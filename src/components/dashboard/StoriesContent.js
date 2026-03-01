@@ -59,22 +59,30 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
             {/* Not connected state */}
             {!isConnected && (
                 <div className={styles.emptyState}>
-                    <Instagram size={48} className={styles.emptyIcon} />
+                    <div className={styles.emptyIconWrapper}>
+                        <div className={styles.pulseBg}></div>
+                        <Instagram size={40} className={styles.emptyIcon} />
+                    </div>
                     <h3 className={styles.emptyTitle}>No stories yet</h3>
                     <p className={styles.emptyDesc}>
                         Connect your Instagram account to see your stories here.
                         Only active (non-expired) stories can have DM links set up.
                     </p>
-                    <button className="btn btn-primary" onClick={handleConnect}>
-                        Connect Instagram
-                    </button>
+                    <div className={styles.emptyAction}>
+                        <button className="btn btn-primary" onClick={handleConnect}>
+                            Connect Instagram
+                        </button>
+                    </div>
                 </div>
             )}
 
             {/* Connected but no stories */}
             {isConnected && stories.length === 0 && (
                 <div className={styles.emptyState}>
-                    <Instagram size={48} className={styles.emptyIcon} />
+                    <div className={styles.emptyIconWrapper}>
+                        <div className={styles.pulseBg}></div>
+                        <Instagram size={40} className={styles.emptyIcon} />
+                    </div>
                     <h3 className={styles.emptyTitle}>No stories found</h3>
                     <p className={styles.emptyDesc}>
                         Post a story on Instagram, then click &quot;Check for new stories&quot; to sync it here.

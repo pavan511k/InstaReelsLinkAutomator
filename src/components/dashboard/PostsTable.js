@@ -140,7 +140,7 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
             case 'setup':
                 return (
                     <button className={styles.setupBadge} onClick={() => handleSetupDM()}>
-                        🔴 Setup LinkDM
+                        <span className={styles.pulseDot}></span> Setup LinkDM
                     </button>
                 );
             case 'paused':

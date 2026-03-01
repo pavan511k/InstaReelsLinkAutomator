@@ -83,7 +83,7 @@ export default function SettingsTab({ config, onChange }) {
                     <div>
                         <span className={styles.checkText}>
                             Flow Automation
-                            <span className="badge badge-warning" style={{ marginLeft: '8px' }}>Pro</span>
+                            <span className="badge badge-pro" style={{ marginLeft: '8px' }}>Pro</span>
                         </span>
                         <p className={styles.checkDesc}>
                             Create multi-step automation flows with conditional logic

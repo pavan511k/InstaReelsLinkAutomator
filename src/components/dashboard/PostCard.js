@@ -1,6 +1,6 @@
 'use client';
 
-import { Instagram, Facebook, Film } from 'lucide-react';
+import { Instagram, Facebook, Film, Pencil, CheckCircle2, PauseCircle } from 'lucide-react';
 import styles from './PostCard.module.css';
 
 export default function PostCard({ post, onSetupDM, onSkip }) {
@@ -46,7 +46,7 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
                         className={styles.setupBtn}
                         onClick={() => onSetupDM?.(post)}
                     >
-                        ✏️ Setup LinkDM
+                        <Pencil size={14} /> Setup LinkDM
                     </button>
                 )}
                 {post.status === 'active' && (
@@ -54,7 +54,7 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
                         className={`${styles.setupBtn} ${styles.activeBtn}`}
                         onClick={() => onSetupDM?.(post)}
                     >
-                        ✅ Edit LinkDM
+                        <CheckCircle2 size={14} /> Edit LinkDM
                     </button>
                 )}
                 {post.status === 'paused' && (
@@ -62,7 +62,7 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
                         className={`${styles.setupBtn} ${styles.pausedBtn}`}
                         onClick={() => onSetupDM?.(post)}
                     >
-                        ⏸ Resume LinkDM
+                        <PauseCircle size={14} /> Resume LinkDM
                     </button>
                 )}
             </div>

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase-server';
 import ConnectAccount from '@/components/dashboard/ConnectAccount';
 import ConnectedAccountBanner from '@/components/dashboard/ConnectedAccountBanner';
 import PostCardsGrid from '@/components/dashboard/PostCardsGrid';
+import { Send, MousePointerClick, MessageCircle, TrendingUp } from 'lucide-react';
 import styles from './dashboard.module.css';
 
 export default async function DashboardPage() {
@@ -95,16 +96,34 @@ export default async function DashboardPage() {
             {/* Stats Cards */}
             <div className={styles.statsGrid}>
                 <div className={styles.statCard}>
-                    <span className={styles.statLabel}>MESSAGES SENT</span>
-                    <span className={styles.statValue}>0</span>
+                    <div className={styles.statHeader}>
+                        <span className={styles.statLabel}>MESSAGES SENT</span>
+                        <div className={styles.statIconWrapper}><Send size={18} /></div>
+                    </div>
+                    <div className={styles.statBody}>
+                        <span className={styles.statValue}>0</span>
+                        <div className={styles.statTrend}><TrendingUp size={14} /> +0%</div>
+                    </div>
                 </div>
                 <div className={styles.statCard}>
-                    <span className={styles.statLabel}>LINK CLICKS</span>
-                    <span className={styles.statValue}>0</span>
+                    <div className={styles.statHeader}>
+                        <span className={styles.statLabel}>LINK CLICKS</span>
+                        <div className={styles.statIconWrapper}><MousePointerClick size={18} /></div>
+                    </div>
+                    <div className={styles.statBody}>
+                        <span className={styles.statValue}>0</span>
+                        <div className={styles.statTrend}><TrendingUp size={14} /> +0%</div>
+                    </div>
                 </div>
                 <div className={styles.statCard}>
-                    <span className={styles.statLabel}>COMMENTS SENT</span>
-                    <span className={styles.statValue}>0</span>
+                    <div className={styles.statHeader}>
+                        <span className={styles.statLabel}>COMMENTS SENT</span>
+                        <div className={styles.statIconWrapper}><MessageCircle size={18} /></div>
+                    </div>
+                    <div className={styles.statBody}>
+                        <span className={styles.statValue}>0</span>
+                        <div className={styles.statTrend}><TrendingUp size={14} /> +0%</div>
+                    </div>
                 </div>
             </div>
 
