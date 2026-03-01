@@ -1,9 +1,12 @@
 'use client';
 
-import { Plus, Upload, Link as LinkIcon, Trash2 } from 'lucide-react';
+import { useRef } from 'react';
+import { Plus, Upload, Link as LinkIcon, Trash2, Image as ImageIcon } from 'lucide-react';
 import styles from './DMSetupTab.module.css';
 
-export default function DMSetupTab({ config, onChange }) {
+export default function DMSetupTab({ config, onChange, onImageUpload }) {
+    const fileInputRefs = useRef({});
+
     const updateConfig = (updates) => {
         onChange({ ...config, ...updates });
     };
@@ -28,11 +31,49 @@ export default function DMSetupTab({ config, onChange }) {
         updateConfig({ slides: newSlides });
     };
 
+    const removeButton = (slideIndex, btnIndex) => {
+        const newSlides = [...config.slides];
+        if (newSlides[slideIndex].buttons.length <= 1) return;
+        newSlides[slideIndex].buttons.splice(btnIndex, 1);
+        updateConfig({ slides: newSlides });
+    };
+
     const addButton = (slideIndex) => {
         if (config.slides[slideIndex].buttons.length >= 3) return;
         const newSlides = [...config.slides];
         newSlides[slideIndex].buttons.push({ type: 'url', label: '', value: '' });
         updateConfig({ slides: newSlides });
+    };
+
+    const handleFileSelect = (slideIndex, e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type and size
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (!validTypes.includes(file.type)) {
+            alert('Please select a valid image file (JPEG, PNG, WebP, or GIF)');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Image must be smaller than 5MB');
+            return;
+        }
+
+        // Read as data URL for preview
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const newSlides = [...config.slides];
+            newSlides[slideIndex].imageUrl = event.target.result;
+            updateConfig({ slides: newSlides });
+            if (onImageUpload) onImageUpload(slideIndex, file);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const triggerFileInput = (slideIndex) => {
+        const input = fileInputRefs.current[slideIndex];
+        if (input) input.click();
     };
 
     const addVariable = (variable) => {
@@ -52,7 +93,6 @@ export default function DMSetupTab({ config, onChange }) {
                 >
                     <option value="button_template">Button Template</option>
                     <option value="message_template">Message Template</option>
-                    <option value="post_reels">Instagram Posts & Reels</option>
                 </select>
             </div>
 
@@ -82,11 +122,32 @@ export default function DMSetupTab({ config, onChange }) {
                                 </div>
 
                                 {/* Image upload zone */}
-                                <div className={styles.uploadZone}>
-                                    <Upload size={24} />
-                                    <p>Drag & drop image or click to upload</p>
-                                    <span>Recommended: 1080x1080px</span>
-                                </div>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    ref={(el) => (fileInputRefs.current[slideIndex] = el)}
+                                    onChange={(e) => handleFileSelect(slideIndex, e)}
+                                    className={styles.hiddenFileInput}
+                                />
+
+                                {slide.imageUrl ? (
+                                    <div className={styles.uploadedImage} onClick={() => triggerFileInput(slideIndex)}>
+                                        <img src={slide.imageUrl} alt={`Slide ${slideIndex + 1}`} />
+                                        <div className={styles.imageOverlay}>
+                                            <ImageIcon size={20} />
+                                            <span>Change image</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div
+                                        className={styles.uploadZone}
+                                        onClick={() => triggerFileInput(slideIndex)}
+                                    >
+                                        <Upload size={24} />
+                                        <p>Click to upload image</p>
+                                        <span>JPEG, PNG, WebP · Max 5MB</span>
+                                    </div>
+                                )}
 
                                 {/* Buttons */}
                                 <div className={styles.buttonsSection}>
@@ -113,6 +174,15 @@ export default function DMSetupTab({ config, onChange }) {
                                                 value={btn.value}
                                                 onChange={(e) => updateSlideButton(slideIndex, btnIndex, 'value', e.target.value)}
                                             />
+                                            {slide.buttons.length > 1 && (
+                                                <button
+                                                    className={styles.removeBtnSmall}
+                                                    onClick={() => removeButton(slideIndex, btnIndex)}
+                                                    title="Remove button"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                     {slide.buttons.length < 3 && (
@@ -161,35 +231,6 @@ export default function DMSetupTab({ config, onChange }) {
                             value={config.branding}
                             onChange={(e) => updateConfig({ branding: e.target.value })}
                         />
-                    </div>
-                </div>
-            )}
-
-            {/* Instagram Posts & Reels */}
-            {config.type === 'post_reels' && (
-                <div className={styles.section}>
-                    <div className="form-group">
-                        <label className="form-label">Search Instagram Posts & Reels</label>
-                        <input
-                            className="form-input"
-                            placeholder="Search posts by caption..."
-                        />
-                    </div>
-                    <div className={styles.postList}>
-                        <div className={styles.postItem}>
-                            <div className={styles.postThumb}></div>
-                            <div className={styles.postInfo}>
-                                <p>Check out our latest reel! Comment &quot;LINK&quot;...</p>
-                                <span>2 hours ago</span>
-                            </div>
-                        </div>
-                        <div className={styles.postItem}>
-                            <div className={styles.postThumb}></div>
-                            <div className={styles.postInfo}>
-                                <p>New product launch 🚀 Comment &quot;SHOP&quot;...</p>
-                                <span>1 day ago</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
             )}

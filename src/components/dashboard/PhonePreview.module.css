@@ -58,11 +58,16 @@
 /* Chat body */
 .chatBody {
     flex: 1;
-    padding: var(--space-4);
+    padding: var(--space-3);
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
+}
+
+/* Hidden file input */
+.hiddenInput {
+    display: none;
 }
 
 /* Button Template Preview */
@@ -72,14 +77,37 @@
     gap: var(--space-2);
 }
 
-.previewImage {
-    width: 100%;
-    aspect-ratio: 1;
+/* Carousel */
+.carouselContainer {
+    position: relative;
     border-radius: var(--radius-lg);
     overflow: hidden;
 }
 
-.previewImage img {
+.carouselTrack {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.carouselTrack::-webkit-scrollbar {
+    display: none;
+}
+
+.carouselSlide {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+    aspect-ratio: 1;
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+}
+
+.slideImage {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -90,10 +118,91 @@
     height: 100%;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: rgba(255, 255, 255, 0.6);
+    gap: var(--space-1);
+    color: rgba(255, 255, 255, 0.7);
     font-size: var(--font-size-xs);
+    transition: all var(--transition-fast);
+}
+
+.imagePlaceholder:hover {
+    background: linear-gradient(135deg, #5a6fe0 0%, #6a3f96 100%);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.uploadOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.carouselSlide:hover .uploadOverlay {
+    opacity: 1;
+}
+
+/* Navigation arrows */
+.carouselNav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    transition: all var(--transition-fast);
+}
+
+.carouselNav:hover {
+    background: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.carouselNavLeft {
+    left: 4px;
+}
+
+.carouselNavRight {
+    right: 4px;
+}
+
+/* Dots */
+.dotsContainer {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: var(--space-1) 0;
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-full);
+    background: var(--color-gray-300);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.dotActive {
+    background: var(--color-primary);
+    width: 16px;
+    border-radius: 3px;
 }
 
 .previewButtons {
@@ -137,30 +246,6 @@
     font-size: 10px;
     color: var(--color-gray-400);
     padding-left: var(--space-1);
-}
-
-/* Post Preview */
-.postPreview {
-    display: flex;
-    flex-direction: column;
-}
-
-.postCard {
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-}
-
-.postThumb {
-    width: 100%;
-    aspect-ratio: 1;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.postCaption {
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--font-size-xs);
-    color: var(--color-gray-500);
 }
 
 /* Chat bar */

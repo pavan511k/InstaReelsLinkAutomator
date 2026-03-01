@@ -59,6 +59,7 @@ export default function PostCardsGrid({ posts = [], totalCount = 0 }) {
             {showSetupModal && (
                 <SetupDMModal
                     onClose={handleCloseModal}
+                    postId={selectedPost?.id}
                     postCaption={selectedPost?.caption || ''}
                 />
             )}

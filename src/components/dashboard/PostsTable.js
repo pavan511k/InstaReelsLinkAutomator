@@ -323,6 +323,7 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
             {showSetupModal && (
                 <SetupDMModal
                     onClose={handleCloseModal}
+                    postId={selectedPost?.id}
                     postCaption={selectedPost?.caption || ''}
                 />
             )}
