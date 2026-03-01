@@ -31,17 +31,13 @@ export default async function PostsPage() {
                 id: p.id,
                 caption: p.caption || 'No caption',
                 thumbnailUrl: p.thumbnail_url || p.media_url,
-                status: 'setup', // Default to setup until automation is configured
+                mediaType: p.media_type,
+                status: 'setup',
                 sent: 0,
                 open: 0,
                 clicks: 0,
                 ctr: '0%',
-                timestamp: new Date(p.timestamp).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                }),
+                timestamp: formatRelativeTime(p.timestamp),
             }));
         }
     } catch {
@@ -59,4 +55,19 @@ export default async function PostsPage() {
             />
         </div>
     );
+}
+
+function formatRelativeTime(timestamp) {
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diffMs = now - date;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    if (diffDays === 1) return '1 day ago';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
