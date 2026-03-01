@@ -1,66 +1,74 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import Navbar from '@/components/landing/Navbar';
+import HeroSection from '@/components/landing/HeroSection';
+import StatsBar from '@/components/landing/StatsBar';
+import FeatureCard from '@/components/landing/FeatureCard';
+import Footer from '@/components/landing/Footer';
+import { MessageCircle, Film, Reply, AtSign } from 'lucide-react';
 
-export default function Home() {
+const FEATURES = [
+  {
+    title: 'Auto-Reply to Instagram Reel Comments',
+    description: 'Reply to Instagram reel comments automatically with a DM sent straight to the users inbox. Add trigger keywords or respond to all comments.',
+    icon: <Film size={64} strokeWidth={1.5} />,
+    reverse: false,
+  },
+  {
+    title: 'Auto-Reply to Instagram Post Comments',
+    description: 'Reply to Instagram post comments automatically with a DM sent straight to the users inbox. Add trigger keywords or respond to all comments.',
+    icon: <MessageCircle size={64} strokeWidth={1.5} />,
+    reverse: true,
+  },
+  {
+    title: 'Auto-Respond to Instagram Story Replies',
+    description: 'Automatically respond to story replies with a DM sent directly to the users inbox. Add trigger keywords or respond to all comments.',
+    icon: <Reply size={64} strokeWidth={1.5} />,
+    reverse: false,
+  },
+  {
+    title: 'Auto-Reply to Instagram Story Mentions',
+    description: 'Automatically respond to story @mentions with a message sent directly to the users inbox.',
+    icon: <AtSign size={64} strokeWidth={1.5} />,
+    reverse: true,
+  },
+];
+
+export default function HomePage() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.js file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <>
+      <Navbar />
+      <main>
+        <HeroSection />
+        <StatsBar />
+        <section id="features" className="container">
+          <div style={{ textAlign: 'center', paddingTop: '5rem' }}>
+            <span style={{
+              color: 'var(--color-primary)',
+              fontSize: 'var(--font-size-sm)',
+              fontWeight: 'var(--font-weight-semibold)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+            }}>Feature Focus</span>
+            <h2 style={{
+              fontSize: 'var(--font-size-4xl)',
+              fontWeight: 'var(--font-weight-extrabold)',
+              color: 'var(--color-gray-900)',
+              marginTop: 'var(--space-3)',
+              marginBottom: 'var(--space-2)',
+            }}>Feature Breakdown</h2>
+            <p style={{
+              color: 'var(--color-gray-500)',
+              maxWidth: '600px',
+              margin: '0 auto',
+            }}>
+              Dive into the specifics of each feature, understanding its functionality and how it can elevate your Instagram strategy.
+            </p>
+          </div>
+          {FEATURES.map((feature) => (
+            <FeatureCard key={feature.title} {...feature} />
+          ))}
+        </section>
       </main>
-    </div>
+      <Footer />
+    </>
   );
 }

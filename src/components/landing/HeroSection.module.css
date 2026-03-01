@@ -1,0 +1,222 @@
+.hero {
+    padding: var(--space-20) 0 var(--space-16);
+    background: linear-gradient(180deg, var(--color-gray-50) 0%, var(--color-white) 100%);
+    overflow: hidden;
+}
+
+.heroContent {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-16);
+    align-items: center;
+}
+
+.headline {
+    font-size: var(--font-size-5xl);
+    font-weight: var(--font-weight-black);
+    line-height: var(--line-height-tight);
+    color: var(--color-gray-900);
+    margin-bottom: var(--space-4);
+}
+
+.highlight {
+    color: var(--color-primary);
+}
+
+.subtitle {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-primary);
+    margin-bottom: var(--space-6);
+}
+
+.features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-bottom: var(--space-8);
+}
+
+.feature {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-700);
+}
+
+.checkIcon {
+    color: var(--color-success);
+    flex-shrink: 0;
+}
+
+.checkIconBlue {
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.checkIconGold {
+    color: var(--color-accent);
+    flex-shrink: 0;
+}
+
+.heroCta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+}
+
+.noCredit {
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-500);
+}
+
+/* Visual / Phone Mockup */
+.heroVisual {
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+
+.phoneFrame {
+    width: 260px;
+    background: var(--color-white);
+    border-radius: 24px;
+    border: 3px solid var(--color-gray-200);
+    box-shadow: var(--shadow-xl);
+    overflow: hidden;
+}
+
+.phoneScreen {
+    padding: var(--space-3);
+}
+
+.mockPost {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.mockHeader {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+}
+
+.mockAvatar {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, #E1306C, #F77737, #FCAF45);
+}
+
+.mockUsername {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+}
+
+.mockImage {
+    width: 100%;
+    aspect-ratio: 1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--radius-sm);
+}
+
+.mockActions {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    font-size: var(--font-size-lg);
+}
+
+.mockComment {
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-700);
+    padding: var(--space-1) 0;
+}
+
+/* DM Bubble */
+.dmBubble {
+    position: absolute;
+    right: -20px;
+    top: 30px;
+    width: 200px;
+    background: var(--color-white);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    box-shadow: var(--shadow-xl);
+    border: 1px solid var(--color-gray-100);
+    animation: slideInRight 0.6s ease 0.3s both;
+}
+
+.notification {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 22px;
+    height: 22px;
+    background: var(--color-error);
+    color: var(--color-white);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: var(--font-weight-bold);
+}
+
+.dmContent {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.dmTitle {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-gray-900);
+}
+
+.dmText {
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-500);
+    line-height: var(--line-height-normal);
+}
+
+.dmButton {
+    background: var(--color-gray-100);
+    text-align: center;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-gray-700);
+    margin-top: var(--space-1);
+}
+
+@media (max-width: 768px) {
+    .heroContent {
+        grid-template-columns: 1fr;
+        gap: var(--space-10);
+        text-align: center;
+    }
+
+    .features {
+        align-items: center;
+    }
+
+    .heroCta {
+        align-items: center;
+    }
+
+    .heroVisual {
+        justify-content: center;
+    }
+
+    .dmBubble {
+        right: 10px;
+    }
+}

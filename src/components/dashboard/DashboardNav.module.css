@@ -1,0 +1,154 @@
+.dashNav {
+    background: var(--color-white);
+    border-bottom: 1px solid var(--color-gray-200);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.navInner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 var(--space-6);
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.logoText {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-extrabold);
+    color: var(--color-gray-900);
+}
+
+.logoDM {
+    color: var(--color-primary);
+}
+
+.navLinks {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.navLink {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-gray-500);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.navLink:hover {
+    color: var(--color-gray-900);
+    background: var(--color-gray-50);
+}
+
+.navLink.active {
+    color: var(--color-gray-900);
+    background: var(--color-gray-100);
+    font-weight: var(--font-weight-semibold);
+}
+
+/* Disabled nav links */
+.navLink.disabled {
+    color: var(--color-gray-400);
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.navLink.disabled:hover {
+    color: var(--color-gray-400);
+    background: transparent;
+}
+
+.lockIcon {
+    margin-left: 2px;
+    opacity: 0.6;
+}
+
+.navRight {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+/* Connect Profile button */
+.connectProfileBtn {
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-error);
+    color: var(--color-white);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-md);
+    transition: opacity var(--transition-fast);
+    white-space: nowrap;
+}
+
+.connectProfileBtn:hover {
+    opacity: 0.9;
+}
+
+.userInfo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, var(--color-primary), #7C3AED);
+    color: var(--color-white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+}
+
+.userEmail {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-600);
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.logoutBtn {
+    color: var(--color-gray-400);
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.logoutBtn:hover {
+    color: var(--color-error);
+    background: var(--color-error-light);
+}
+
+@media (max-width: 768px) {
+    .userEmail {
+        display: none;
+    }
+
+    .connectProfileBtn {
+        display: none;
+    }
+}

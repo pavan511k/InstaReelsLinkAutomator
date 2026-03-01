@@ -1,0 +1,104 @@
+.feature {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-16);
+    align-items: center;
+    padding: var(--space-16) 0;
+}
+
+.feature.reverse {
+    direction: rtl;
+}
+
+.feature.reverse>* {
+    direction: ltr;
+}
+
+.featureText {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.featureTitle {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-extrabold);
+    color: var(--color-gray-900);
+    line-height: var(--line-height-tight);
+}
+
+.featureDesc {
+    font-size: var(--font-size-base);
+    color: var(--color-gray-600);
+    line-height: var(--line-height-relaxed);
+}
+
+.featureVisual {
+    display: flex;
+    justify-content: center;
+}
+
+.phoneWrapper {
+    position: relative;
+}
+
+.phoneMockup {
+    width: 240px;
+    height: 420px;
+    background: var(--color-gray-900);
+    border-radius: 32px;
+    padding: 12px;
+    box-shadow: var(--shadow-xl);
+    position: relative;
+}
+
+.phoneNotch {
+    width: 100px;
+    height: 24px;
+    background: var(--color-gray-900);
+    border-radius: 0 0 16px 16px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+.phoneContent {
+    background: var(--color-white);
+    border-radius: 22px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-top: -12px;
+}
+
+.iconBox {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-6);
+    color: var(--color-primary);
+}
+
+@media (max-width: 768px) {
+    .feature {
+        grid-template-columns: 1fr;
+        gap: var(--space-8);
+        text-align: center;
+    }
+
+    .feature.reverse {
+        direction: ltr;
+    }
+
+    .featureVisual {
+        order: -1;
+    }
+
+    .phoneMockup {
+        width: 200px;
+        height: 360px;
+    }
+}

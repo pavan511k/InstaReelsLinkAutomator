@@ -1,0 +1,104 @@
+.footer {
+    background: var(--color-gray-900);
+    color: var(--color-gray-300);
+    padding-top: var(--space-16);
+}
+
+.footerCta {
+    text-align: center;
+    padding: var(--space-16) 0;
+    border-bottom: 1px solid var(--color-gray-700);
+}
+
+.footerHeadline {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-extrabold);
+    color: var(--color-white);
+    margin-bottom: var(--space-4);
+}
+
+.footerSub {
+    font-size: var(--font-size-base);
+    color: var(--color-gray-400);
+    margin-bottom: var(--space-8);
+}
+
+.footerGrid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: var(--space-10);
+    padding: var(--space-12) 0;
+}
+
+.footerBrand {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-primary);
+}
+
+.logoText {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-extrabold);
+    color: var(--color-white);
+}
+
+.logoDM {
+    color: var(--color-primary);
+}
+
+.brandDesc {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-400);
+    line-height: var(--line-height-relaxed);
+    max-width: 300px;
+}
+
+.footerLinks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.linkTitle {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-white);
+    margin-bottom: var(--space-1);
+}
+
+.footerLinks a {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-400);
+    transition: color var(--transition-fast);
+}
+
+.footerLinks a:hover {
+    color: var(--color-white);
+}
+
+.footerBottom {
+    border-top: 1px solid var(--color-gray-700);
+    padding: var(--space-6) 0;
+    text-align: center;
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-500);
+}
+
+@media (max-width: 768px) {
+    .footerGrid {
+        grid-template-columns: 1fr;
+        gap: var(--space-8);
+        text-align: center;
+    }
+
+    .brandDesc {
+        max-width: none;
+    }
+}

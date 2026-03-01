@@ -1,0 +1,62 @@
+{
+  "theme": "Default",
+  "contextFileName": "GEMINI.md",
+  "autoAcceptEdits": false,
+  "showLineNumbers": true,
+  "checkpointing": {
+    "enabled": true
+  },
+  "security": {
+    "mode": "restricted",
+    "allowedTools": [
+      "read_file",
+      "list_directory",
+      "write_file",
+      "replace_file_content",
+      "google_web_search",
+      "run_shell_command"
+    ],
+    "shellPolicy": {
+      "allow": [
+        "git status",
+        "git diff",
+        "git log",
+        "git add",
+        "git commit",
+        "git push",
+        "git pull",
+        "npm install",
+        "npm run",
+        "npx",
+        "node",
+        "python",
+        "pip install",
+        "ls",
+        "dir",
+        "cat",
+        "type",
+        "echo",
+        "mkdir",
+        "cp",
+        "copy"
+      ],
+      "deny": [
+        "rm -rf",
+        "del /f",
+        "format",
+        "sudo",
+        "chmod 777",
+        "curl | bash",
+        "wget | sh"
+      ]
+    }
+  },
+  "model": "gemini-2.5-pro",
+  "maxSessionTurns": 100,
+  "autoContextCompress": true,
+  "showCitations": true,
+  "ui": {
+    "showSuggestions": true,
+    "showLineNumbers": true
+  }
+}
