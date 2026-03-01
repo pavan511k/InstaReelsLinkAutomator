@@ -14,20 +14,18 @@ export default async function DashboardLayout({ children }) {
         redirect('/login');
     }
 
-    // Check if user has connected an Instagram/Facebook account
+    // Check if user has any active connected accounts
     let isConnected = false;
-    let connectedAccount = null;
 
     try {
         const { data, error } = await supabase
             .from('connected_accounts')
-            .select('id, platform, ig_username, fb_page_name')
+            .select('id, platform')
             .eq('user_id', user.id)
-            .single();
+            .eq('is_active', true);
 
-        if (data && !error) {
+        if (data && !error && data.length > 0) {
             isConnected = true;
-            connectedAccount = data;
         }
     } catch {
         // Table may not exist yet — that's OK, isConnected stays false
@@ -38,7 +36,6 @@ export default async function DashboardLayout({ children }) {
             <DashboardNav
                 user={user}
                 isConnected={isConnected}
-                connectedAccount={connectedAccount}
             />
             <main style={{ minHeight: 'calc(100vh - 56px)', background: 'var(--color-gray-50)' }}>
                 {children}

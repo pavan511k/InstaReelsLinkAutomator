@@ -49,7 +49,7 @@ export function buildAuthUrl(connectionType, state) {
     // NOTE: To use Instagram's native login screen (instagram.com/oauth/authorize),
     // you need to configure "Instagram > API Setup with Instagram Login" in your
     // Meta Developer App. Once configured, set USE_INSTAGRAM_LOGIN = true.
-    const USE_INSTAGRAM_LOGIN = true;
+    const USE_INSTAGRAM_LOGIN = false;
 
     if (connectionType === 'instagram' && USE_INSTAGRAM_LOGIN) {
         // Instagram's own OAuth endpoint (shows Instagram login screen)
