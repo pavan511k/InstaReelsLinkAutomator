@@ -121,3 +121,41 @@ export async function GET(request) {
         return NextResponse.json({ error: `Fetch failed: ${err.message}` }, { status: 500 });
     }
 }
+
+/**
+ * DELETE /api/automations
+ * Delete a DM automation
+ */
+export async function DELETE(request) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const postId = searchParams.get('postId');
+
+    if (!postId) {
+        return NextResponse.json({ error: 'Post ID is required' }, { status: 400 });
+    }
+
+    try {
+        const { error } = await supabase
+            .from('dm_automations')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', user.id);
+
+        if (error) {
+            console.error('Failed to delete automation:', error);
+            return NextResponse.json({ error: 'Failed to delete automation' }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (err) {
+        console.error('Automation delete error:', err);
+        return NextResponse.json({ error: `Delete failed: ${err.message}` }, { status: 500 });
+    }
+}

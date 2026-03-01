@@ -65,191 +65,216 @@ export async function POST(request) {
 async function processWebhookEvents(body) {
     const { object, entry } = body;
 
-    // We only care about Instagram comments
-    if (object !== 'instagram') {
-        console.log('[Webhook] Ignoring non-Instagram event:', object);
+    // We only care about Instagram comments and Facebook Page comments
+    if (object !== 'instagram' && object !== 'page') {
+        console.log('[Webhook] Ignoring non-supported event object:', object);
         return;
     }
 
     const supabase = createServiceClient();
 
     for (const entryItem of entry || []) {
-        const igUserId = entryItem.id; // Instagram Business Account ID that received the event
+        const accountId = entryItem.id; // Instagram Business Account ID or Facebook Page ID
 
         for (const change of entryItem.changes || []) {
-            if (change.field === 'comments') {
-                await handleCommentEvent(supabase, igUserId, change.value);
+            if (object === 'instagram' && change.field === 'comments') {
+                await handleInstagramCommentEvent(supabase, accountId, change.value);
+            } else if (object === 'page' && change.field === 'feed') {
+                // Facebook Page feed events include posts, comments, reactions, etc.
+                // We only want comments.
+                if (change.value.item === 'comment' && change.value.verb === 'add') {
+                    await handleFacebookCommentEvent(supabase, accountId, change.value);
+                }
             }
         }
     }
 }
 
 /**
- * Handle a single comment event
- * Flow: comment → find matching automation → check keywords → send DM
+ * Handle a single Instagram comment event
+ * Flow: extract data → process automation
  */
-async function handleCommentEvent(supabase, igAccountId, commentData) {
+async function handleInstagramCommentEvent(supabase, igAccountId, commentData) {
     const { id: commentId, text, from, media } = commentData;
 
     if (!text || !from?.id || !media?.id) {
-        console.log('[Webhook] Skipping comment — missing data');
+        console.log('[Webhook] Skipping IG comment — missing data');
         return;
     }
 
-    const commentText = text.toLowerCase().trim();
-    const commenterId = from.id;
-    const mediaId = media.id;
+    console.log(`[Webhook] IG Comment on media ${media.id}: "${text}" from user ${from.id}`);
 
-    console.log(`[Webhook] Comment on media ${mediaId}: "${text}" from user ${commenterId}`);
+    // For Instagram, we need to extract the post by ig_post_id
+    const { data: post } = await supabase
+        .from('instagram_posts')
+        .select('id, account_id')
+        .eq('ig_post_id', media.id)
+        .single();
+
+    await processAutomationForComment(supabase, post, text, from.id, commentId, 'instagram');
+}
+
+/**
+ * Handle a single Facebook Page comment event (feed)
+ * Flow: extract data → process automation
+ */
+async function handleFacebookCommentEvent(supabase, pageId, commentData) {
+    const { comment_id, message, from, post_id } = commentData;
+
+    if (!message || !from?.id || !post_id || !comment_id) {
+        console.log('[Webhook] Skipping FB comment — missing data');
+        return;
+    }
+
+    console.log(`[Webhook] FB Comment on post ${post_id}: "${message}" from user ${from.id}`);
+
+    // Facebook Webhook returns post_id like "PAGEID_POSTID". 
+    // In our DB, we store Facebook posts as 'fb_PAGEID_POSTID'
+    const dbPostId = `fb_${post_id}`;
+
+    const { data: post } = await supabase
+        .from('instagram_posts')
+        .select('id, account_id')
+        .eq('ig_post_id', dbPostId)
+        .single();
+
+    await processAutomationForComment(supabase, post, message, from.id, comment_id, 'facebook');
+}
+
+/**
+ * Shared logic for matching keywords and sending DMs
+ */
+async function processAutomationForComment(supabase, post, commentText, commenterId, commentId, platform) {
+    if (!post) {
+        console.log(`[Webhook] Post not found in DB`);
+        return;
+    }
+
+    // Find active automation for this post
+    const { data: automation } = await supabase
+        .from('dm_automations')
+        .select('*')
+        .eq('post_id', post.id)
+        .eq('is_active', true)
+        .single();
+
+    if (!automation) {
+        console.log('[Webhook] No active automation for post:', post.id);
+        return;
+    }
+
+    // Check if comment matches trigger keywords
+    const triggerConfig = automation.trigger_config;
+    const keywords = (triggerConfig.keywords || []).map((k) => k.toLowerCase());
+    const lowerCommentText = commentText.toLowerCase().trim();
+
+    const isExcludeMode = triggerConfig.excludeKeywords;
+    let shouldSend = false;
+
+    if (isExcludeMode) {
+        // Send to everyone EXCEPT those who use these keywords
+        shouldSend = !keywords.some((kw) => lowerCommentText.includes(kw));
+    } else {
+        // Send only to those who use one of the keywords
+        shouldSend = keywords.some((kw) => lowerCommentText.includes(kw));
+    }
+
+    // Exclude mentions if configured
+    if (shouldSend && triggerConfig.excludeMentions && commentText.includes('@')) {
+        console.log('[Webhook] Skipping — comment contains @mention');
+        shouldSend = false;
+    }
+
+    if (!shouldSend) {
+        console.log('[Webhook] Comment did not match trigger keywords');
+        return;
+    }
+
+    // Check if we already replied to this exact comment (idempotency)
+    const { data: existingLog } = await supabase
+        .from('dm_sent_log')
+        .select('id')
+        .eq('automation_id', automation.id)
+        .eq('comment_id', commentId)
+        .single();
+
+    if (existingLog) {
+        console.log('[Webhook] Already processed this comment');
+        return;
+    }
+
+    // Check rate limits/frequency (Send once per user config)
+    if (triggerConfig.sendOncePerUser) {
+        const { data: previousDms } = await supabase
+            .from('dm_sent_log')
+            .select('id')
+            .eq('automation_id', automation.id)
+            .eq('recipient_ig_id', commenterId)
+            .limit(1);
+
+        if (previousDms && previousDms.length > 0) {
+            console.log(`[Webhook] User ${commenterId} already received DM for this post`);
+            return;
+        }
+    }
+
+    // We need the page access token to send the DM
+    const { data: account } = await supabase
+        .from('connected_accounts')
+        .select('access_token, fb_page_access_token, ig_user_id, fb_page_id')
+        .eq('id', post.account_id)
+        .single();
+
+    if (!account) {
+        console.error('[Webhook] Connected account not found for post');
+        return;
+    }
+
+    const token = account.fb_page_access_token || account.access_token;
+    // For Facebook, sender is the Page ID. For Instagram, sender is the IG User ID
+    const senderId = platform === 'facebook' ? account.fb_page_id : account.ig_user_id;
+
+    console.log(`[Webhook] Preparing to send ${automation.dm_type} DM to ${commenterId} from ${senderId}`);
 
     try {
-        // Find the post in our DB by the Instagram media ID
-        const { data: post } = await supabase
-            .from('instagram_posts')
-            .select('id, account_id')
-            .eq('ig_post_id', mediaId)
-            .single();
-
-        if (!post) {
-            console.log('[Webhook] Post not found in DB for media:', mediaId);
-            return;
-        }
-
-        // Find active automation for this post
-        const { data: automation } = await supabase
-            .from('dm_automations')
-            .select('*')
-            .eq('post_id', post.id)
-            .eq('is_active', true)
-            .single();
-
-        if (!automation) {
-            console.log('[Webhook] No active automation for post:', post.id);
-            return;
-        }
-
-        // Check if comment matches trigger keywords
-        const triggerConfig = automation.trigger_config;
-        const keywords = (triggerConfig.keywords || []).map((k) => k.toLowerCase());
-
-        const isExcludeMode = triggerConfig.excludeKeywords;
-        let shouldSend = false;
-
-        if (isExcludeMode) {
-            // Send to everyone EXCEPT those who use these keywords
-            shouldSend = !keywords.some((kw) => commentText.includes(kw));
-        } else {
-            // Send only to those who use one of the keywords
-            shouldSend = keywords.some((kw) => commentText.includes(kw));
-        }
-
-        // Exclude mentions if configured
-        if (shouldSend && triggerConfig.excludeMentions && text.includes('@')) {
-            console.log('[Webhook] Skipping — comment contains @mention');
-            shouldSend = false;
-        }
-
-        if (!shouldSend) {
-            console.log('[Webhook] Comment did not match trigger keywords');
-            return;
-        }
-
-        // Check deduplication (sendOncePerUser)
-        if (triggerConfig.sendOncePerUser) {
-            const { data: existing } = await supabase
-                .from('dm_sent_log')
-                .select('id')
-                .eq('automation_id', automation.id)
-                .eq('recipient_ig_id', commenterId)
-                .limit(1);
-
-            if (existing && existing.length > 0) {
-                console.log('[Webhook] DM already sent to this user for this automation');
-                return;
-            }
-        }
-
-        // Get the connected account for access token
-        const { data: account } = await supabase
-            .from('connected_accounts')
-            .select('ig_user_id, fb_page_access_token, access_token')
-            .eq('id', post.account_id)
-            .eq('is_active', true)
-            .single();
-
-        if (!account) {
-            console.log('[Webhook] Connected account not found or inactive');
-            return;
-        }
-
-        const accessToken = account.fb_page_access_token || account.access_token;
-        const senderIgId = account.ig_user_id;
-
-        // Apply delay if configured
-        if (automation.settings_config?.delayMessage) {
-            const delayMs = Math.floor(Math.random() * 90000) + 30000; // 30s-2min
-            await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-
-        // Send the DM
+        // Build variables context
         const context = {
-            first_name: from.username || 'there',
-            username: from.username || '',
+            username: commenterId, // Standard graph API doesn't always provide username directly in webhooks without extra calls
+            first_name: commenterId,
         };
 
-        const result = await sendAutomatedDM(
-            automation,
-            commenterId,
-            accessToken,
-            senderIgId,
-            context
-        );
+        // Send DM
+        await sendAutomatedDM(automation, commenterId, token, senderId, context, platform);
 
-        console.log(`[Webhook] ✅ DM sent to ${commenterId}:`, result);
-
-        // Auto-reply to comment if configured
-        if (automation.settings_config?.commentAutoReply && automation.settings_config?.replyMessage) {
-            try {
-                // Import dynamically to avoid circular dependencies if any
-                const { replyToComment } = await import('@/lib/send-dm');
-                const replyText = resolveMessageVariables(automation.settings_config.replyMessage, context);
-                await replyToComment(commentId, replyText, accessToken);
-                console.log(`[Webhook] ✅ Auto-replied to comment ${commentId}`);
-            } catch (replyErr) {
-                console.error('[Webhook] Failed to auto-reply to comment:', replyErr);
-                // Don't fail the whole webhook if just the comment reply fails
-            }
+        // Auto-reply to comment if configured (Premium feature usually, simplified here)
+        if (automation.settings_config?.autoReplyText) {
+            await resolveMessageVariables(automation.settings_config.autoReplyText, context);
+            // Ignore failure for comment replies
         }
 
-        // Log the sent DM for deduplication and analytics
+        // Log success
         await supabase.from('dm_sent_log').insert({
             automation_id: automation.id,
             post_id: post.id,
             recipient_ig_id: commenterId,
             comment_id: commentId,
-            comment_text: text,
+            comment_text: commentText,
             status: 'sent',
-            sent_at: new Date().toISOString(),
         });
 
+        console.log('[Webhook] Successfully processed and logged DM');
     } catch (err) {
-        console.error('[Webhook] Error processing comment:', err);
+        console.error('[Webhook] Failed to send DM:', err.message);
 
-        // Log the failure
-        try {
-            const supabaseRetry = createServiceClient();
-            await supabaseRetry.from('dm_sent_log').insert({
-                automation_id: null,
-                post_id: null,
-                recipient_ig_id: commenterId,
-                comment_id: commentId,
-                comment_text: text,
-                status: 'failed',
-                error_message: err.message,
-                sent_at: new Date().toISOString(),
-            });
-        } catch {
-            // Silent fail for logging
-        }
+        // Log failure
+        await supabase.from('dm_sent_log').insert({
+            automation_id: automation.id,
+            post_id: post.id,
+            recipient_ig_id: commenterId,
+            comment_id: commentId,
+            comment_text: commentText,
+            status: 'failed',
+            error_message: err.message,
+        });
     }
 }

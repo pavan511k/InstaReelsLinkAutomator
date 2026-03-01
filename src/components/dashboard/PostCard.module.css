@@ -118,20 +118,27 @@
 }
 
 .setupBtn:hover {
-    background: var(--color-primary-hover);
+    background: var(--color-primary-dark);
 }
 
-.skipBtn {
-    padding: var(--space-2) var(--space-3);
-    color: var(--color-gray-500);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
+.activeBtn {
+    background: white;
+    color: var(--color-success);
+    border: 1px solid var(--color-success);
 }
 
-.skipBtn:hover {
-    background: var(--color-gray-100);
-    color: var(--color-gray-700);
+.activeBtn:hover {
+    background: var(--color-success);
+    color: white;
+}
+
+.pausedBtn {
+    background: white;
+    color: var(--color-warning);
+    border: 1px solid var(--color-warning);
+}
+
+.pausedBtn:hover {
+    background: var(--color-warning);
+    color: white;
 }

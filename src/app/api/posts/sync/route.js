@@ -31,6 +31,7 @@ export async function POST() {
         for (const account of accounts) {
             // Fetch Instagram posts if Instagram is connected
             if (account.ig_user_id && (account.platform === 'instagram' || account.platform === 'both')) {
+                // Fetch Posts
                 const igPosts = await fetchInstagramPosts(account.ig_user_id, account.fb_page_access_token || account.access_token);
                 allPosts.push(...igPosts.map((p) => ({
                     account_id: account.id,
@@ -44,6 +45,22 @@ export async function POST() {
                     is_story: false,
                     synced_at: new Date().toISOString(),
                 })));
+
+                // Fetch Stories (Active items within 24h limit)
+                const igStories = await fetchInstagramStories(account.ig_user_id, account.fb_page_access_token || account.access_token);
+                allPosts.push(...igStories.map((s) => ({
+                    account_id: account.id,
+                    ig_post_id: s.id,
+                    media_type: s.media_type,
+                    media_url: s.media_url || null,
+                    thumbnail_url: s.thumbnail_url || s.media_url || null,
+                    caption: s.caption || '',
+                    permalink: s.permalink || '',
+                    timestamp: s.timestamp,
+                    is_story: true,
+                    synced_at: new Date().toISOString(),
+                })));
+
                 syncedPlatforms.push('instagram');
             }
 
@@ -109,6 +126,24 @@ async function fetchInstagramPosts(igUserId, accessToken) {
     if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error?.message || 'Failed to fetch Instagram posts');
+    }
+
+    const data = await response.json();
+    return data.data || [];
+}
+
+/**
+ * Fetch stories from Instagram Graph API
+ */
+async function fetchInstagramStories(igUserId, accessToken) {
+    const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp';
+    const response = await fetch(
+        `https://graph.facebook.com/v21.0/${igUserId}/stories?fields=${fields}&limit=100&access_token=${accessToken}`
+    );
+
+    if (!response.ok) {
+        console.warn('Failed to fetch Instagram stories, they might not be available or expired.');
+        return [];
     }
 
     const data = await response.json();

@@ -47,7 +47,7 @@ export async function GET(request) {
         // When USE_INSTAGRAM_LOGIN is enabled in meta-oauth.js and connectionType is
         // 'instagram', the Instagram Login flow is used. Otherwise, all types use
         // Facebook OAuth, so we go through handleFacebookCallback.
-        const USE_INSTAGRAM_LOGIN = false; // Must match the flag in meta-oauth.js
+        const USE_INSTAGRAM_LOGIN = true; // Must match the flag in meta-oauth.js
         if (connectionType === 'instagram' && USE_INSTAGRAM_LOGIN) {
             accountData = await handleInstagramCallback(code, userId);
         } else {

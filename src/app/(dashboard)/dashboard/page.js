@@ -26,20 +26,33 @@ export default async function DashboardPage() {
             const accountIds = connectedAccounts.map((a) => a.id);
             const { data: dbPosts } = await supabase
                 .from('instagram_posts')
-                .select('*, connected_accounts!inner(platform)')
+                .select('*, connected_accounts!inner(platform), dm_automations(is_active)')
                 .in('account_id', accountIds)
                 .eq('is_story', false)
                 .order('timestamp', { ascending: false });
 
-            allPosts = (dbPosts || []).map((p) => ({
-                id: p.id,
-                caption: p.caption || '',
-                thumbnailUrl: p.thumbnail_url || p.media_url,
-                mediaType: p.media_type,
-                platform: p.connected_accounts?.platform || 'instagram',
-                status: 'setup',
-                timestamp: formatRelativeTime(p.timestamp),
-            }));
+            allPosts = (dbPosts || []).map((p) => {
+                let currentStatus = 'setup';
+                if (p.dm_automations) {
+                    const isArray = Array.isArray(p.dm_automations);
+                    const hasData = isArray ? p.dm_automations.length > 0 : Object.keys(p.dm_automations).length > 0;
+
+                    if (hasData) {
+                        const isActive = isArray ? p.dm_automations[0].is_active : p.dm_automations.is_active;
+                        currentStatus = isActive ? 'active' : 'paused';
+                    }
+                }
+
+                return {
+                    id: p.id,
+                    caption: p.caption || '',
+                    thumbnailUrl: p.thumbnail_url || p.media_url,
+                    mediaType: p.media_type,
+                    platform: p.connected_accounts?.platform || 'instagram',
+                    status: currentStatus,
+                    timestamp: formatRelativeTime(p.timestamp),
+                };
+            });
         }
     } catch {
         // Table may not exist yet
@@ -52,7 +65,8 @@ export default async function DashboardPage() {
         return <ConnectAccount />;
     }
 
-    const setupCount = allPosts.filter((p) => p.status === 'setup').length;
+    const setupPosts = allPosts.filter((p) => p.status === 'setup');
+    const setupCount = setupPosts.length;
 
     // Determine which platforms are connected
     const connectedPlatforms = connectedAccounts.map((a) => a.platform);
@@ -102,7 +116,7 @@ export default async function DashboardPage() {
                     </h2>
                     <p className={styles.sectionSub}>AutoDM isn&apos;t active on these posts yet</p>
                 </div>
-                <PostCardsGrid posts={allPosts} totalCount={allPosts.length} />
+                <PostCardsGrid posts={setupPosts} totalCount={setupPosts.length} />
             </div>
 
             {/* Analytics Placeholder */}

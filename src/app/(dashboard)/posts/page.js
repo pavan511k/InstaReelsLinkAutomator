@@ -23,24 +23,37 @@ export default async function PostsPage() {
             const accountIds = connectedAccounts.map((a) => a.id);
             const { data: dbPosts } = await supabase
                 .from('instagram_posts')
-                .select('*, connected_accounts!inner(platform)')
+                .select('*, connected_accounts!inner(platform), dm_automations(is_active)')
                 .in('account_id', accountIds)
                 .eq('is_story', false)
                 .order('timestamp', { ascending: false });
 
-            posts = (dbPosts || []).map((p) => ({
-                id: p.id,
-                caption: p.caption || 'No caption',
-                thumbnailUrl: p.thumbnail_url || p.media_url,
-                mediaType: p.media_type,
-                platform: p.connected_accounts?.platform || 'instagram',
-                status: 'setup',
-                sent: 0,
-                open: 0,
-                clicks: 0,
-                ctr: '0%',
-                timestamp: formatRelativeTime(p.timestamp),
-            }));
+            posts = (dbPosts || []).map((p) => {
+                let currentStatus = 'setup';
+                if (p.dm_automations) {
+                    const isArray = Array.isArray(p.dm_automations);
+                    const hasData = isArray ? p.dm_automations.length > 0 : Object.keys(p.dm_automations).length > 0;
+
+                    if (hasData) {
+                        const isActive = isArray ? p.dm_automations[0].is_active : p.dm_automations.is_active;
+                        currentStatus = isActive ? 'active' : 'paused';
+                    }
+                }
+
+                return {
+                    id: p.id,
+                    caption: p.caption || 'No caption',
+                    thumbnailUrl: p.thumbnail_url || p.media_url,
+                    mediaType: p.media_type,
+                    platform: p.connected_accounts?.platform || 'instagram',
+                    status: currentStatus,
+                    sent: 0,
+                    open: 0,
+                    clicks: 0,
+                    ctr: '0%',
+                    timestamp: formatRelativeTime(p.timestamp),
+                };
+            });
         }
     } catch {
         // Table may not exist yet

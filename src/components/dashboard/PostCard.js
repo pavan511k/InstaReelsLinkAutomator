@@ -41,18 +41,30 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
             </div>
 
             <div className={styles.cardActions}>
-                <button
-                    className={styles.setupBtn}
-                    onClick={() => onSetupDM?.(post)}
-                >
-                    ✏️ Setup LinkDM
-                </button>
-                <button
-                    className={styles.skipBtn}
-                    onClick={() => onSkip?.(post)}
-                >
-                    Skip
-                </button>
+                {post.status === 'setup' && (
+                    <button
+                        className={styles.setupBtn}
+                        onClick={() => onSetupDM?.(post)}
+                    >
+                        ✏️ Setup LinkDM
+                    </button>
+                )}
+                {post.status === 'active' && (
+                    <button
+                        className={`${styles.setupBtn} ${styles.activeBtn}`}
+                        onClick={() => onSetupDM?.(post)}
+                    >
+                        ✅ Edit LinkDM
+                    </button>
+                )}
+                {post.status === 'paused' && (
+                    <button
+                        className={`${styles.setupBtn} ${styles.pausedBtn}`}
+                        onClick={() => onSetupDM?.(post)}
+                    >
+                        ⏸ Resume LinkDM
+                    </button>
+                )}
             </div>
         </div>
     );

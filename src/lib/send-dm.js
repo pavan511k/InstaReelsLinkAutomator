@@ -35,6 +35,32 @@ export async function sendTextDM(igUserId, recipientId, message, accessToken) {
 }
 
 /**
+ * Send a private reply to a Facebook Page comment
+ * @param {string} commentId - The FB comment ID to reply to privately
+ * @param {string} message - Text message to send
+ * @param {string} accessToken - Page access token
+ */
+export async function sendFacebookPrivateReply(commentId, message, accessToken) {
+    const url = `${GRAPH_API_BASE}/${commentId}/private_replies`;
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            message: message,
+            access_token: accessToken,
+        }),
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to send Facebook private reply');
+    }
+
+    return response.json();
+}
+
+/**
  * Reply to a specific Instagram comment
  * @param {string} commentId - The ID of the comment to reply to
  * @param {string} message - The reply text
@@ -144,9 +170,25 @@ export function resolveMessageVariables(template, context) {
 /**
  * Send a DM based on automation config
  * Routes to the correct send function based on dm_type
+ * @param {object} automation - The automation DB record
+ * @param {string} recipientId - The IG User ID or FB Comment ID
+ * @param {string} accessToken - Page Access Token
+ * @param {string} igUserId - IG Sender ID or FB Page ID
+ * @param {object} context - Variable replacement context
+ * @param {string} platform - 'instagram' or 'facebook'
  */
-export async function sendAutomatedDM(automation, recipientId, accessToken, igUserId, context = {}) {
+export async function sendAutomatedDM(automation, recipientId, accessToken, igUserId, context = {}, platform = 'instagram') {
     const { dm_type, dm_config } = automation;
+
+    // Facebook requires using the `private_replies` edge on the comment ID to initiate a DM.
+    // In our webhook logic, `context.comment_id` is passed so we can use it.
+    if (platform === 'facebook') {
+        const message = resolveMessageVariables(dm_config.message || 'Check your DMs!', context);
+        // Facebook Private Replies only support text natively without prior interaction.
+        // If it was a button template, we degrade gracefully to text for the first message,
+        // or we could try sending a template. For safety, we use text.
+        return sendFacebookPrivateReply(context.comment_id || recipientId, message, accessToken);
+    }
 
     switch (dm_type) {
         case 'button_template': {

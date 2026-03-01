@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Download, Edit3, Pause, Trash2, Instagram, Facebook } from 'lucide-react';
+import { RefreshCw, Download, Edit3, Pause, Play, Trash2, Instagram, Facebook } from 'lucide-react';
 import PostCard from './PostCard';
 import SetupDMModal from './SetupDMModal';
 import styles from './PostsTable.module.css';
@@ -94,6 +94,43 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
     const handleCloseModal = () => {
         setShowSetupModal(false);
         setSelectedPost(null);
+    };
+
+    const handleToggleStatus = async (post) => {
+        const newStatus = post.status === 'active' ? false : true;
+        try {
+            const res = await fetch('/api/automations/status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ postId: post.id, isActive: newStatus }),
+            });
+            if (res.ok) {
+                router.refresh();
+            } else {
+                alert('Failed to update status');
+            }
+        } catch (err) {
+            console.error('Status update failed', err);
+        }
+    };
+
+    const handleDeleteAutomation = async (post) => {
+        if (!confirm('Are you sure you want to delete this automation? This will stop all DMs for this post.')) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/automations?postId=${post.id}`, {
+                method: 'DELETE',
+            });
+            if (res.ok) {
+                router.refresh();
+            } else {
+                alert('Failed to delete automation');
+            }
+        } catch (err) {
+            console.error('Status delete failed', err);
+        }
     };
 
     const getStatusBadge = (status) => {
@@ -285,19 +322,31 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                                             <td className={styles.metricCell}>{post.ctr}</td>
                                             <td>
                                                 <div className={styles.actions}>
-                                                    {post.status === 'active' && (
+                                                    {(post.status === 'active' || post.status === 'paused') && (
                                                         <>
-                                                            <button className={styles.actionBtn} title="Edit">
+                                                            <button
+                                                                className={styles.actionBtn}
+                                                                title="Edit"
+                                                                onClick={() => handleSetupDM(post)}
+                                                            >
                                                                 <Edit3 size={14} />
                                                             </button>
-                                                            <button className={styles.actionBtn} title="Pause">
-                                                                <Pause size={14} />
+                                                            <button
+                                                                className={styles.actionBtn}
+                                                                title={post.status === 'active' ? 'Pause' : 'Resume'}
+                                                                onClick={() => handleToggleStatus(post)}
+                                                            >
+                                                                {post.status === 'active' ? <Pause size={14} /> : <Play size={14} />}
+                                                            </button>
+                                                            <button
+                                                                className={`${styles.actionBtn} ${styles.actionDanger}`}
+                                                                title="Remove"
+                                                                onClick={() => handleDeleteAutomation(post)}
+                                                            >
+                                                                <Trash2 size={14} />
                                                             </button>
                                                         </>
                                                     )}
-                                                    <button className={`${styles.actionBtn} ${styles.actionDanger}`} title="Remove">
-                                                        <Trash2 size={14} />
-                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>

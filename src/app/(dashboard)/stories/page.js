@@ -21,12 +21,34 @@ export default async function StoriesPage() {
             const accountIds = connectedAccounts.map((a) => a.id);
             const { data: dbStories } = await supabase
                 .from('instagram_posts')
-                .select('*')
+                .select('*, connected_accounts!inner(platform), dm_automations(is_active)')
                 .in('account_id', accountIds)
                 .eq('is_story', true)
                 .order('timestamp', { ascending: false });
 
-            stories = dbStories || [];
+            stories = (dbStories || []).map((s) => {
+                let currentStatus = 'setup';
+                if (s.dm_automations) {
+                    const isArray = Array.isArray(s.dm_automations);
+                    const hasData = isArray ? s.dm_automations.length > 0 : Object.keys(s.dm_automations).length > 0;
+
+                    if (hasData) {
+                        const isActive = isArray ? s.dm_automations[0].is_active : s.dm_automations.is_active;
+                        currentStatus = isActive ? 'active' : 'paused';
+                    }
+                }
+
+                return {
+                    id: s.id,
+                    mediaUrl: s.media_url,
+                    thumbnailUrl: s.thumbnail_url || s.media_url,
+                    mediaType: s.media_type,
+                    platform: s.connected_accounts?.platform || 'instagram',
+                    status: currentStatus,
+                    replies: 0,
+                    timestamp: s.timestamp, // Keep original timestamp for now, format in component
+                };
+            });
         }
     } catch {
         // Table may not exist yet

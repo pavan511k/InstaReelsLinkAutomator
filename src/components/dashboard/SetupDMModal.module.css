@@ -90,6 +90,22 @@
     }
 }
 
+.loadingConfig {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    flex: 1;
+    color: var(--color-gray-500);
+    gap: var(--space-3);
+    min-height: 300px;
+}
+
+.loadingConfig p {
+    font-size: var(--font-size-sm);
+}
+
 @media (max-width: 768px) {
     .body {
         grid-template-columns: 1fr;

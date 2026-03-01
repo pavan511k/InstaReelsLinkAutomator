@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import DMSetupTab from './DMSetupTab';
 import TriggerSetupTab from './TriggerSetupTab';
@@ -17,6 +17,7 @@ const TABS = [
 export default function SetupDMModal({ onClose, postId, postCaption }) {
     const [activeTab, setActiveTab] = useState('dm-setup');
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoadingConfig, setIsLoadingConfig] = useState(true);
     const [saveMessage, setSaveMessage] = useState('');
     const [dmConfig, setDmConfig] = useState({
         type: 'button_template',
@@ -38,6 +39,33 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
         commentAutoReply: false,
         flowAutomation: false,
     });
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            if (!postId) {
+                setIsLoadingConfig(false);
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/automations?postId=${postId}`);
+                const data = await res.json();
+
+                if (data.automations && data.automations.length > 0) {
+                    const existing = data.automations[0];
+                    setDmConfig(existing.dm_config || dmConfig);
+                    setTriggerConfig(existing.trigger_config || triggerConfig);
+                    setSettingsConfig(existing.settings_config || settingsConfig);
+                }
+            } catch (err) {
+                console.error('Failed to load existing automation:', err);
+            } finally {
+                setIsLoadingConfig(false);
+            }
+        };
+
+        fetchConfig();
+    }, [postId]);
 
     const handleImageUploadFromPreview = (slideIndex, dataUrl) => {
         const newSlides = [...dmConfig.slides];
@@ -198,38 +226,45 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                 </div>
 
                 {/* Body: Split layout */}
-                <div className={styles.body}>
-                    <div className={styles.formPanel}>
-                        {renderTab()}
+                {isLoadingConfig ? (
+                    <div className={styles.loadingConfig}>
+                        <Loader2 className={styles.spinner} size={32} />
+                        <p>Loading automation settings...</p>
+                    </div>
+                ) : (
+                    <div className={styles.body}>
+                        <div className={styles.formPanel}>
+                            {renderTab()}
 
-                        {/* Save bar */}
-                        <div className={styles.saveBar}>
-                            {saveMessage && (
-                                <span className={styles.saveMessage}>{saveMessage}</span>
-                            )}
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleSave}
-                                disabled={isSaving}
-                            >
-                                {isSaving ? (
-                                    <>
-                                        <Loader2 size={14} className={styles.spinner} />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    'Save & Activate'
+                            {/* Save bar */}
+                            <div className={styles.saveBar}>
+                                {saveMessage && (
+                                    <span className={styles.saveMessage}>{saveMessage}</span>
                                 )}
-                            </button>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleSave}
+                                    disabled={isSaving}
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <Loader2 size={14} className={styles.spinner} />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        'Save & Activate'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                        <div className={styles.previewPanel}>
+                            <PhonePreview
+                                config={dmConfig}
+                                onImageUpload={handleImageUploadFromPreview}
+                            />
                         </div>
                     </div>
-                    <div className={styles.previewPanel}>
-                        <PhonePreview
-                            config={dmConfig}
-                            onImageUpload={handleImageUploadFromPreview}
-                        />
-                    </div>
-                </div>
+                )}
             </div>
         </div>
     );
