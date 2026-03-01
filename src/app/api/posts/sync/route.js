@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase-server';
 
 /**
  * POST /api/posts/sync
- * Fetches posts from connected Instagram/Facebook account and saves to DB
+ * Fetches posts from all connected Instagram/Facebook accounts and saves to DB
  */
 export async function POST() {
     const supabase = await createClient();
@@ -13,66 +13,70 @@ export async function POST() {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Get user's connected account
-    const { data: account, error: accountError } = await supabase
+    // Get all active connected accounts
+    const { data: accounts, error: accountError } = await supabase
         .from('connected_accounts')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .eq('is_active', true);
 
-    if (accountError || !account) {
+    if (accountError || !accounts || accounts.length === 0) {
         return NextResponse.json({ error: 'No connected account found' }, { status: 400 });
     }
 
-    const posts = [];
+    const allPosts = [];
+    const syncedPlatforms = [];
 
     try {
-        // Fetch Instagram posts if Instagram is connected
-        if (account.ig_user_id && (account.platform === 'instagram' || account.platform === 'both')) {
-            const igPosts = await fetchInstagramPosts(account.ig_user_id, account.fb_page_access_token || account.access_token);
-            posts.push(...igPosts.map((p) => ({
-                account_id: account.id,
-                ig_post_id: p.id,
-                media_type: p.media_type,
-                media_url: p.media_url || null,
-                thumbnail_url: p.thumbnail_url || p.media_url || null,
-                caption: p.caption || '',
-                permalink: p.permalink || '',
-                timestamp: p.timestamp,
-                is_story: false,
-                synced_at: new Date().toISOString(),
-            })));
-        }
-
-        // Fetch Facebook Page posts if Facebook is connected
-        if (account.fb_page_id && (account.platform === 'facebook' || account.platform === 'both')) {
-            const fbPosts = await fetchFacebookPosts(account.fb_page_id, account.fb_page_access_token || account.access_token);
-            posts.push(...fbPosts.map((p) => {
-                // Extract media from attachments (replaces deprecated full_picture/type)
-                const attachment = p.attachments?.data?.[0];
-                const mediaUrl = attachment?.media?.image?.src || null;
-                const mediaType = attachment?.media_type === 'video' ? 'VIDEO' : 'IMAGE';
-
-                return {
+        for (const account of accounts) {
+            // Fetch Instagram posts if Instagram is connected
+            if (account.ig_user_id && (account.platform === 'instagram' || account.platform === 'both')) {
+                const igPosts = await fetchInstagramPosts(account.ig_user_id, account.fb_page_access_token || account.access_token);
+                allPosts.push(...igPosts.map((p) => ({
                     account_id: account.id,
-                    ig_post_id: `fb_${p.id}`,
-                    media_type: mediaType,
-                    media_url: mediaUrl,
-                    thumbnail_url: mediaUrl,
-                    caption: p.message || '',
-                    permalink: p.permalink_url || '',
-                    timestamp: p.created_time,
+                    ig_post_id: p.id,
+                    media_type: p.media_type,
+                    media_url: p.media_url || null,
+                    thumbnail_url: p.thumbnail_url || p.media_url || null,
+                    caption: p.caption || '',
+                    permalink: p.permalink || '',
+                    timestamp: p.timestamp,
                     is_story: false,
                     synced_at: new Date().toISOString(),
-                };
-            }));
+                })));
+                syncedPlatforms.push('instagram');
+            }
+
+            // Fetch Facebook Page posts if Facebook is connected
+            if (account.fb_page_id && (account.platform === 'facebook' || account.platform === 'both')) {
+                const fbPosts = await fetchFacebookPosts(account.fb_page_id, account.fb_page_access_token || account.access_token);
+                allPosts.push(...fbPosts.map((p) => {
+                    const attachment = p.attachments?.data?.[0];
+                    const mediaUrl = attachment?.media?.image?.src || null;
+                    const mediaType = attachment?.media_type === 'video' ? 'VIDEO' : 'IMAGE';
+
+                    return {
+                        account_id: account.id,
+                        ig_post_id: `fb_${p.id}`,
+                        media_type: mediaType,
+                        media_url: mediaUrl,
+                        thumbnail_url: mediaUrl,
+                        caption: p.message || '',
+                        permalink: p.permalink_url || '',
+                        timestamp: p.created_time,
+                        is_story: false,
+                        synced_at: new Date().toISOString(),
+                    };
+                }));
+                syncedPlatforms.push('facebook');
+            }
         }
 
         // Upsert posts (insert or update on conflict)
-        if (posts.length > 0) {
+        if (allPosts.length > 0) {
             const { error: upsertError } = await supabase
                 .from('instagram_posts')
-                .upsert(posts, { onConflict: 'ig_post_id' });
+                .upsert(allPosts, { onConflict: 'ig_post_id' });
 
             if (upsertError) {
                 console.error('Failed to save posts:', upsertError);
@@ -82,8 +86,8 @@ export async function POST() {
 
         return NextResponse.json({
             success: true,
-            synced: posts.length,
-            platform: account.platform,
+            synced: allPosts.length,
+            platforms: syncedPlatforms,
         });
     } catch (err) {
         console.error('Post sync error:', err);
@@ -113,7 +117,6 @@ async function fetchInstagramPosts(igUserId, accessToken) {
 
 /**
  * Fetch posts from Facebook Page Graph API
- * Uses 'attachments' edge instead of deprecated 'full_picture' and 'type' fields
  */
 async function fetchFacebookPosts(pageId, pageAccessToken) {
     const fields = 'id,message,permalink_url,created_time,attachments{media,media_type,url}';

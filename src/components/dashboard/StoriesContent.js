@@ -1,12 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { RefreshCw, Instagram, Clock, Search } from 'lucide-react';
 import SetupDMModal from '@/components/dashboard/SetupDMModal';
 import styles from '../../app/(dashboard)/stories/stories.module.css';
 
 export default function StoriesContent({ stories = [], isConnected = false, platform }) {
+    const router = useRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncMessage, setSyncMessage] = useState('');
 
     const recentStories = stories.filter((s) => !s.story_expires_at || new Date(s.story_expires_at) > new Date());
     const expiredStories = stories.filter((s) => s.story_expires_at && new Date(s.story_expires_at) <= new Date());
@@ -15,17 +19,40 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
         window.location.href = '/api/auth/meta/connect?type=instagram';
     };
 
+    const handleCheckForNewStories = async () => {
+        setIsSyncing(true);
+        setSyncMessage('');
+        try {
+            const res = await fetch('/api/posts/sync', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                setSyncMessage(`✅ Synced ${data.synced} items`);
+                router.refresh();
+            } else {
+                setSyncMessage(`❌ ${data.error}`);
+            }
+        } catch (err) {
+            setSyncMessage(`❌ Sync failed: ${err.message}`);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     return (
         <div className={styles.storiesPage}>
             {/* Header */}
             <div className={styles.header}>
                 <h1 className={styles.title}>Stories</h1>
                 <div className={styles.headerRight}>
-                    <button className="btn btn-primary btn-sm" disabled={!isConnected}>
-                        <RefreshCw size={14} />
-                        Check for new stories
+                    <button
+                        className="btn btn-primary btn-sm"
+                        disabled={!isConnected || isSyncing}
+                        onClick={handleCheckForNewStories}
+                    >
+                        <RefreshCw size={14} className={isSyncing ? 'spinning' : ''} />
+                        {isSyncing ? 'Syncing...' : 'Check for new stories'}
                     </button>
-                    <span className={styles.syncTime}>Last synced: {isConnected ? 'just now' : 'never'}</span>
+                    {syncMessage && <span className={styles.syncTime}>{syncMessage}</span>}
                 </div>
             </div>
 

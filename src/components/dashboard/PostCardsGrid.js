@@ -1,15 +1,30 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import PostCard from './PostCard';
+import SetupDMModal from './SetupDMModal';
 import styles from './PostCardsGrid.module.css';
 
 const MAX_VISIBLE_CARDS = 4;
 
 export default function PostCardsGrid({ posts = [], totalCount = 0 }) {
+    const [showSetupModal, setShowSetupModal] = useState(false);
+    const [selectedPost, setSelectedPost] = useState(null);
+
     const visiblePosts = posts.slice(0, MAX_VISIBLE_CARDS);
     const hasMore = totalCount > MAX_VISIBLE_CARDS;
+
+    const handleSetupDM = (post) => {
+        setSelectedPost(post);
+        setShowSetupModal(true);
+    };
+
+    const handleCloseModal = () => {
+        setShowSetupModal(false);
+        setSelectedPost(null);
+    };
 
     if (posts.length === 0) {
         return (
@@ -26,6 +41,7 @@ export default function PostCardsGrid({ posts = [], totalCount = 0 }) {
                     <PostCard
                         key={post.id}
                         post={post}
+                        onSetupDM={handleSetupDM}
                     />
                 ))}
             </div>
@@ -37,6 +53,14 @@ export default function PostCardsGrid({ posts = [], totalCount = 0 }) {
                         <ArrowRight size={14} />
                     </Link>
                 </div>
+            )}
+
+            {/* Setup DM Modal */}
+            {showSetupModal && (
+                <SetupDMModal
+                    onClose={handleCloseModal}
+                    postCaption={selectedPost?.caption || ''}
+                />
             )}
         </div>
     );

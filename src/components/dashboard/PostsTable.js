@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { RefreshCw, Download, Edit3, Pause, Trash2, Instagram, Facebook } from 'lucide-react';
 import PostCard from './PostCard';
+import SetupDMModal from './SetupDMModal';
 import styles from './PostsTable.module.css';
 
 const STATUS_FILTERS = [
@@ -16,10 +18,15 @@ const INITIAL_CARDS = 8;
 const LOAD_MORE_COUNT = 8;
 
 export default function PostsTable({ posts = [], onSetupDM, isConnected = false, connectedAccounts = [] }) {
+    const router = useRouter();
     const [activeStatusFilter, setActiveStatusFilter] = useState('all');
     const [activePlatformFilter, setActivePlatformFilter] = useState('all');
     const [visibleCardCount, setVisibleCardCount] = useState(INITIAL_CARDS);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncMessage, setSyncMessage] = useState('');
+    const [showSetupModal, setShowSetupModal] = useState(false);
+    const [selectedPost, setSelectedPost] = useState(null);
 
     // Platform filtering
     const platformFiltered = activePlatformFilter === 'all'
@@ -60,13 +67,42 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
         setVisibleCardCount(INITIAL_CARDS);
     };
 
+    const handleCheckForNewPosts = async () => {
+        setIsSyncing(true);
+        setSyncMessage('');
+        try {
+            const res = await fetch('/api/posts/sync', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                setSyncMessage(`✅ Synced ${data.synced} posts`);
+                router.refresh();
+            } else {
+                setSyncMessage(`❌ ${data.error}`);
+            }
+        } catch (err) {
+            setSyncMessage(`❌ Sync failed: ${err.message}`);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleSetupDM = (post) => {
+        setSelectedPost(post);
+        setShowSetupModal(true);
+    };
+
+    const handleCloseModal = () => {
+        setShowSetupModal(false);
+        setSelectedPost(null);
+    };
+
     const getStatusBadge = (status) => {
         switch (status) {
             case 'active':
                 return <span className={`badge badge-success`}>✅ Active</span>;
             case 'setup':
                 return (
-                    <button className={styles.setupBadge} onClick={() => onSetupDM?.()}>
+                    <button className={styles.setupBadge} onClick={() => handleSetupDM()}>
                         🔴 Setup LinkDM
                     </button>
                 );
@@ -95,11 +131,15 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                     <h1 className={styles.title}>Posts & Reels</h1>
                 </div>
                 <div className={styles.headerRight}>
-                    <button className="btn btn-primary btn-sm" disabled={!isConnected}>
-                        <RefreshCw size={14} />
-                        Check for new posts
+                    <button
+                        className="btn btn-primary btn-sm"
+                        disabled={!isConnected || isSyncing}
+                        onClick={handleCheckForNewPosts}
+                    >
+                        <RefreshCw size={14} className={isSyncing ? styles.spinning : ''} />
+                        {isSyncing ? 'Syncing...' : 'Check for new posts'}
                     </button>
-                    <span className={styles.syncTime}>Last synced: never</span>
+                    {syncMessage && <span className={styles.syncTime}>{syncMessage}</span>}
                 </div>
             </div>
 
@@ -164,7 +204,7 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                                     <PostCard
                                         key={post.id}
                                         post={post}
-                                        onSetupDM={onSetupDM}
+                                        onSetupDM={handleSetupDM}
                                     />
                                 ))}
                             </div>
@@ -278,6 +318,14 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                 </div>
                 <button className="btn btn-outline btn-sm" disabled={!isConnected}>Import Posts</button>
             </div>
+
+            {/* Setup DM Modal */}
+            {showSetupModal && (
+                <SetupDMModal
+                    onClose={handleCloseModal}
+                    postCaption={selectedPost?.caption || ''}
+                />
+            )}
         </div>
     );
 }

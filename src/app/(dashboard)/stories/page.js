@@ -5,23 +5,24 @@ export default async function StoriesPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    let connectedAccount = null;
+    let connectedAccounts = [];
     let stories = [];
 
     try {
-        const { data: account } = await supabase
+        const { data: accounts } = await supabase
             .from('connected_accounts')
             .select('id, platform, ig_username')
             .eq('user_id', user.id)
-            .single();
+            .eq('is_active', true);
 
-        connectedAccount = account;
+        connectedAccounts = accounts || [];
 
-        if (account) {
+        if (connectedAccounts.length > 0) {
+            const accountIds = connectedAccounts.map((a) => a.id);
             const { data: dbStories } = await supabase
                 .from('instagram_posts')
                 .select('*')
-                .eq('account_id', account.id)
+                .in('account_id', accountIds)
                 .eq('is_story', true)
                 .order('timestamp', { ascending: false });
 
@@ -31,11 +32,14 @@ export default async function StoriesPage() {
         // Table may not exist yet
     }
 
+    const isConnected = connectedAccounts.length > 0;
+    const platform = connectedAccounts[0]?.platform;
+
     return (
         <StoriesContent
             stories={stories}
-            isConnected={!!connectedAccount}
-            platform={connectedAccount?.platform}
+            isConnected={isConnected}
+            platform={platform}
         />
     );
 }
