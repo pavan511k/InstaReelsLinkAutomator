@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw, Download, Edit3, Pause, Trash2, Instagram } from 'lucide-react';
+import { RefreshCw, Download, Edit3, Pause, Trash2, Instagram, Facebook } from 'lucide-react';
 import PostCard from './PostCard';
 import styles from './PostsTable.module.css';
 
-const FILTERS = [
+const STATUS_FILTERS = [
     { key: 'all', label: 'All' },
     { key: 'active', label: 'Active' },
     { key: 'setup', label: 'Setup' },
@@ -15,26 +15,49 @@ const FILTERS = [
 const INITIAL_CARDS = 8;
 const LOAD_MORE_COUNT = 8;
 
-export default function PostsTable({ posts = [], onSetupDM, isConnected = false }) {
-    const [activeFilter, setActiveFilter] = useState('all');
+export default function PostsTable({ posts = [], onSetupDM, isConnected = false, connectedAccounts = [] }) {
+    const [activeStatusFilter, setActiveStatusFilter] = useState('all');
+    const [activePlatformFilter, setActivePlatformFilter] = useState('all');
     const [visibleCardCount, setVisibleCardCount] = useState(INITIAL_CARDS);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-    const filteredPosts = activeFilter === 'all'
+    // Platform filtering
+    const platformFiltered = activePlatformFilter === 'all'
         ? posts
-        : posts.filter((post) => post.status === activeFilter);
+        : posts.filter((post) => post.platform === activePlatformFilter);
 
-    const setupPosts = posts.filter((p) => p.status === 'setup');
+    // Status filtering (applied on top of platform filter)
+    const filteredPosts = activeStatusFilter === 'all'
+        ? platformFiltered
+        : platformFiltered.filter((post) => post.status === activeStatusFilter);
+
+    // Cards: show only setup posts from platform filter
+    const setupPosts = platformFiltered.filter((p) => p.status === 'setup');
     const visibleCards = setupPosts.slice(0, visibleCardCount);
     const hasMoreCards = setupPosts.length > visibleCardCount;
 
+    // Platform counts
+    const platformCounts = {
+        all: posts.length,
+        instagram: posts.filter((p) => p.platform === 'instagram').length,
+        facebook: posts.filter((p) => p.platform === 'facebook').length,
+    };
+
+    // Determine which platform tabs to show
+    const hasMultiplePlatforms = connectedAccounts.length > 1 ||
+        new Set(posts.map((p) => p.platform)).size > 1;
+
     const handleLoadMore = () => {
         setIsLoadingMore(true);
-        // Simulate lazy load delay for smoother UX
         setTimeout(() => {
             setVisibleCardCount((prev) => prev + LOAD_MORE_COUNT);
             setIsLoadingMore(false);
         }, 300);
+    };
+
+    const handlePlatformChange = (platform) => {
+        setActivePlatformFilter(platform);
+        setVisibleCardCount(INITIAL_CARDS);
     };
 
     const getStatusBadge = (status) => {
@@ -54,8 +77,14 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false 
         }
     };
 
-    const getFilterCount = (filterKey) => {
-        return posts.filter((p) => p.status === filterKey).length;
+    const getStatusFilterCount = (filterKey) => {
+        return platformFiltered.filter((p) => p.status === filterKey).length;
+    };
+
+    const getPlatformIcon = (platform) => {
+        if (platform === 'instagram') return <Instagram size={12} />;
+        if (platform === 'facebook') return <Facebook size={12} />;
+        return null;
     };
 
     return (
@@ -73,6 +102,36 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false 
                     <span className={styles.syncTime}>Last synced: never</span>
                 </div>
             </div>
+
+            {/* Platform Tabs */}
+            {hasMultiplePlatforms && (
+                <div className={styles.platformTabs}>
+                    <button
+                        className={`${styles.platformTab} ${activePlatformFilter === 'all' ? styles.platformTabActive : ''}`}
+                        onClick={() => handlePlatformChange('all')}
+                    >
+                        All <span className={styles.platformCount}>{platformCounts.all}</span>
+                    </button>
+                    {platformCounts.instagram > 0 && (
+                        <button
+                            className={`${styles.platformTab} ${activePlatformFilter === 'instagram' ? styles.platformTabActive : ''} ${styles.platformTabInstagram}`}
+                            onClick={() => handlePlatformChange('instagram')}
+                        >
+                            <Instagram size={14} />
+                            Instagram <span className={styles.platformCount}>{platformCounts.instagram}</span>
+                        </button>
+                    )}
+                    {platformCounts.facebook > 0 && (
+                        <button
+                            className={`${styles.platformTab} ${activePlatformFilter === 'facebook' ? styles.platformTabActive : ''} ${styles.platformTabFacebook}`}
+                            onClick={() => handlePlatformChange('facebook')}
+                        >
+                            <Facebook size={14} />
+                            Facebook <span className={styles.platformCount}>{platformCounts.facebook}</span>
+                        </button>
+                    )}
+                </div>
+            )}
 
             {/* Empty State */}
             {posts.length === 0 ? (
@@ -128,16 +187,16 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false 
                         <div className={styles.tableSectionHeader}>
                             <h2 className={styles.tableSectionTitle}>All Posts</h2>
                             <div className="filter-pills">
-                                {FILTERS.map((filter) => (
+                                {STATUS_FILTERS.map((filter) => (
                                     <button
                                         key={filter.key}
-                                        className={`filter-pill ${activeFilter === filter.key ? 'active' : ''}`}
-                                        onClick={() => setActiveFilter(filter.key)}
+                                        className={`filter-pill ${activeStatusFilter === filter.key ? 'active' : ''}`}
+                                        onClick={() => setActiveStatusFilter(filter.key)}
                                     >
                                         {filter.label}
                                         {filter.key !== 'all' && (
                                             <span className={styles.filterCount}>
-                                                {getFilterCount(filter.key)}
+                                                {getStatusFilterCount(filter.key)}
                                             </span>
                                         )}
                                     </button>
@@ -167,6 +226,11 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false 
                                                         {post.thumbnailUrl ? (
                                                             <img src={post.thumbnailUrl} alt="" />
                                                         ) : null}
+                                                        {getPlatformIcon(post.platform) && (
+                                                            <span className={`${styles.thumbPlatform} ${styles[`thumbPlatform_${post.platform}`]}`}>
+                                                                {getPlatformIcon(post.platform)}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div className={styles.postInfo}>
                                                         <p className={styles.postCaption}>{post.caption}</p>

@@ -63,6 +63,55 @@
     color: var(--color-gray-500);
 }
 
+/* Platform Tabs */
+.platformTabs {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-6);
+    padding: var(--space-1);
+    background: var(--color-gray-100);
+    border-radius: var(--radius-lg);
+    width: fit-content;
+}
+
+.platformTab {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-gray-600);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.platformTab:hover {
+    color: var(--color-gray-900);
+}
+
+.platformTabActive {
+    background: var(--color-white);
+    color: var(--color-gray-900);
+    font-weight: var(--font-weight-semibold);
+    box-shadow: var(--shadow-sm);
+}
+
+.platformTabInstagram.platformTabActive {
+    color: #E1306C;
+}
+
+.platformTabFacebook.platformTabActive {
+    color: #1877F2;
+}
+
+.platformCount {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-left: 2px;
+}
+
 /* Cards Section — Ready to Setup */
 .cardsSection {
     background: var(--color-white);
@@ -172,12 +221,35 @@
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     flex-shrink: 0;
     overflow: hidden;
+    position: relative;
 }
 
 .postThumb img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.thumbPlatform {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    border: 2px solid white;
+}
+
+.thumbPlatform_instagram {
+    background: linear-gradient(135deg, #E1306C, #F77737);
+}
+
+.thumbPlatform_facebook {
+    background: #1877F2;
 }
 
 .postInfo {
@@ -308,6 +380,10 @@
     .tableSectionHeader {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .platformTabs {
+        width: 100%;
     }
 }
 

@@ -8,32 +8,35 @@ export default async function DashboardPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Check if user has connected accounts
-    let connectedAccount = null;
-    let posts = [];
+    // Fetch all active connected accounts
+    let connectedAccounts = [];
+    let allPosts = [];
 
     try {
-        const { data } = await supabase
+        const { data: accounts } = await supabase
             .from('connected_accounts')
-            .select('id, platform, ig_username, ig_profile_picture_url, fb_page_name')
+            .select('id, platform, ig_username, ig_profile_picture_url, fb_page_name, is_active')
             .eq('user_id', user.id)
-            .single();
-        connectedAccount = data;
+            .eq('is_active', true);
 
-        // Fetch posts if account is connected
-        if (data) {
+        connectedAccounts = accounts || [];
+
+        // Fetch posts from all connected accounts
+        if (connectedAccounts.length > 0) {
+            const accountIds = connectedAccounts.map((a) => a.id);
             const { data: dbPosts } = await supabase
                 .from('instagram_posts')
-                .select('*')
-                .eq('account_id', data.id)
+                .select('*, connected_accounts!inner(platform)')
+                .in('account_id', accountIds)
                 .eq('is_story', false)
                 .order('timestamp', { ascending: false });
 
-            posts = (dbPosts || []).map((p) => ({
+            allPosts = (dbPosts || []).map((p) => ({
                 id: p.id,
                 caption: p.caption || '',
                 thumbnailUrl: p.thumbnail_url || p.media_url,
                 mediaType: p.media_type,
+                platform: p.connected_accounts?.platform || 'instagram',
                 status: 'setup',
                 timestamp: formatRelativeTime(p.timestamp),
             }));
@@ -44,14 +47,16 @@ export default async function DashboardPage() {
 
     const displayName = user?.email?.split('@')[0] || 'User';
 
-    // If not connected, show Connect Account page
-    if (!connectedAccount) {
+    // If no connected accounts, show Connect Account page
+    if (connectedAccounts.length === 0) {
         return <ConnectAccount />;
     }
 
-    const setupCount = posts.filter((p) => p.status === 'setup').length;
+    const setupCount = allPosts.filter((p) => p.status === 'setup').length;
 
-    // Connected state — show dashboard with account banner
+    // Determine which platforms are connected
+    const connectedPlatforms = connectedAccounts.map((a) => a.platform);
+
     return (
         <div className={styles.dashboardPage}>
             <div className={styles.header}>
@@ -67,8 +72,11 @@ export default async function DashboardPage() {
                 </div>
             </div>
 
-            {/* Connected Account Banner */}
-            <ConnectedAccountBanner account={connectedAccount} />
+            {/* Connected Account Banners — one per account */}
+            <ConnectedAccountBanner
+                accounts={connectedAccounts}
+                connectedPlatforms={connectedPlatforms}
+            />
 
             {/* Stats Cards */}
             <div className={styles.statsGrid}>
@@ -94,7 +102,7 @@ export default async function DashboardPage() {
                     </h2>
                     <p className={styles.sectionSub}>AutoDM isn&apos;t active on these posts yet</p>
                 </div>
-                <PostCardsGrid posts={posts} totalCount={posts.length} />
+                <PostCardsGrid posts={allPosts} totalCount={allPosts.length} />
             </div>
 
             {/* Analytics Placeholder */}

@@ -1,10 +1,11 @@
 'use client';
 
-import { Instagram, Film } from 'lucide-react';
+import { Instagram, Facebook, Film } from 'lucide-react';
 import styles from './PostCard.module.css';
 
 export default function PostCard({ post, onSetupDM, onSkip }) {
     const isReel = post.mediaType === 'VIDEO' || post.mediaType === 'REEL';
+    const isFacebook = post.platform === 'facebook';
     const truncatedCaption = post.caption?.length > 60
         ? post.caption.substring(0, 60) + '...'
         : post.caption || '';
@@ -21,7 +22,7 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
                     />
                 ) : (
                     <div className={styles.thumbnailPlaceholder}>
-                        <Instagram size={24} />
+                        {isFacebook ? <Facebook size={24} /> : <Instagram size={24} />}
                     </div>
                 )}
                 {isReel && (
@@ -29,8 +30,8 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
                         <Film size={12} />
                     </span>
                 )}
-                <span className={styles.platformBadge}>
-                    <Instagram size={12} />
+                <span className={`${styles.platformBadge} ${isFacebook ? styles.platformBadgeFacebook : ''}`}>
+                    {isFacebook ? <Facebook size={12} /> : <Instagram size={12} />}
                 </span>
             </div>
 

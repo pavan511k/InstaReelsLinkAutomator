@@ -54,18 +54,27 @@ export async function GET(request) {
             accountData = await handleFacebookCallback(code, userId, connectionType);
         }
 
-        // Save to Supabase (upsert)
+        // Save to Supabase — multi-account: one row per user per platform
         const supabase = await createClient();
+        const platform = accountData.platform;
+
+        // Check for existing account (active or inactive) for this user + platform
         const { data: existingAccount } = await supabase
             .from('connected_accounts')
-            .select('id')
+            .select('id, is_active')
             .eq('user_id', userId)
-            .single();
+            .eq('platform', platform)
+            .maybeSingle();
 
         if (existingAccount) {
+            // Reactivate if inactive, or update if active
             const { error: updateError } = await supabase
                 .from('connected_accounts')
-                .update({ ...accountData, updated_at: new Date().toISOString() })
+                .update({
+                    ...accountData,
+                    is_active: true,
+                    updated_at: new Date().toISOString(),
+                })
                 .eq('id', existingAccount.id);
 
             if (updateError) {
@@ -73,9 +82,10 @@ export async function GET(request) {
                 return NextResponse.redirect(`${appUrl}/dashboard?error=save_failed`);
             }
         } else {
+            // Insert new account row (allows FB + IG simultaneously)
             const { error: insertError } = await supabase
                 .from('connected_accounts')
-                .insert(accountData);
+                .insert({ ...accountData, is_active: true });
 
             if (insertError) {
                 console.error('Failed to save account:', insertError);

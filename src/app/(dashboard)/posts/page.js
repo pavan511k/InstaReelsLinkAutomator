@@ -6,24 +6,25 @@ export default async function PostsPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Check connection & fetch posts from DB
-    let connectedAccount = null;
+    // Check connection & fetch posts from all active accounts
+    let connectedAccounts = [];
     let posts = [];
 
     try {
-        const { data: account } = await supabase
+        const { data: accounts } = await supabase
             .from('connected_accounts')
-            .select('id, platform, ig_username, fb_page_name')
+            .select('id, platform, ig_username, fb_page_name, is_active')
             .eq('user_id', user.id)
-            .single();
+            .eq('is_active', true);
 
-        connectedAccount = account;
+        connectedAccounts = accounts || [];
 
-        if (account) {
+        if (connectedAccounts.length > 0) {
+            const accountIds = connectedAccounts.map((a) => a.id);
             const { data: dbPosts } = await supabase
                 .from('instagram_posts')
-                .select('*')
-                .eq('account_id', account.id)
+                .select('*, connected_accounts!inner(platform)')
+                .in('account_id', accountIds)
                 .eq('is_story', false)
                 .order('timestamp', { ascending: false });
 
@@ -32,6 +33,7 @@ export default async function PostsPage() {
                 caption: p.caption || 'No caption',
                 thumbnailUrl: p.thumbnail_url || p.media_url,
                 mediaType: p.media_type,
+                platform: p.connected_accounts?.platform || 'instagram',
                 status: 'setup',
                 sent: 0,
                 open: 0,
@@ -44,14 +46,14 @@ export default async function PostsPage() {
         // Table may not exist yet
     }
 
-    const isConnected = !!connectedAccount;
+    const isConnected = connectedAccounts.length > 0;
 
     return (
         <div className={styles.postsPage}>
             <PostsTable
                 posts={posts}
                 isConnected={isConnected}
-                platform={connectedAccount?.platform}
+                connectedAccounts={connectedAccounts}
             />
         </div>
     );

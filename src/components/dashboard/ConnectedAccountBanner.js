@@ -2,126 +2,148 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Instagram, LogOut, Link as LinkIcon, RefreshCw } from 'lucide-react';
+import { Instagram, Facebook, LogOut, RefreshCw, Plus } from 'lucide-react';
 import styles from './ConnectedAccountBanner.module.css';
 
-export default function ConnectedAccountBanner({ account }) {
+export default function ConnectedAccountBanner({ accounts = [], connectedPlatforms = [] }) {
     const router = useRouter();
-    const [isDisconnecting, setIsDisconnecting] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [syncResult, setSyncResult] = useState(null);
+    const [syncingId, setSyncingId] = useState(null);
+    const [disconnectingId, setDisconnectingId] = useState(null);
+    const [syncResults, setSyncResults] = useState({});
 
-    const handleDisconnect = async () => {
-        if (!confirm('Are you sure you want to disconnect this account? All synced posts and automations will be removed.')) return;
-        setIsDisconnecting(true);
+    const handleDisconnect = async (accountId) => {
+        if (!confirm('Disconnect this account? Your posts and automations will be preserved.')) return;
+        setDisconnectingId(accountId);
         try {
-            const res = await fetch('/api/accounts/disconnect', { method: 'POST' });
+            const res = await fetch('/api/accounts/disconnect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId }),
+            });
             if (res.ok) {
                 router.refresh();
             }
         } catch (err) {
             console.error('Disconnect failed:', err);
         } finally {
-            setIsDisconnecting(false);
+            setDisconnectingId(null);
         }
     };
 
-    const handleSync = async () => {
-        setIsSyncing(true);
-        setSyncResult(null);
+    const handleSync = async (accountId) => {
+        setSyncingId(accountId);
+        setSyncResults((prev) => ({ ...prev, [accountId]: null }));
         try {
             const res = await fetch('/api/posts/sync', { method: 'POST' });
             const data = await res.json();
             if (res.ok) {
-                setSyncResult(`✅ Synced ${data.synced} posts`);
+                setSyncResults((prev) => ({ ...prev, [accountId]: `✅ Synced ${data.synced} posts` }));
                 router.refresh();
             } else {
-                setSyncResult(`❌ ${data.error}`);
+                setSyncResults((prev) => ({ ...prev, [accountId]: `❌ ${data.error}` }));
             }
         } catch (err) {
-            setSyncResult(`❌ Sync failed: ${err.message}`);
+            setSyncResults((prev) => ({ ...prev, [accountId]: `❌ Sync failed: ${err.message}` }));
         } finally {
-            setIsSyncing(false);
+            setSyncingId(null);
         }
     };
 
-    const handleConnectMore = (type) => {
+    const handleConnect = (type) => {
         window.location.href = `/api/auth/meta/connect?type=${type}`;
     };
 
-    const platformLabel = {
-        instagram: 'Instagram',
-        facebook: 'Facebook',
-        both: 'Instagram + Facebook',
+    const hasFacebook = connectedPlatforms.includes('facebook') || connectedPlatforms.includes('both');
+    const hasInstagram = connectedPlatforms.includes('instagram') || connectedPlatforms.includes('both');
+
+    const getPlatformIcon = (platform) => {
+        if (platform === 'instagram') return <Instagram size={18} />;
+        if (platform === 'facebook') return <Facebook size={18} />;
+        return <Instagram size={18} />;
+    };
+
+    const getPlatformLabel = (platform) => {
+        if (platform === 'instagram') return 'Instagram';
+        if (platform === 'facebook') return 'Facebook';
+        if (platform === 'both') return 'Instagram + Facebook';
+        return platform;
     };
 
     return (
-        <div className={styles.banner}>
-            <div className={styles.accountInfo}>
-                <div className={styles.accountAvatar}>
-                    {account.ig_profile_picture_url ? (
-                        <img src={account.ig_profile_picture_url} alt="" />
-                    ) : (
-                        <Instagram size={20} />
+        <div className={styles.container}>
+            {/* Account rows */}
+            {accounts.map((account) => (
+                <div key={account.id} className={styles.banner}>
+                    <div className={styles.accountInfo}>
+                        <div className={`${styles.accountAvatar} ${styles[`avatar_${account.platform}`]}`}>
+                            {account.ig_profile_picture_url ? (
+                                <img src={account.ig_profile_picture_url} alt="" />
+                            ) : (
+                                getPlatformIcon(account.platform)
+                            )}
+                        </div>
+                        <div className={styles.accountDetails}>
+                            <span className={styles.accountName}>
+                                {account.ig_username
+                                    ? `@${account.ig_username}`
+                                    : account.fb_page_name || 'Connected Account'}
+                            </span>
+                            <span className={`${styles.accountPlatform} ${styles[`platform_${account.platform}`]}`}>
+                                {getPlatformIcon(account.platform)}
+                                {getPlatformLabel(account.platform)} Connected
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className={styles.actions}>
+                        <button
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handleSync(account.id)}
+                            disabled={syncingId === account.id}
+                        >
+                            <RefreshCw size={14} className={syncingId === account.id ? styles.spinning : ''} />
+                            {syncingId === account.id ? 'Syncing...' : 'Sync Posts'}
+                        </button>
+
+                        <button
+                            className={styles.disconnectBtn}
+                            onClick={() => handleDisconnect(account.id)}
+                            disabled={disconnectingId === account.id}
+                        >
+                            <LogOut size={14} />
+                            {disconnectingId === account.id ? 'Disconnecting...' : 'Disconnect'}
+                        </button>
+                    </div>
+
+                    {syncResults[account.id] && (
+                        <div className={styles.syncResult}>
+                            <span>{syncResults[account.id]}</span>
+                        </div>
                     )}
                 </div>
-                <div className={styles.accountDetails}>
-                    <span className={styles.accountName}>
-                        {account.ig_username
-                            ? `@${account.ig_username}`
-                            : account.fb_page_name || 'Connected Account'}
-                    </span>
-                    <span className={styles.accountPlatform}>
-                        {platformLabel[account.platform] || account.platform} Connected
-                    </span>
-                </div>
-            </div>
+            ))}
 
-            <div className={styles.actions}>
-                {/* Show option to connect the other platform */}
-                {account.platform === 'facebook' && (
-                    <button
-                        className={styles.connectMoreBtn}
-                        onClick={() => handleConnectMore('instagram')}
-                    >
+            {/* Connect more platforms */}
+            <div className={styles.connectMore}>
+                {!hasInstagram && (
+                    <button className={styles.connectMoreBtn} onClick={() => handleConnect('instagram')}>
                         <Instagram size={14} />
-                        Also Connect Instagram
+                        Connect Instagram
                     </button>
                 )}
-                {account.platform === 'instagram' && (
-                    <button
-                        className={styles.connectMoreBtn}
-                        onClick={() => handleConnectMore('facebook')}
-                    >
-                        <LinkIcon size={14} />
-                        Also Connect Facebook
+                {!hasFacebook && (
+                    <button className={styles.connectMoreBtn} onClick={() => handleConnect('facebook')}>
+                        <Facebook size={14} />
+                        Connect Facebook
                     </button>
                 )}
-
-                <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleSync}
-                    disabled={isSyncing}
-                >
-                    <RefreshCw size={14} className={isSyncing ? styles.spinning : ''} />
-                    {isSyncing ? 'Syncing...' : 'Sync Posts'}
-                </button>
-
-                <button
-                    className={styles.disconnectBtn}
-                    onClick={handleDisconnect}
-                    disabled={isDisconnecting}
-                >
-                    <LogOut size={14} />
-                    {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
-                </button>
+                {hasInstagram && hasFacebook && (
+                    <span className={styles.allConnected}>
+                        <Plus size={14} />
+                        All platforms connected
+                    </span>
+                )}
             </div>
-
-            {syncResult && (
-                <div className={styles.syncResult}>
-                    <span>{syncResult}</span>
-                </div>
-            )}
         </div>
     );
 }

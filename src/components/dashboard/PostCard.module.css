@@ -68,6 +68,10 @@
     color: var(--color-white);
 }
 
+.platformBadgeFacebook {
+    background: #1877F2;
+}
+
 /* Body */
 .cardBody {
     padding: var(--space-3);

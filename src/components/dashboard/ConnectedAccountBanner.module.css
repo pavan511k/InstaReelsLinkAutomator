@@ -1,3 +1,10 @@
+.container {
+    margin-bottom: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
 .banner {
     background: var(--color-white);
     border: 1px solid var(--color-gray-200);
@@ -8,7 +15,6 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: var(--space-4);
-    margin-bottom: var(--space-6);
 }
 
 .accountInfo {
@@ -29,6 +35,14 @@
     overflow: hidden;
 }
 
+.avatar_facebook {
+    background: linear-gradient(135deg, #1877F2, #42A5F5);
+}
+
+.avatar_both {
+    background: linear-gradient(135deg, #E1306C, #1877F2);
+}
+
 .accountAvatar img {
     width: 100%;
     height: 100%;
@@ -38,6 +52,7 @@
 .accountDetails {
     display: flex;
     flex-direction: column;
+    gap: 2px;
 }
 
 .accountName {
@@ -47,9 +62,20 @@
 }
 
 .accountPlatform {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
     font-size: var(--font-size-xs);
     color: var(--color-success);
     font-weight: var(--font-weight-medium);
+}
+
+.platform_facebook {
+    color: #1877F2;
+}
+
+.platform_instagram {
+    color: #E1306C;
 }
 
 .actions {
@@ -59,22 +85,40 @@
     flex-wrap: wrap;
 }
 
+/* Connect more platforms */
+.connectMore {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-2);
+}
+
 .connectMoreBtn {
     display: flex;
     align-items: center;
     gap: var(--space-1);
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-4);
     background: var(--color-primary-light);
     color: var(--color-primary);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
     border-radius: var(--radius-md);
     transition: all var(--transition-fast);
+    cursor: pointer;
 }
 
 .connectMoreBtn:hover {
     background: var(--color-primary);
     color: var(--color-white);
+}
+
+.allConnected {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-success);
+    font-weight: var(--font-weight-medium);
 }
 
 .disconnectBtn {
@@ -87,6 +131,7 @@
     font-weight: var(--font-weight-medium);
     border-radius: var(--radius-md);
     transition: all var(--transition-fast);
+    cursor: pointer;
 }
 
 .disconnectBtn:hover {
@@ -118,6 +163,11 @@
 
 @media (max-width: 768px) {
     .banner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .connectMore {
         flex-direction: column;
         align-items: flex-start;
     }
