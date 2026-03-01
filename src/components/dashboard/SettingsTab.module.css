@@ -70,3 +70,16 @@
     margin-top: 2px;
     line-height: var(--line-height-normal);
 }
+
+.checkboxGroup {
+    display: flex;
+    flex-direction: column;
+}
+
+.nestedInput {
+    padding-left: 44px;
+    /* Align with text, after checkbox */
+    padding-right: var(--space-3);
+    padding-bottom: var(--space-3);
+    margin-top: -8px;
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { sendAutomatedDM } from '@/lib/send-dm';
+import { sendAutomatedDM, resolveMessageVariables } from '@/lib/send-dm';
 
 /**
  * Instagram Webhook Endpoint
@@ -206,6 +206,20 @@ async function handleCommentEvent(supabase, igAccountId, commentData) {
         );
 
         console.log(`[Webhook] ✅ DM sent to ${commenterId}:`, result);
+
+        // Auto-reply to comment if configured
+        if (automation.settings_config?.commentAutoReply && automation.settings_config?.replyMessage) {
+            try {
+                // Import dynamically to avoid circular dependencies if any
+                const { replyToComment } = await import('@/lib/send-dm');
+                const replyText = resolveMessageVariables(automation.settings_config.replyMessage, context);
+                await replyToComment(commentId, replyText, accessToken);
+                console.log(`[Webhook] ✅ Auto-replied to comment ${commentId}`);
+            } catch (replyErr) {
+                console.error('[Webhook] Failed to auto-reply to comment:', replyErr);
+                // Don't fail the whole webhook if just the comment reply fails
+            }
+        }
 
         // Log the sent DM for deduplication and analytics
         await supabase.from('dm_sent_log').insert({

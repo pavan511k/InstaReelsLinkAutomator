@@ -85,9 +85,57 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
         }
 
         setIsSaving(true);
-        setSaveMessage('');
+        setSaveMessage('Uploading images...');
 
         try {
+            // 1. Initialize Supabase client for storage uploads
+            const { createClient } = await import('@/lib/supabase-client');
+            const supabase = createClient();
+
+            // Get current user for auth context
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('You must be logged in to save');
+
+            // 2. Upload any new images in the slides
+            const finalSlides = [...dmConfig.slides];
+
+            for (let i = 0; i < finalSlides.length; i++) {
+                const slide = finalSlides[i];
+
+                // If it's a data URL (new upload), we need to upload it to Supabase
+                if (slide.imageUrl && slide.imageUrl.startsWith('data:image')) {
+                    setSaveMessage(`Uploading image for slide ${i + 1}...`);
+
+                    // Convert base64 to Blob
+                    const response = await fetch(slide.imageUrl);
+                    const blob = await response.blob();
+
+                    // Create unique filename: user_id/post_id_slideIndex_timestamp.ext
+                    const ext = blob.type.split('/')[1] || 'jpg';
+                    const filename = `${user.id}/${postId}_${i}_${Date.now()}.${ext}`;
+
+                    // Upload to dm_images bucket
+                    const { data: uploadData, error: uploadError } = await supabase.storage
+                        .from('dm_images')
+                        .upload(filename, blob, { upsert: true });
+
+                    if (uploadError) {
+                        throw new Error(`Failed to upload slide ${i + 1} image: ${uploadError.message}`);
+                    }
+
+                    // Get public URL
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('dm_images')
+                        .getPublicUrl(filename);
+
+                    // Replace data URL with public Supabase URL
+                    finalSlides[i] = { ...slide, imageUrl: publicUrl };
+                }
+            }
+
+            setSaveMessage('Saving automation...');
+
+            // 3. Save the automation to DB
             const res = await fetch('/api/automations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -95,11 +143,7 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                     postId,
                     dmConfig: {
                         ...dmConfig,
-                        // Don't send full data URLs to the server, send a flag
-                        slides: dmConfig.slides.map((s) => ({
-                            ...s,
-                            imageUrl: s.imageUrl ? '[uploaded]' : '',
-                        })),
+                        slides: finalSlides, // Use the slides with uploaded public URLs
                     },
                     triggerConfig,
                     settingsConfig,

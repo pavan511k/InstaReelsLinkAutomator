@@ -35,6 +35,32 @@ export async function sendTextDM(igUserId, recipientId, message, accessToken) {
 }
 
 /**
+ * Reply to a specific Instagram comment
+ * @param {string} commentId - The ID of the comment to reply to
+ * @param {string} message - The reply text
+ * @param {string} accessToken - Page access token
+ */
+export async function replyToComment(commentId, message, accessToken) {
+    const url = `${GRAPH_API_BASE}/${commentId}/replies`;
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            message: message,
+            access_token: accessToken,
+        }),
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to reply to comment');
+    }
+
+    return response.json();
+}
+
+/**
  * Send a button template DM (Generic Template) to a user
  * Instagram supports Generic Templates with buttons via the Send API
  * @param {string} igUserId - Instagram Business Account ID

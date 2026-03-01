@@ -46,18 +46,33 @@ export default function SettingsTab({ config, onChange }) {
                     </div>
                 </label>
 
-                <label className={`${styles.checkboxLabel} ${styles.proFeature}`}>
-                    <input type="checkbox" className={styles.checkbox} disabled />
-                    <div>
-                        <span className={styles.checkText}>
-                            Comment Auto-Reply
-                            <span className="badge badge-warning" style={{ marginLeft: '8px' }}>Pro</span>
-                        </span>
-                        <p className={styles.checkDesc}>
-                            Automatically reply to the comment as well as sending a DM
-                        </p>
-                    </div>
-                </label>
+                <div className={styles.checkboxGroup}>
+                    <label className={styles.checkboxLabel}>
+                        <input
+                            type="checkbox"
+                            className={styles.checkbox}
+                            checked={config.commentAutoReply}
+                            onChange={(e) => updateConfig({ commentAutoReply: e.target.checked })}
+                        />
+                        <div>
+                            <span className={styles.checkText}>Comment Auto-Reply</span>
+                            <p className={styles.checkDesc}>
+                                Automatically reply to the user's comment in addition to sending a DM
+                            </p>
+                        </div>
+                    </label>
+                    {config.commentAutoReply && (
+                        <div className={styles.nestedInput}>
+                            <textarea
+                                className="form-input"
+                                placeholder="E.g., Sent you a DM! Check your requests."
+                                value={config.replyMessage || ''}
+                                onChange={(e) => updateConfig({ replyMessage: e.target.value })}
+                                rows={2}
+                            />
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Flow Logic */}
