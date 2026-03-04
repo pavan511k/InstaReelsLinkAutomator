@@ -36,39 +36,44 @@ export default function TriggerSetupTab({ config, onChange }) {
                 <label className="form-label">Trigger Type</label>
                 <select className="form-input" value={config.type} onChange={(e) => updateConfig({ type: e.target.value })}>
                     <option value="keywords">Keywords</option>
+                    <option value="all_comments">All Comments</option>
+                    <option value="emojis_only">Emojis Only</option>
+                    <option value="mentions_only">@Mentions Only</option>
                 </select>
             </div>
 
-            {/* Keyword Triggers */}
-            <div className="form-group">
-                <label className="form-label">Keyword Triggers</label>
-                <div className={styles.tagInput}>
-                    <div className={styles.tags}>
-                        {config.keywords.map((keyword) => (
-                            <span key={keyword} className="tag">
-                                {keyword}
-                                <button
-                                    className="tag-remove"
-                                    onClick={() => removeKeyword(keyword)}
-                                    aria-label={`Remove ${keyword}`}
-                                >
-                                    <X size={12} />
-                                </button>
-                            </span>
-                        ))}
+            {/* Keyword Triggers — only shown when type is 'keywords' */}
+            {config.type === 'keywords' && (
+                <div className="form-group">
+                    <label className="form-label">Keyword Triggers</label>
+                    <div className={styles.tagInput}>
+                        <div className={styles.tags}>
+                            {config.keywords.map((keyword) => (
+                                <span key={keyword} className="tag">
+                                    {keyword}
+                                    <button
+                                        className="tag-remove"
+                                        onClick={() => removeKeyword(keyword)}
+                                        aria-label={`Remove ${keyword}`}
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                        <input
+                            className={styles.tagField}
+                            placeholder="Type a keyword and press Enter..."
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                        />
                     </div>
-                    <input
-                        className={styles.tagField}
-                        placeholder="Type a keyword and press Enter..."
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                    />
+                    <p className={styles.helperText}>
+                        Save each trigger keyword by pressing the ENTER or RETURN key
+                    </p>
                 </div>
-                <p className={styles.helperText}>
-                    Save each trigger keyword by pressing the ENTER or RETURN key
-                </p>
-            </div>
+            )}
 
             {/* Trigger Settings */}
             <div className={styles.settings}>

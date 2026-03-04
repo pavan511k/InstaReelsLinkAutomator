@@ -19,6 +19,7 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
     const [isSaving, setIsSaving] = useState(false);
     const [isLoadingConfig, setIsLoadingConfig] = useState(true);
     const [saveMessage, setSaveMessage] = useState('');
+    const [templates, setTemplates] = useState([]);
     const [dmConfig, setDmConfig] = useState({
         type: 'button_template',
         slides: [{ imageUrl: '', buttons: [{ type: 'url', label: '', value: '' }] }],
@@ -41,30 +42,37 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
     });
 
     useEffect(() => {
-        const fetchConfig = async () => {
-            if (!postId) {
-                setIsLoadingConfig(false);
-                return;
-            }
+        const fetchData = async () => {
+            // Fetch existing automation config
+            if (postId) {
+                try {
+                    const res = await fetch(`/api/automations?postId=${postId}`);
+                    const data = await res.json();
 
-            try {
-                const res = await fetch(`/api/automations?postId=${postId}`);
-                const data = await res.json();
-
-                if (data.automations && data.automations.length > 0) {
-                    const existing = data.automations[0];
-                    setDmConfig(existing.dm_config || dmConfig);
-                    setTriggerConfig(existing.trigger_config || triggerConfig);
-                    setSettingsConfig(existing.settings_config || settingsConfig);
+                    if (data.automations && data.automations.length > 0) {
+                        const existing = data.automations[0];
+                        if (existing.dm_config) setDmConfig(existing.dm_config);
+                        if (existing.trigger_config) setTriggerConfig(existing.trigger_config);
+                        if (existing.settings_config) setSettingsConfig(existing.settings_config);
+                    }
+                } catch (err) {
+                    console.error('Failed to load existing automation:', err);
                 }
-            } catch (err) {
-                console.error('Failed to load existing automation:', err);
-            } finally {
-                setIsLoadingConfig(false);
             }
+
+            // Fetch saved templates
+            try {
+                const res = await fetch('/api/templates');
+                const data = await res.json();
+                setTemplates(data.templates || []);
+            } catch {
+                // Templates table may not exist yet
+            }
+
+            setIsLoadingConfig(false);
         };
 
-        fetchConfig();
+        fetchData();
     }, [postId]);
 
     const handleImageUploadFromPreview = (slideIndex, dataUrl) => {
@@ -73,10 +81,52 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
         setDmConfig({ ...dmConfig, slides: newSlides });
     };
 
+    const handleSaveTemplate = async (name) => {
+        try {
+            const res = await fetch('/api/templates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    dmConfig,
+                    triggerConfig,
+                    settingsConfig,
+                }),
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                setSaveMessage('✅ Template saved!');
+                setTemplates((prev) => [data.template, ...prev]);
+                setTimeout(() => setSaveMessage(''), 3000);
+            } else {
+                setSaveMessage(`❌ ${data.error || 'Failed to save template'}`);
+            }
+        } catch (err) {
+            setSaveMessage(`❌ Template save failed: ${err.message}`);
+        }
+    };
+
+    const handleLoadTemplate = (template) => {
+        if (template.dm_config) setDmConfig(template.dm_config);
+        if (template.trigger_config) setTriggerConfig(template.trigger_config);
+        if (template.settings_config) setSettingsConfig(template.settings_config);
+        setSaveMessage(`✅ Loaded template: ${template.name}`);
+        setTimeout(() => setSaveMessage(''), 3000);
+    };
+
     const renderTab = () => {
         switch (activeTab) {
             case 'dm-setup':
-                return <DMSetupTab config={dmConfig} onChange={setDmConfig} />;
+                return (
+                    <DMSetupTab
+                        config={dmConfig}
+                        onChange={setDmConfig}
+                        templates={templates}
+                        onSaveTemplate={handleSaveTemplate}
+                        onLoadTemplate={handleLoadTemplate}
+                    />
+                );
             case 'trigger-setup':
                 return <TriggerSetupTab config={triggerConfig} onChange={setTriggerConfig} />;
             case 'settings':

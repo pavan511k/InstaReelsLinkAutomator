@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { MessageSquare, LayoutDashboard, Grid3X3, BookOpen, LogOut, Lock, Menu, X } from 'lucide-react';
+import { MessageSquare, LayoutDashboard, Grid3X3, BookOpen, Settings, LogOut, Lock, Menu, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import styles from './DashboardNav.module.css';
 
-export default function DashboardNav({ user, isConnected = false }) {
+export default function DashboardNav({ user, isConnected = false, profilePicUrl = null }) {
     const pathname = usePathname();
     const router = useRouter();
     const supabase = createClient();
@@ -23,6 +23,7 @@ export default function DashboardNav({ user, isConnected = false }) {
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, requiresConnection: false },
         { href: '/posts', label: 'Posts & Reels', icon: Grid3X3, requiresConnection: true },
         { href: '/stories', label: 'Stories', icon: BookOpen, requiresConnection: true },
+        { href: '/settings', label: 'Settings', icon: Settings, requiresConnection: false },
     ];
 
     const closeMenu = () => setIsMenuOpen(false);
@@ -86,7 +87,11 @@ export default function DashboardNav({ user, isConnected = false }) {
                         )}
                         <div className={styles.userInfo}>
                             <div className={styles.avatar}>
-                                {user?.email?.[0]?.toUpperCase() || 'U'}
+                                {profilePicUrl ? (
+                                    <img src={profilePicUrl} alt="" className={styles.avatarImg} />
+                                ) : (
+                                    user?.email?.[0]?.toUpperCase() || 'U'
+                                )}
                             </div>
                             <span className={styles.userEmail}>{user?.email || 'User'}</span>
                         </div>

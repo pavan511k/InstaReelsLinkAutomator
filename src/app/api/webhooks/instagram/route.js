@@ -163,25 +163,57 @@ async function processAutomationForComment(supabase, post, commentText, commente
         return;
     }
 
-    // Check if comment matches trigger keywords
+    // Evaluate trigger based on configured trigger type
     const triggerConfig = automation.trigger_config;
-    const keywords = (triggerConfig.keywords || []).map((k) => k.toLowerCase());
+    const triggerType = triggerConfig.triggerType || 'keywords';
     const lowerCommentText = commentText.toLowerCase().trim();
-
-    const isExcludeMode = triggerConfig.excludeKeywords;
     let shouldSend = false;
 
-    if (isExcludeMode) {
-        // Send to everyone EXCEPT those who use these keywords
-        shouldSend = !keywords.some((kw) => lowerCommentText.includes(kw));
-    } else {
-        // Send only to those who use one of the keywords
-        shouldSend = keywords.some((kw) => lowerCommentText.includes(kw));
+    switch (triggerType) {
+        case 'all_comments': {
+            // Fire on every comment — no filtering needed
+            shouldSend = true;
+            break;
+        }
+
+        case 'emojis_only': {
+            // Fire only when the comment contains at least one emoji and no plain text words
+            const EMOJI_REGEX = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu;
+            const plainText = lowerCommentText.replace(EMOJI_REGEX, '').trim();
+            const hasEmoji = EMOJI_REGEX.test(commentText); // reset regex state
+            // Pure emoji comment: stripping emojis leaves nothing (or only whitespace/punctuation)
+            shouldSend = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/u.test(commentText)
+                && plainText.replace(/[^a-z0-9]/g, '') === '';
+            break;
+        }
+
+        case 'mentions_only': {
+            // Fire only when the comment is a @mention (starts with @ or contains a @handle)
+            shouldSend = /@\w+/.test(commentText);
+            break;
+        }
+
+        case 'keywords':
+        default: {
+            // Classic keyword matching
+            const keywords = (triggerConfig.keywords || []).map((k) => k.toLowerCase());
+            const isExcludeMode = triggerConfig.excludeKeywords;
+
+            if (keywords.length === 0) {
+                // No keywords configured — treat as "all comments"
+                shouldSend = true;
+            } else if (isExcludeMode) {
+                shouldSend = !keywords.some((kw) => lowerCommentText.includes(kw));
+            } else {
+                shouldSend = keywords.some((kw) => lowerCommentText.includes(kw));
+            }
+            break;
+        }
     }
 
-    // Exclude mentions if configured
+    // Exclude @mentions if the "Exclude @Mentions" setting is on (applies to keywords mode)
     if (shouldSend && triggerConfig.excludeMentions && commentText.includes('@')) {
-        console.log('[Webhook] Skipping — comment contains @mention');
+        console.log('[Webhook] Skipping — comment contains @mention (excludeMentions=true)');
         shouldSend = false;
     }
 

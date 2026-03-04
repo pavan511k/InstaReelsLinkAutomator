@@ -93,6 +93,17 @@ export default async function DashboardPage() {
                 connectedPlatforms={connectedPlatforms}
             />
 
+            {/* Ready to Setup Section — shown first since it's the primary action */}
+            <div className={styles.section}>
+                <div className={styles.sectionHeader}>
+                    <h2 className={styles.sectionTitle}>
+                        Ready to Setup {setupCount > 0 && <span className="badge-count">{setupCount}</span>}
+                    </h2>
+                    <p className={styles.sectionSub}>AutoDM isn&apos;t active on these posts yet</p>
+                </div>
+                <PostCardsGrid posts={setupPosts} totalCount={setupPosts.length} />
+            </div>
+
             {/* Stats Cards */}
             <div className={styles.statsGrid}>
                 <div className={styles.statCard}>
@@ -124,27 +135,6 @@ export default async function DashboardPage() {
                         <span className={styles.statValue}>0</span>
                         <div className={styles.statTrend}><TrendingUp size={14} /> +0%</div>
                     </div>
-                </div>
-            </div>
-
-            {/* Ready to Setup Section */}
-            <div className={styles.section}>
-                <div className={styles.sectionHeader}>
-                    <h2 className={styles.sectionTitle}>
-                        Ready to Setup {setupCount > 0 && <span className="badge-count">{setupCount}</span>}
-                    </h2>
-                    <p className={styles.sectionSub}>AutoDM isn&apos;t active on these posts yet</p>
-                </div>
-                <PostCardsGrid posts={setupPosts} totalCount={setupPosts.length} />
-            </div>
-
-            {/* Analytics Placeholder */}
-            <div className={styles.section}>
-                <div className={styles.sectionHeader}>
-                    <h2 className={styles.sectionTitle}>Analytics</h2>
-                </div>
-                <div className={styles.chartPlaceholder}>
-                    <p>Analytics chart will appear here once you start sending DMs.</p>
                 </div>
             </div>
         </div>

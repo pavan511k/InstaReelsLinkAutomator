@@ -2,15 +2,18 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Instagram, Clock, Search } from 'lucide-react';
+import { RefreshCw, Instagram, Facebook, Clock, Search } from 'lucide-react';
 import SetupDMModal from '@/components/dashboard/SetupDMModal';
 import styles from '../../app/(dashboard)/stories/stories.module.css';
 
-export default function StoriesContent({ stories = [], isConnected = false, platform }) {
+export default function StoriesContent({ stories = [], isConnected = false, platform = 'instagram' }) {
     const router = useRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedStoryId, setSelectedStoryId] = useState(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncMessage, setSyncMessage] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [skippingId, setSkippingId] = useState(null);
 
     const recentStories = stories.filter((s) => !s.story_expires_at || new Date(s.story_expires_at) > new Date());
     const expiredStories = stories.filter((s) => s.story_expires_at && new Date(s.story_expires_at) <= new Date());
@@ -36,6 +39,39 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
         } finally {
             setIsSyncing(false);
         }
+    };
+
+    const handleSkipStory = async (storyId) => {
+        setSkippingId(storyId);
+        try {
+            // Mark the story as skipped via the existing posts table
+            const { createClient } = await import('@/lib/supabase-client');
+            const supabase = createClient();
+            await supabase
+                .from('instagram_posts')
+                .update({ is_skipped: true })
+                .eq('id', storyId);
+            router.refresh();
+        } catch (err) {
+            console.error('Skip failed:', err);
+        } finally {
+            setSkippingId(null);
+        }
+    };
+
+    const handleSetupStory = (storyId) => {
+        setSelectedStoryId(storyId);
+        setIsModalOpen(true);
+    };
+
+    // Filter stories by search query
+    const filterBySearch = (storyList) => {
+        if (!searchQuery.trim()) return storyList;
+        const q = searchQuery.toLowerCase();
+        return storyList.filter((s) =>
+            (s.caption && s.caption.toLowerCase().includes(q)) ||
+            new Date(s.timestamp).toLocaleDateString().includes(q)
+        );
     };
 
     return (
@@ -114,6 +150,9 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                                     {story.media_type === 'VIDEO' && (
                                         <span className={styles.videoIcon}>▶</span>
                                     )}
+                                    <span className={`${styles.storyPlatformBadge} ${platform === 'facebook' ? styles.storyPlatformBadgeFacebook : ''}`}>
+                                        {platform === 'facebook' ? <Facebook size={14} /> : <Instagram size={14} />}
+                                    </span>
                                 </div>
                                 <div className={styles.storyMeta}>
                                     <span className={styles.storyDate}>
@@ -133,11 +172,17 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                                 <div className={styles.storyActions}>
                                     <button
                                         className="btn btn-primary btn-sm"
-                                        onClick={() => setIsModalOpen(true)}
+                                        onClick={() => handleSetupStory(story.id)}
                                     >
                                         Setup LinkDM
                                     </button>
-                                    <button className={styles.skipBtn}>Skip</button>
+                                    <button
+                                        className={styles.skipBtn}
+                                        onClick={() => handleSkipStory(story.id)}
+                                        disabled={skippingId === story.id}
+                                    >
+                                        {skippingId === story.id ? 'Skipping...' : 'Skip'}
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -154,7 +199,13 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                         </div>
                         <div className={styles.searchBox}>
                             <Search size={14} className={styles.searchIcon} />
-                            <input type="text" className={styles.searchInput} placeholder="Search" />
+                            <input
+                                type="text"
+                                className={styles.searchInput}
+                                placeholder="Search"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
                         </div>
                     </div>
                     <div className="table-container">
@@ -170,7 +221,7 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                                 </tr>
                             </thead>
                             <tbody>
-                                {stories.map((story) => {
+                                {filterBySearch(stories).map((story) => {
                                     const isExpired = story.story_expires_at && new Date(story.story_expires_at) <= new Date();
                                     return (
                                         <tr key={story.id}>
@@ -208,7 +259,10 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
 
             {/* Setup DM Modal */}
             {isModalOpen && (
-                <SetupDMModal onClose={() => setIsModalOpen(false)} />
+                <SetupDMModal
+                    onClose={() => { setIsModalOpen(false); setSelectedStoryId(null); }}
+                    postId={selectedStoryId}
+                />
             )}
         </div>
     );
