@@ -135,56 +135,6 @@ export default function DMSetupTab({ config, onChange, onImageUpload, templates 
                     </div>
                 )}
 
-                {/* Trigger Type Selector */}
-                <div className="form-group">
-                    <label className="form-label">Trigger Type</label>
-                    <select
-                        className="form-input"
-                        value={config.triggerType || 'keywords'}
-                        onChange={(e) => updateConfig({ triggerType: e.target.value })}
-                    >
-                        <option value="keywords">Keywords</option>
-                        <option value="all_comments">All Comments</option>
-                        <option value="emojis_only">Emojis Only</option>
-                        <option value="mentions_only">@Mentions Only</option>
-                    </select>
-                </div>
-
-                {/* Keyword input — only when trigger is keywords */}
-                {(config.triggerType === 'keywords' || !config.triggerType) && (
-                    <div className="form-group">
-                        <label className="form-label">Keyword Triggers</label>
-                        <div className={styles.keywordInput}>
-                            <div className={styles.keywordTags}>
-                                {(config.keywords || []).map((kw) => (
-                                    <span key={kw} className="tag">
-                                        {kw}
-                                        <button
-                                            className="tag-remove"
-                                            onClick={() => updateConfig({ keywords: (config.keywords || []).filter((k) => k !== kw) })}
-                                        >
-                                            ×
-                                        </button>
-                                    </span>
-                                ))}
-                            </div>
-                            <input
-                                className="form-input"
-                                placeholder="Type keyword and press Enter..."
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        const val = e.target.value.trim();
-                                        if (val && !(config.keywords || []).includes(val)) {
-                                            updateConfig({ keywords: [...(config.keywords || []), val] });
-                                        }
-                                        e.target.value = '';
-                                    }
-                                }}
-                            />
-                        </div>
-                    </div>
-                )}
 
                 {/* DM Type Selector */}
                 <div className="form-group">

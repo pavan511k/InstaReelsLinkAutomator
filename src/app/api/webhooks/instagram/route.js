@@ -262,6 +262,13 @@ async function processAutomationForComment(supabase, post, commentText, commente
         return;
     }
 
+    // Verify global exclude keywords from user settings
+    const globalExcludeKeywords = (account.default_config?.excludeKeywords || []).map((k) => k.toLowerCase());
+    if (globalExcludeKeywords.length > 0 && globalExcludeKeywords.some((kw) => lowerCommentText.includes(kw))) {
+        console.log(`[Webhook] Skipping — comment contains global exclude keyword`);
+        return;
+    }
+
     const token = account.fb_page_access_token || account.access_token;
     // For Facebook, sender is the Page ID. For Instagram, sender is the IG User ID
     const senderId = platform === 'facebook' ? account.fb_page_id : account.ig_user_id;
