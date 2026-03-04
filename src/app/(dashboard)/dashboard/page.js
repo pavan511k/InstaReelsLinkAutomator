@@ -5,6 +5,8 @@ import PostCardsGrid from '@/components/dashboard/PostCardsGrid';
 import { Send, MousePointerClick, MessageCircle, TrendingUp } from 'lucide-react';
 import styles from './dashboard.module.css';
 
+const MONTHLY_DM_LIMIT = 1000;
+
 export default async function DashboardPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -59,6 +61,58 @@ export default async function DashboardPage() {
         // Table may not exist yet
     }
 
+    // ─── Analytics: Query dm_sent_log for real metrics ──────────────
+    let totalSent = 0;
+    let monthlySent = 0;
+    let totalActivePosts = 0;
+
+    try {
+        // Total DMs sent (all time) — count rows with status='sent'
+        const { count: sentCount } = await supabase
+            .from('dm_sent_log')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'sent')
+            .in('automation_id', (
+                await supabase
+                    .from('dm_automations')
+                    .select('id')
+                    .eq('user_id', user.id)
+            ).data?.map((a) => a.id) || []);
+
+        totalSent = sentCount || 0;
+
+        // DMs sent this month
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const { count: monthlyCount } = await supabase
+            .from('dm_sent_log')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'sent')
+            .gte('created_at', startOfMonth.toISOString())
+            .in('automation_id', (
+                await supabase
+                    .from('dm_automations')
+                    .select('id')
+                    .eq('user_id', user.id)
+            ).data?.map((a) => a.id) || []);
+
+        monthlySent = monthlyCount || 0;
+
+        // Active automations count
+        const { count: activeCount } = await supabase
+            .from('dm_automations')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('is_active', true);
+
+        totalActivePosts = activeCount || 0;
+    } catch {
+        // dm_sent_log or dm_automations table may not exist yet
+    }
+
+    const dmUsagePercent = Math.min(100, Math.round((monthlySent / MONTHLY_DM_LIMIT) * 100));
     const displayName = user?.email?.split('@')[0] || 'User';
 
     // If no connected accounts, show Connect Account page
@@ -81,9 +135,9 @@ export default async function DashboardPage() {
                 <div className={styles.dmUsage}>
                     <span className={styles.usageLabel}>MONTHLY DM USAGE</span>
                     <div className="progress-bar" style={{ width: '150px' }}>
-                        <div className="progress-fill" style={{ width: '5%' }}></div>
+                        <div className="progress-fill" style={{ width: `${dmUsagePercent}%` }}></div>
                     </div>
-                    <span className={styles.usageCount}>0/1,000</span>
+                    <span className={styles.usageCount}>{monthlySent.toLocaleString()}/{MONTHLY_DM_LIMIT.toLocaleString()}</span>
                 </div>
             </div>
 
@@ -112,28 +166,25 @@ export default async function DashboardPage() {
                         <div className={styles.statIconWrapper}><Send size={18} /></div>
                     </div>
                     <div className={styles.statBody}>
-                        <span className={styles.statValue}>0</span>
-                        <div className={styles.statTrend}><TrendingUp size={14} /> +0%</div>
+                        <span className={styles.statValue}>{totalSent.toLocaleString()}</span>
                     </div>
                 </div>
                 <div className={styles.statCard}>
                     <div className={styles.statHeader}>
-                        <span className={styles.statLabel}>LINK CLICKS</span>
+                        <span className={styles.statLabel}>ACTIVE AUTOMATIONS</span>
                         <div className={styles.statIconWrapper}><MousePointerClick size={18} /></div>
                     </div>
                     <div className={styles.statBody}>
-                        <span className={styles.statValue}>0</span>
-                        <div className={styles.statTrend}><TrendingUp size={14} /> +0%</div>
+                        <span className={styles.statValue}>{totalActivePosts}</span>
                     </div>
                 </div>
                 <div className={styles.statCard}>
                     <div className={styles.statHeader}>
-                        <span className={styles.statLabel}>COMMENTS SENT</span>
+                        <span className={styles.statLabel}>THIS MONTH</span>
                         <div className={styles.statIconWrapper}><MessageCircle size={18} /></div>
                     </div>
                     <div className={styles.statBody}>
-                        <span className={styles.statValue}>0</span>
-                        <div className={styles.statTrend}><TrendingUp size={14} /> +0%</div>
+                        <span className={styles.statValue}>{monthlySent.toLocaleString()}</span>
                     </div>
                 </div>
             </div>

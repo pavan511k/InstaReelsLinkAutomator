@@ -46,7 +46,7 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
                         className={styles.setupBtn}
                         onClick={() => onSetupDM?.(post)}
                     >
-                        <Pencil size={14} /> Setup LinkDM
+                        <Pencil size={14} /> Configure AutoDM
                     </button>
                 )}
                 {post.status === 'active' && (
@@ -54,7 +54,7 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
                         className={`${styles.setupBtn} ${styles.activeBtn}`}
                         onClick={() => onSetupDM?.(post)}
                     >
-                        <CheckCircle2 size={14} /> Edit LinkDM
+                        <CheckCircle2 size={14} /> Edit AutoDM
                     </button>
                 )}
                 {post.status === 'paused' && (
@@ -62,7 +62,7 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
                         className={`${styles.setupBtn} ${styles.pausedBtn}`}
                         onClick={() => onSetupDM?.(post)}
                     >
-                        <PauseCircle size={14} /> Resume LinkDM
+                        <PauseCircle size={14} /> Resume AutoDM
                     </button>
                 )}
             </div>

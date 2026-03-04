@@ -5,7 +5,7 @@ import { Plus, Upload, Link as LinkIcon, Trash2, Image as ImageIcon, BookmarkPlu
 import styles from './DMSetupTab.module.css';
 import settingsStyles from './SettingsContent.module.css';
 
-export default function DMSetupTab({ config, onChange, onImageUpload, templates = [], onSaveTemplate, onLoadTemplate }) {
+export default function DMSetupTab({ config, onChange, onImageUpload, templates = [], onSaveTemplate, onLoadTemplate, onDeleteTemplate }) {
     const fileInputRefs = useRef({});
     const [showTemplateNameModal, setShowTemplateNameModal] = useState(false);
     const [templateName, setTemplateName] = useState('');
@@ -120,6 +120,26 @@ export default function DMSetupTab({ config, onChange, onImageUpload, templates 
                                         <option key={t.id} value={t.id}>{t.name}</option>
                                     ))}
                                 </select>
+                                {onDeleteTemplate && (
+                                    <button
+                                        className={styles.deleteTemplateBtn}
+                                        onClick={() => {
+                                            const name = prompt('Enter the template name to delete:');
+                                            if (!name) return;
+                                            const template = templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
+                                            if (template) {
+                                                if (confirm(`Delete template "${template.name}"?`)) {
+                                                    onDeleteTemplate(template.id);
+                                                }
+                                            } else {
+                                                alert('Template not found. Check the name and try again.');
+                                            }
+                                        }}
+                                        title="Delete a saved template"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
                             </div>
                         )}
                         {onSaveTemplate && (

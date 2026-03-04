@@ -1,4 +1,5 @@
 import './globals.css';
+import CookieConsent from '@/components/CookieConsent/CookieConsent';
 
 export const metadata = {
   title: 'AutoDM — Reply to Instagram Comments with a DM, Instantly!',
@@ -16,6 +17,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body>
         {children}
+        <CookieConsent />
       </body>
     </html>
   );

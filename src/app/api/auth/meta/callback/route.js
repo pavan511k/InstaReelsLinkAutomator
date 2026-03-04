@@ -92,6 +92,21 @@ export async function GET(request) {
                 return NextResponse.redirect(`${appUrl}/dashboard?error=save_failed`);
             }
         }
+        // Auto-sync posts after successful connection (#14)
+        try {
+            const syncUrl = `${appUrl}/api/posts/sync`;
+            await fetch(syncUrl, {
+                method: 'POST',
+                headers: {
+                    // Forward cookies for authentication
+                    cookie: request.headers.get('cookie') || '',
+                },
+            });
+            console.log('[OAuth Callback] Auto-sync triggered after connection');
+        } catch (syncErr) {
+            // Non-critical — user can manually sync later
+            console.warn('[OAuth Callback] Auto-sync failed (non-critical):', syncErr.message);
+        }
 
         return NextResponse.redirect(`${appUrl}/dashboard?connected=${connectionType}`);
     } catch (err) {

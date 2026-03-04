@@ -43,6 +43,8 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
 
     useEffect(() => {
         const fetchData = async () => {
+            let hasExistingAutomation = false;
+
             // Fetch existing automation config
             if (postId) {
                 try {
@@ -54,9 +56,54 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                         if (existing.dm_config) setDmConfig(existing.dm_config);
                         if (existing.trigger_config) setTriggerConfig(existing.trigger_config);
                         if (existing.settings_config) setSettingsConfig(existing.settings_config);
+                        hasExistingAutomation = true;
                     }
                 } catch (err) {
                     console.error('Failed to load existing automation:', err);
+                }
+            }
+
+            // If no existing automation, pre-fill from account default config (#10)
+            if (!hasExistingAutomation) {
+                try {
+                    const { createClient } = await import('@/lib/supabase-client');
+                    const supabase = createClient();
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (user) {
+                        const { data: accounts } = await supabase
+                            .from('connected_accounts')
+                            .select('default_config')
+                            .eq('user_id', user.id)
+                            .eq('is_active', true)
+                            .limit(1);
+
+                        const defaults = accounts?.[0]?.default_config;
+                        if (defaults) {
+                            if (defaults.defaultMessage) {
+                                setDmConfig((prev) => ({ ...prev, message: defaults.defaultMessage }));
+                            }
+                            if (defaults.defaultButtonName) {
+                                setDmConfig((prev) => ({
+                                    ...prev,
+                                    slides: prev.slides.map((s) => ({
+                                        ...s,
+                                        buttons: s.buttons.map((b) => ({
+                                            ...b,
+                                            label: b.label || defaults.defaultButtonName,
+                                        })),
+                                    })),
+                                }));
+                            }
+                            if (defaults.keywords?.length > 0) {
+                                setTriggerConfig((prev) => ({
+                                    ...prev,
+                                    keywords: [...new Set([...prev.keywords, ...defaults.keywords])],
+                                }));
+                            }
+                        }
+                    }
+                } catch {
+                    // Non-critical — defaults just won't be pre-filled
                 }
             }
 
@@ -115,6 +162,22 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
         setTimeout(() => setSaveMessage(''), 3000);
     };
 
+    const handleDeleteTemplate = async (templateId) => {
+        try {
+            const res = await fetch(`/api/templates?id=${templateId}`, { method: 'DELETE' });
+            if (res.ok) {
+                setTemplates((prev) => prev.filter((t) => t.id !== templateId));
+                setSaveMessage('✅ Template deleted');
+                setTimeout(() => setSaveMessage(''), 3000);
+            } else {
+                const data = await res.json();
+                setSaveMessage(`❌ ${data.error || 'Failed to delete template'}`);
+            }
+        } catch (err) {
+            setSaveMessage(`❌ Delete failed: ${err.message}`);
+        }
+    };
+
     const renderTab = () => {
         switch (activeTab) {
             case 'dm-setup':
@@ -125,6 +188,7 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                         templates={templates}
                         onSaveTemplate={handleSaveTemplate}
                         onLoadTemplate={handleLoadTemplate}
+                        onDeleteTemplate={handleDeleteTemplate}
                     />
                 );
             case 'trigger-setup':
@@ -252,7 +316,7 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                 {/* Header */}
                 <div className="modal-header">
                     <div>
-                        <h2 className={styles.modalTitle}>Setup DM Automation</h2>
+                        <h2 className={styles.modalTitle}>Configure AutoDM</h2>
                         {postCaption && (
                             <p className={styles.postCaption}>{postCaption}</p>
                         )}

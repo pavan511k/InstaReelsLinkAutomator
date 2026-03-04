@@ -23,10 +23,43 @@ export default async function PostsPage() {
             const accountIds = connectedAccounts.map((a) => a.id);
             const { data: dbPosts } = await supabase
                 .from('instagram_posts')
-                .select('*, connected_accounts!inner(platform), dm_automations(is_active)')
+                .select('*, connected_accounts!inner(platform), dm_automations(id, is_active)')
                 .in('account_id', accountIds)
                 .eq('is_story', false)
                 .order('timestamp', { ascending: false });
+
+            // Fetch all automation IDs for this user to get sent counts
+            const { data: userAutomations } = await supabase
+                .from('dm_automations')
+                .select('id, post_id')
+                .eq('user_id', user.id);
+
+            const automationMap = {};
+            for (const a of (userAutomations || [])) {
+                automationMap[a.post_id] = a.id;
+            }
+
+            // Fetch sent counts per automation from dm_sent_log
+            const automationIds = Object.values(automationMap);
+            let sentCountMap = {};
+
+            if (automationIds.length > 0) {
+                try {
+                    // Get counts grouped by automation_id
+                    const { data: sentLogs } = await supabase
+                        .from('dm_sent_log')
+                        .select('automation_id, status')
+                        .in('automation_id', automationIds)
+                        .eq('status', 'sent');
+
+                    // Count per automation
+                    for (const log of (sentLogs || [])) {
+                        sentCountMap[log.automation_id] = (sentCountMap[log.automation_id] || 0) + 1;
+                    }
+                } catch {
+                    // dm_sent_log may not exist
+                }
+            }
 
             posts = (dbPosts || []).map((p) => {
                 let currentStatus = 'setup';
@@ -40,6 +73,9 @@ export default async function PostsPage() {
                     }
                 }
 
+                const automationId = automationMap[p.id];
+                const sentCount = automationId ? (sentCountMap[automationId] || 0) : 0;
+
                 return {
                     id: p.id,
                     caption: p.caption || 'No caption',
@@ -47,10 +83,10 @@ export default async function PostsPage() {
                     mediaType: p.media_type,
                     platform: p.connected_accounts?.platform || 'instagram',
                     status: currentStatus,
-                    sent: 0,
+                    sent: sentCount,
                     open: 0,
                     clicks: 0,
-                    ctr: '0%',
+                    ctr: sentCount > 0 ? '0%' : '-',
                     timestamp: formatRelativeTime(p.timestamp),
                 };
             });

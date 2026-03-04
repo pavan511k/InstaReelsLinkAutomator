@@ -35,7 +35,9 @@ export async function middleware(request) {
 
     // Protected routes — redirect to login if not authenticated
     const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') ||
-        request.nextUrl.pathname.startsWith('/posts');
+        request.nextUrl.pathname.startsWith('/posts') ||
+        request.nextUrl.pathname.startsWith('/stories') ||
+        request.nextUrl.pathname.startsWith('/settings');
 
     if (isProtectedRoute && !user) {
         const url = request.nextUrl.clone();

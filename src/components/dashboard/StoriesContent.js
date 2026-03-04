@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Instagram, Facebook, Clock, Search } from 'lucide-react';
+import { RefreshCw, Instagram, Facebook, Clock, Search, Edit3, Pause, Play, Trash2 } from 'lucide-react';
 import SetupDMModal from '@/components/dashboard/SetupDMModal';
 import styles from '../../app/(dashboard)/stories/stories.module.css';
 
@@ -14,6 +14,8 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
     const [syncMessage, setSyncMessage] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [skippingId, setSkippingId] = useState(null);
+    const [togglingId, setTogglingId] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
 
     const recentStories = stories.filter((s) => !s.story_expires_at || new Date(s.story_expires_at) > new Date());
     const expiredStories = stories.filter((s) => s.story_expires_at && new Date(s.story_expires_at) <= new Date());
@@ -44,7 +46,6 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
     const handleSkipStory = async (storyId) => {
         setSkippingId(storyId);
         try {
-            // Mark the story as skipped via the existing posts table
             const { createClient } = await import('@/lib/supabase-client');
             const supabase = createClient();
             await supabase
@@ -64,6 +65,40 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
         setIsModalOpen(true);
     };
 
+    const handleToggleStatus = async (story) => {
+        setTogglingId(story.id);
+        try {
+            const newStatus = story.status !== 'active';
+            const res = await fetch('/api/automations/status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ postId: story.id, isActive: newStatus }),
+            });
+            if (res.ok) {
+                router.refresh();
+            }
+        } catch (err) {
+            console.error('Toggle failed:', err);
+        } finally {
+            setTogglingId(null);
+        }
+    };
+
+    const handleDeleteAutomation = async (story) => {
+        if (!confirm('Remove DM automation for this story?')) return;
+        setDeletingId(story.id);
+        try {
+            const res = await fetch(`/api/automations?postId=${story.id}`, { method: 'DELETE' });
+            if (res.ok) {
+                router.refresh();
+            }
+        } catch (err) {
+            console.error('Delete failed:', err);
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     // Filter stories by search query
     const filterBySearch = (storyList) => {
         if (!searchQuery.trim()) return storyList;
@@ -72,6 +107,16 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
             (s.caption && s.caption.toLowerCase().includes(q)) ||
             new Date(s.timestamp).toLocaleDateString().includes(q)
         );
+    };
+
+    const getStatusBadge = (story) => {
+        const isExpired = story.story_expires_at && new Date(story.story_expires_at) <= new Date();
+        if (isExpired) return <span className={styles.expiredBadge}>Expired</span>;
+        switch (story.status) {
+            case 'active': return <span className="badge badge-success">✅ Active</span>;
+            case 'paused': return <span className="badge badge-warning">⏸ Paused</span>;
+            default: return <span className={styles.setupBadge}>Configure AutoDM</span>;
+        }
     };
 
     return (
@@ -170,19 +215,40 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                                     )}
                                 </div>
                                 <div className={styles.storyActions}>
-                                    <button
-                                        className="btn btn-primary btn-sm"
-                                        onClick={() => handleSetupStory(story.id)}
-                                    >
-                                        Setup LinkDM
-                                    </button>
-                                    <button
-                                        className={styles.skipBtn}
-                                        onClick={() => handleSkipStory(story.id)}
-                                        disabled={skippingId === story.id}
-                                    >
-                                        {skippingId === story.id ? 'Skipping...' : 'Skip'}
-                                    </button>
+                                    {story.status === 'setup' ? (
+                                        <>
+                                            <button
+                                                className="btn btn-primary btn-sm"
+                                                onClick={() => handleSetupStory(story.id)}
+                                            >
+                                                Configure AutoDM
+                                            </button>
+                                            <button
+                                                className={styles.skipBtn}
+                                                onClick={() => handleSkipStory(story.id)}
+                                                disabled={skippingId === story.id}
+                                            >
+                                                {skippingId === story.id ? 'Skipping...' : 'Skip'}
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button
+                                                className="btn btn-primary btn-sm"
+                                                onClick={() => handleSetupStory(story.id)}
+                                            >
+                                                <Edit3 size={12} /> Edit
+                                            </button>
+                                            <button
+                                                className={styles.skipBtn}
+                                                onClick={() => handleToggleStatus(story)}
+                                                disabled={togglingId === story.id}
+                                            >
+                                                {story.status === 'active' ? <Pause size={12} /> : <Play size={12} />}
+                                                {story.status === 'active' ? 'Pause' : 'Resume'}
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -218,11 +284,11 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                                     <th>Open</th>
                                     <th>Clicks</th>
                                     <th>CTR</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filterBySearch(stories).map((story) => {
-                                    const isExpired = story.story_expires_at && new Date(story.story_expires_at) <= new Date();
                                     return (
                                         <tr key={story.id}>
                                             <td>
@@ -237,17 +303,43 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                                                     </span>
                                                 </div>
                                             </td>
+                                            <td>{getStatusBadge(story)}</td>
+                                            <td className={styles.metricCell}>{story.sent || 0}</td>
+                                            <td className={styles.metricCell}>0</td>
+                                            <td className={styles.metricCell}>0</td>
+                                            <td className={styles.metricCell}>{story.sent > 0 ? '0%' : '-'}</td>
                                             <td>
-                                                {isExpired ? (
-                                                    <span className={styles.expiredBadge}>Expired</span>
-                                                ) : (
-                                                    <span className={styles.setupBadge}>Setup LinkDM</span>
+                                                {(story.status === 'active' || story.status === 'paused') && (
+                                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            title="Edit"
+                                                            onClick={() => handleSetupStory(story.id)}
+                                                            style={{ padding: '4px 6px', background: 'transparent', border: '1px solid var(--border)' }}
+                                                        >
+                                                            <Edit3 size={14} />
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            title={story.status === 'active' ? 'Pause' : 'Resume'}
+                                                            onClick={() => handleToggleStatus(story)}
+                                                            disabled={togglingId === story.id}
+                                                            style={{ padding: '4px 6px', background: 'transparent', border: '1px solid var(--border)' }}
+                                                        >
+                                                            {story.status === 'active' ? <Pause size={14} /> : <Play size={14} />}
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            title="Remove"
+                                                            onClick={() => handleDeleteAutomation(story)}
+                                                            disabled={deletingId === story.id}
+                                                            style={{ padding: '4px 6px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--error)' }}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </td>
-                                            <td className={styles.metricCell}>0</td>
-                                            <td className={styles.metricCell}>0</td>
-                                            <td className={styles.metricCell}>0</td>
-                                            <td className={styles.metricCell}>-</td>
                                         </tr>
                                     );
                                 })}

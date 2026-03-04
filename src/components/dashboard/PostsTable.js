@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Download, Edit3, Pause, Play, Trash2, Instagram, Facebook } from 'lucide-react';
+import { RefreshCw, Download, Edit3, Pause, Play, Trash2, Instagram, Facebook, AlertTriangle } from 'lucide-react';
 import PostCard from './PostCard';
 import SetupDMModal from './SetupDMModal';
 import styles from './PostsTable.module.css';
+import settingsStyles from './SettingsContent.module.css';
 
 const STATUS_FILTERS = [
     { key: 'all', label: 'All' },
@@ -27,6 +28,8 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
     const [syncMessage, setSyncMessage] = useState('');
     const [showSetupModal, setShowSetupModal] = useState(false);
     const [selectedPost, setSelectedPost] = useState(null);
+    const [postToDelete, setPostToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Platform filtering
     const platformFiltered = activePlatformFilter === 'all'
@@ -114,33 +117,42 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
         }
     };
 
-    const handleDeleteAutomation = async (post) => {
-        if (!confirm('Are you sure you want to delete this automation? This will stop all DMs for this post.')) {
-            return;
-        }
+    const handleDeleteAutomation = (post) => {
+        setPostToDelete(post);
+    };
 
+    const handleConfirmDelete = async () => {
+        if (!postToDelete) return;
+        setIsDeleting(true);
         try {
-            const res = await fetch(`/api/automations?postId=${post.id}`, {
+            const res = await fetch(`/api/automations?postId=${postToDelete.id}`, {
                 method: 'DELETE',
             });
             if (res.ok) {
+                setPostToDelete(null);
                 router.refresh();
             } else {
                 alert('Failed to delete automation');
             }
         } catch (err) {
-            console.error('Status delete failed', err);
+            console.error('Delete automation failed', err);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
-    const getStatusBadge = (status) => {
+    const handleCancelDelete = () => {
+        if (!isDeleting) setPostToDelete(null);
+    };
+
+    const getStatusBadge = (status, post) => {
         switch (status) {
             case 'active':
                 return <span className={`badge badge-success`}>✅ Active</span>;
             case 'setup':
                 return (
-                    <button className={styles.setupBadge} onClick={() => handleSetupDM()}>
-                        <span className={styles.pulseDot}></span> Setup LinkDM
+                    <button className={styles.setupBadge} onClick={() => handleSetupDM(post)}>
+                        <span className={styles.pulseDot}></span> Configure AutoDM
                     </button>
                 );
             case 'paused':
@@ -315,7 +327,7 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td>{getStatusBadge(post.status)}</td>
+                                            <td>{getStatusBadge(post.status, post)}</td>
                                             <td className={styles.metricCell}>{post.sent}</td>
                                             <td className={styles.metricCell}>{post.open}</td>
                                             <td className={styles.metricCell}>{post.clicks}</td>
@@ -365,7 +377,13 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                     <p className={styles.importTitle}>Import Additional Posts</p>
                     <p className={styles.importDesc}>Looking for older posts? Import your last 100 Instagram posts for free!</p>
                 </div>
-                <button className="btn btn-outline btn-sm" disabled={!isConnected}>Import Posts</button>
+                <button
+                    className="btn btn-outline btn-sm"
+                    disabled={!isConnected || isSyncing}
+                    onClick={handleCheckForNewPosts}
+                >
+                    {isSyncing ? 'Importing...' : 'Import Posts'}
+                </button>
             </div>
 
             {/* Setup DM Modal */}
@@ -375,6 +393,40 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                     postId={selectedPost?.id}
                     postCaption={selectedPost?.caption || ''}
                 />
+            )}
+
+            {/* Delete Automation Confirmation Modal */}
+            {postToDelete && (
+                <div className={settingsStyles.modalOverlay} onClick={handleCancelDelete}>
+                    <div className={settingsStyles.modal} onClick={(e) => e.stopPropagation()}>
+                        <div className={settingsStyles.modalIcon}>
+                            <AlertTriangle size={32} />
+                        </div>
+                        <h3 className={settingsStyles.modalTitle}>Delete this automation?</h3>
+                        <p className={settingsStyles.modalDesc}>
+                            This will permanently stop all DMs for the post{' '}
+                            <strong>&ldquo;{postToDelete.caption || 'Untitled'}&rdquo;</strong>
+                            . This action cannot be undone.
+                        </p>
+                        <div className={settingsStyles.modalActions}>
+                            <button
+                                className={settingsStyles.cancelBtn}
+                                onClick={handleCancelDelete}
+                                disabled={isDeleting}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className={settingsStyles.confirmDeleteBtn}
+                                onClick={handleConfirmDelete}
+                                disabled={isDeleting}
+                            >
+                                <Trash2 size={14} />
+                                {isDeleting ? 'Deleting...' : 'Yes, delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

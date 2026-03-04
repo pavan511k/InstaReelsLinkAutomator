@@ -98,7 +98,7 @@ export default function PrivacyPolicy() {
                         <li>We do not read or store the content of your private Direct Messages</li>
                         <li>We do not collect your followers or following lists</li>
                         <li>We do not collect payment or financial information (the service is currently free)</li>
-                        <li>We do not use cookies or third-party analytics trackers</li>
+                        <li>We use essential cookies only for authentication and session management (via Supabase Auth). We do not use third-party analytics trackers or advertising cookies</li>
                     </ul>
                 </section>
 

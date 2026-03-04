@@ -163,44 +163,66 @@ async function processAutomationForComment(supabase, post, commentText, commente
         return;
     }
 
+    // We need the account early for global config checks
+    const { data: account } = await supabase
+        .from('connected_accounts')
+        .select('access_token, fb_page_access_token, ig_user_id, fb_page_id, default_config')
+        .eq('id', post.account_id)
+        .single();
+
+    if (!account) {
+        console.error('[Webhook] Connected account not found for post');
+        return;
+    }
+
     // Evaluate trigger based on configured trigger type
+    // Fix: frontend saves as `type`, legacy may use `triggerType` — support both
     const triggerConfig = automation.trigger_config;
-    const triggerType = triggerConfig.triggerType || 'keywords';
+    const settingsConfig = automation.settings_config || {};
+    const triggerType = triggerConfig.type || triggerConfig.triggerType || 'keywords';
     const lowerCommentText = commentText.toLowerCase().trim();
     let shouldSend = false;
 
     switch (triggerType) {
         case 'all_comments': {
-            // Fire on every comment — no filtering needed
             shouldSend = true;
             break;
         }
 
         case 'emojis_only': {
-            // Fire only when the comment contains at least one emoji and no plain text words
             const EMOJI_REGEX = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu;
             const plainText = lowerCommentText.replace(EMOJI_REGEX, '').trim();
-            const hasEmoji = EMOJI_REGEX.test(commentText); // reset regex state
-            // Pure emoji comment: stripping emojis leaves nothing (or only whitespace/punctuation)
             shouldSend = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/u.test(commentText)
                 && plainText.replace(/[^a-z0-9]/g, '') === '';
             break;
         }
 
         case 'mentions_only': {
-            // Fire only when the comment is a @mention (starts with @ or contains a @handle)
             shouldSend = /@\w+/.test(commentText);
             break;
         }
 
         case 'keywords':
         default: {
-            // Classic keyword matching
-            const keywords = (triggerConfig.keywords || []).map((k) => k.toLowerCase());
+            // Post-specific keywords
+            let keywords = (triggerConfig.keywords || []).map((k) => k.toLowerCase());
             const isExcludeMode = triggerConfig.excludeKeywords;
 
+            // Merge global trigger keywords from Settings > Configuration
+            // (only if disableUniversalTriggers is NOT checked for this post)
+            if (!settingsConfig.disableUniversalTriggers) {
+                const globalKeywords = (account.default_config?.keywords || []).map((k) => k.toLowerCase());
+                if (globalKeywords.length > 0) {
+                    // Deduplicate: add global keywords not already in post keywords
+                    const keywordSet = new Set(keywords);
+                    for (const gk of globalKeywords) {
+                        keywordSet.add(gk);
+                    }
+                    keywords = [...keywordSet];
+                }
+            }
+
             if (keywords.length === 0) {
-                // No keywords configured — treat as "all comments"
                 shouldSend = true;
             } else if (isExcludeMode) {
                 shouldSend = !keywords.some((kw) => lowerCommentText.includes(kw));
@@ -211,7 +233,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
         }
     }
 
-    // Exclude @mentions if the "Exclude @Mentions" setting is on (applies to keywords mode)
+    // Exclude @mentions if the "Exclude @Mentions" setting is on
     if (shouldSend && triggerConfig.excludeMentions && commentText.includes('@')) {
         console.log('[Webhook] Skipping — comment contains @mention (excludeMentions=true)');
         shouldSend = false;
@@ -219,6 +241,13 @@ async function processAutomationForComment(supabase, post, commentText, commente
 
     if (!shouldSend) {
         console.log('[Webhook] Comment did not match trigger keywords');
+        return;
+    }
+
+    // Verify global exclude keywords from user settings
+    const globalExcludeKeywords = (account.default_config?.excludeKeywords || []).map((k) => k.toLowerCase());
+    if (globalExcludeKeywords.length > 0 && globalExcludeKeywords.some((kw) => lowerCommentText.includes(kw))) {
+        console.log(`[Webhook] Skipping — comment contains global exclude keyword`);
         return;
     }
 
@@ -250,45 +279,41 @@ async function processAutomationForComment(supabase, post, commentText, commente
         }
     }
 
-    // We need the page access token to send the DM
-    const { data: account } = await supabase
-        .from('connected_accounts')
-        .select('access_token, fb_page_access_token, ig_user_id, fb_page_id')
-        .eq('id', post.account_id)
-        .single();
-
-    if (!account) {
-        console.error('[Webhook] Connected account not found for post');
-        return;
-    }
-
-    // Verify global exclude keywords from user settings
-    const globalExcludeKeywords = (account.default_config?.excludeKeywords || []).map((k) => k.toLowerCase());
-    if (globalExcludeKeywords.length > 0 && globalExcludeKeywords.some((kw) => lowerCommentText.includes(kw))) {
-        console.log(`[Webhook] Skipping — comment contains global exclude keyword`);
-        return;
-    }
-
     const token = account.fb_page_access_token || account.access_token;
-    // For Facebook, sender is the Page ID. For Instagram, sender is the IG User ID
     const senderId = platform === 'facebook' ? account.fb_page_id : account.ig_user_id;
 
     console.log(`[Webhook] Preparing to send ${automation.dm_type} DM to ${commenterId} from ${senderId}`);
 
+    // Implement delay message — add random delay (30s-2min) if enabled
+    if (settingsConfig.delayMessage) {
+        const delayMs = Math.floor(Math.random() * (120000 - 30000 + 1)) + 30000; // 30s to 2min
+        console.log(`[Webhook] Delaying DM by ${Math.round(delayMs / 1000)}s (delayMessage=true)`);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
     try {
-        // Build variables context
         const context = {
-            username: commenterId, // Standard graph API doesn't always provide username directly in webhooks without extra calls
+            username: commenterId,
             first_name: commenterId,
+            comment_id: commentId,
         };
 
         // Send DM
         await sendAutomatedDM(automation, commenterId, token, senderId, context, platform);
 
-        // Auto-reply to comment if configured (Premium feature usually, simplified here)
-        if (automation.settings_config?.autoReplyText) {
-            await resolveMessageVariables(automation.settings_config.autoReplyText, context);
-            // Ignore failure for comment replies
+        // Comment auto-reply if configured
+        // Support both field names: `replyMessage` (current frontend) and `autoReplyText` (legacy)
+        const autoReplyEnabled = settingsConfig.commentAutoReply;
+        const autoReplyMessage = settingsConfig.replyMessage || settingsConfig.autoReplyText;
+        if (autoReplyEnabled && autoReplyMessage) {
+            try {
+                const { replyToComment } = await import('@/lib/send-dm');
+                const resolvedReply = resolveMessageVariables(autoReplyMessage, context);
+                await replyToComment(commentId, resolvedReply, token);
+                console.log('[Webhook] Comment auto-reply sent');
+            } catch (replyErr) {
+                console.warn('[Webhook] Comment auto-reply failed (non-fatal):', replyErr.message);
+            }
         }
 
         // Log success
@@ -305,7 +330,6 @@ async function processAutomationForComment(supabase, post, commentText, commente
     } catch (err) {
         console.error('[Webhook] Failed to send DM:', err.message);
 
-        // Log failure
         await supabase.from('dm_sent_log').insert({
             automation_id: automation.id,
             post_id: post.id,
