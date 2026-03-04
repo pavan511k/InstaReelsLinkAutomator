@@ -73,7 +73,7 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                 body: JSON.stringify({ accountId: disconnectTargetId }),
             });
             if (res.ok) {
-                router.refresh();
+                window.location.reload();
             }
         } catch (err) {
             console.error('Disconnect failed:', err);

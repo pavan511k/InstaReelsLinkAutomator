@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 /**
  * POST /api/accounts/disconnect
@@ -10,7 +11,17 @@ import { createClient } from '@/lib/supabase-server';
  * - PRESERVES DM automation configs (our own data, not Platform Data)
  *   but pauses them (is_active = false)
  * - Deactivates the connected_accounts row and scrubs Platform Data fields
+
+ * Uses service role client to bypass RLS for reliable data deletion.
  */
+
+function createServiceClient() {
+    return createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+    );
+}
+
 export async function POST(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -27,9 +38,12 @@ export async function POST(request) {
         // No body provided
     }
 
+    // Use service role for all DB mutations (bypasses RLS)
+    const serviceClient = createServiceClient();
+
     try {
         // 1. Find the account(s) to disconnect
-        let accountQuery = supabase
+        let accountQuery = serviceClient
             .from('connected_accounts')
             .select('id')
             .eq('user_id', user.id)
@@ -39,7 +53,13 @@ export async function POST(request) {
             accountQuery = accountQuery.eq('id', accountId);
         }
 
-        const { data: accounts } = await accountQuery;
+        const { data: accounts, error: findError } = await accountQuery;
+
+        if (findError) {
+            console.error('Disconnect — failed to find accounts:', findError);
+            return NextResponse.json({ error: 'Failed to find accounts' }, { status: 500 });
+        }
+
         const accountIds = (accounts || []).map((a) => a.id);
 
         if (accountIds.length === 0) {
@@ -47,7 +67,7 @@ export async function POST(request) {
         }
 
         // 2. Find all post IDs for these accounts
-        const { data: posts } = await supabase
+        const { data: posts } = await serviceClient
             .from('instagram_posts')
             .select('id')
             .in('account_id', accountIds);
@@ -56,31 +76,30 @@ export async function POST(request) {
 
         // 3. PAUSE all automations (our data — keep but deactivate)
         if (postIds.length > 0) {
-            await supabase
+            await serviceClient
                 .from('dm_automations')
                 .update({ is_active: false })
                 .in('post_id', postIds);
         }
 
         // 4. DELETE all Platform Data — posts fetched from Meta APIs
-        //    This includes: captions, media_urls, thumbnail_urls, ig_post_id,
-        //    timestamps — all came from the Graph API
         if (accountIds.length > 0) {
-            await supabase
+            const { error: deletePostsError } = await serviceClient
                 .from('instagram_posts')
                 .delete()
                 .in('account_id', accountIds);
+
+            if (deletePostsError) {
+                console.error('Disconnect — failed to delete posts:', deletePostsError);
+            }
         }
 
         // 5. SCRUB Platform Data from connected_accounts and deactivate
-        //    Remove: access_token, ig_user_id, ig_username, ig_profile_picture_url,
-        //    fb_page_id, fb_page_name, fb_page_access_token, scopes
-        //    Keep: id, user_id, platform, is_active=false (we know they HAD a connection)
-        await supabase
+        const { error: scrubError } = await serviceClient
             .from('connected_accounts')
             .update({
                 is_active: false,
-                access_token: null,
+                access_token: '',  // Schema enforces NOT NULL
                 ig_user_id: null,
                 ig_username: null,
                 ig_profile_picture_url: null,
@@ -91,6 +110,13 @@ export async function POST(request) {
                 updated_at: new Date().toISOString(),
             })
             .in('id', accountIds);
+
+        if (scrubError) {
+            console.error('Disconnect — failed to scrub account:', scrubError);
+            return NextResponse.json({ error: 'Failed to deactivate account' }, { status: 500 });
+        }
+
+        console.log(`[Disconnect] Successfully disconnected ${accountIds.length} account(s), deleted ${postIds.length} posts`);
 
         return NextResponse.json({
             success: true,

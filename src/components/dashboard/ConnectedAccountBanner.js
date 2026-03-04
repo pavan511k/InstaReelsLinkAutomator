@@ -30,7 +30,7 @@ export default function ConnectedAccountBanner({ accounts = [], connectedPlatfor
                 body: JSON.stringify({ accountId: disconnectTargetId }),
             });
             if (res.ok) {
-                router.refresh();
+                window.location.reload();
             }
         } catch (err) {
             console.error('Disconnect failed:', err);
