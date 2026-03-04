@@ -1,71 +1,95 @@
+'use client';
+
+import { useScrollReveal } from '@/hooks/useScrollReveal';
 import Navbar from '@/components/landing/Navbar';
 import HeroSection from '@/components/landing/HeroSection';
-import StatsBar from '@/components/landing/StatsBar';
+import HowItWorks from '@/components/landing/HowItWorks';
 import FeatureCard from '@/components/landing/FeatureCard';
 import Footer from '@/components/landing/Footer';
 import { MessageCircle, Film, Reply, AtSign } from 'lucide-react';
 
 const FEATURES = [
   {
-    title: 'Auto-Reply to Instagram Reel Comments',
-    description: 'Reply to Instagram reel comments automatically with a DM sent straight to the users inbox. Add trigger keywords or respond to all comments.',
-    icon: <Film size={64} strokeWidth={1.5} />,
+    title: 'Auto-Reply to Reel Comments',
+    description: 'When someone comments on your reel, AutoDM sends them a DM instantly. Use keyword triggers or reply to all comments automatically.',
+    icon: <Film size={48} strokeWidth={1.5} />,
     reverse: false,
   },
   {
-    title: 'Auto-Reply to Instagram Post Comments',
-    description: 'Reply to Instagram post comments automatically with a DM sent straight to the users inbox. Add trigger keywords or respond to all comments.',
-    icon: <MessageCircle size={64} strokeWidth={1.5} />,
+    title: 'Auto-Reply to Post Comments',
+    description: 'Set up automated DMs for your static posts. Choose trigger keywords like "LINK" or "INFO" and let AutoDM handle the rest.',
+    icon: <MessageCircle size={48} strokeWidth={1.5} />,
     reverse: true,
   },
   {
-    title: 'Auto-Respond to Instagram Story Replies',
-    description: 'Automatically respond to story replies with a DM sent directly to the users inbox. Add trigger keywords or respond to all comments.',
-    icon: <Reply size={64} strokeWidth={1.5} />,
+    title: 'Auto-Respond to Story Replies',
+    description: 'When followers reply to your stories, send them a DM automatically with your link, info, or any custom message.',
+    icon: <Reply size={48} strokeWidth={1.5} />,
     reverse: false,
   },
   {
-    title: 'Auto-Reply to Instagram Story Mentions',
-    description: 'Automatically respond to story @mentions with a message sent directly to the users inbox.',
-    icon: <AtSign size={64} strokeWidth={1.5} />,
+    title: 'Auto-Reply to Story Mentions',
+    description: 'Get notified and send automatic DMs when someone mentions your account in their story. Great for brand partnerships and collaborations.',
+    icon: <AtSign size={48} strokeWidth={1.5} />,
     reverse: true,
   },
 ];
 
 export default function HomePage() {
+  const [featuresRef, featuresVisible] = useScrollReveal({ threshold: 0.2 });
+
   return (
     <>
       <Navbar />
       <main>
         <HeroSection />
-        <StatsBar />
-        <section id="features" className="container">
-          <div style={{ textAlign: 'center', paddingTop: '5rem' }}>
-            <span style={{
-              color: 'var(--color-primary)',
-              fontSize: 'var(--font-size-sm)',
-              fontWeight: 'var(--font-weight-semibold)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-            }}>Feature Focus</span>
-            <h2 style={{
-              fontSize: 'var(--font-size-4xl)',
-              fontWeight: 'var(--font-weight-extrabold)',
-              color: 'var(--color-gray-900)',
-              marginTop: 'var(--space-3)',
-              marginBottom: 'var(--space-2)',
-            }}>Feature Breakdown</h2>
-            <p style={{
-              color: 'var(--color-gray-500)',
-              maxWidth: '600px',
-              margin: '0 auto',
-            }}>
-              Dive into the specifics of each feature, understanding its functionality and how it can elevate your Instagram strategy.
-            </p>
+        <HowItWorks />
+        <section id="features" style={{ background: 'var(--color-white)' }}>
+          <div className="container">
+            <div
+              ref={featuresRef}
+              style={{
+                textAlign: 'center',
+                paddingTop: 'var(--space-20)',
+                paddingBottom: 'var(--space-4)',
+                opacity: featuresVisible ? 1 : 0,
+                transform: featuresVisible ? 'translateY(0)' : 'translateY(30px)',
+                transition: 'opacity 0.7s ease-out, transform 0.7s ease-out',
+              }}
+            >
+              <span style={{
+                display: 'inline-block',
+                fontSize: 'var(--font-size-xs)',
+                fontWeight: 'var(--font-weight-semibold)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: 'var(--color-ig-pink)',
+                marginBottom: 'var(--space-3)',
+                padding: 'var(--space-1) var(--space-4)',
+                background: 'var(--color-primary-light)',
+                borderRadius: 'var(--radius-full)',
+              }}>Features</span>
+              <h2 style={{
+                fontSize: 'var(--font-size-4xl)',
+                fontWeight: 'var(--font-weight-extrabold)',
+                color: 'var(--color-gray-900)',
+                marginTop: 'var(--space-3)',
+                marginBottom: 'var(--space-3)',
+                letterSpacing: '-0.02em',
+              }}>Everything you need to automate DMs</h2>
+              <p style={{
+                color: 'var(--color-gray-500)',
+                maxWidth: '550px',
+                margin: '0 auto',
+                lineHeight: '1.7',
+              }}>
+                AutoDM works across reels, posts, stories, and mentions — giving you full control over your Instagram DM automation.
+              </p>
+            </div>
+            {FEATURES.map((feature) => (
+              <FeatureCard key={feature.title} {...feature} />
+            ))}
           </div>
-          {FEATURES.map((feature) => (
-            <FeatureCard key={feature.title} {...feature} />
-          ))}
         </section>
       </main>
       <Footer />

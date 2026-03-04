@@ -1,10 +1,14 @@
+/* ============================================================
+   Landing — Navbar (Dark Premium)
+   ============================================================ */
+
 .navbar {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--color-gray-100);
+    background: rgba(15, 15, 26, 0.95);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .navContent {
@@ -14,24 +18,39 @@
     height: 64px;
 }
 
+/* Logo */
 .logo {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    color: var(--color-primary);
     text-decoration: none;
+}
+
+.logoIcon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-lg);
+    background: var(--gradient-brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(225, 48, 108, 0.25);
 }
 
 .logoText {
     font-size: var(--font-size-xl);
     font-weight: var(--font-weight-extrabold);
-    color: var(--color-gray-900);
+    color: var(--color-white);
 }
 
 .logoDM {
-    color: var(--color-primary);
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
+/* Nav Links */
 .navLinks {
     display: flex;
     align-items: center;
@@ -41,21 +60,40 @@
 .navLink {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
-    color: var(--color-gray-600);
+    color: rgba(255, 255, 255, 0.6);
     transition: color var(--transition-fast);
+    text-decoration: none;
 }
 
 .navLink:hover {
-    color: var(--color-gray-900);
+    color: var(--color-white);
 }
 
+/* CTA Button */
 .ctaBtn {
-    margin-left: var(--space-2);
+    padding: var(--space-2) var(--space-5);
+    background: var(--gradient-btn);
+    color: var(--color-white);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-base);
+    text-decoration: none;
+    box-shadow: 0 2px 10px rgba(225, 48, 108, 0.2);
 }
 
+.ctaBtn:hover {
+    box-shadow: 0 4px 20px rgba(225, 48, 108, 0.35);
+    transform: translateY(-1px);
+}
+
+/* Mobile Toggle */
 .menuToggle {
     display: none;
-    color: var(--color-gray-700);
+    color: rgba(255, 255, 255, 0.7);
+    background: none;
+    border: none;
+    cursor: pointer;
 }
 
 @media (max-width: 768px) {
@@ -70,7 +108,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: var(--color-white);
+        background: var(--color-surface-dark);
         flex-direction: column;
         align-items: center;
         justify-content: flex-start;
@@ -83,9 +121,5 @@
 
     .navLinks.open {
         transform: translateX(0);
-    }
-
-    .ctaBtn {
-        margin-left: 0;
     }
 }

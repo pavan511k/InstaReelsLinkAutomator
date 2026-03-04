@@ -1,29 +1,287 @@
+/* ============================================================
+   Auth Pages — Split-Screen Premium Layout
+   Instagram-inspired design with branding panel + form panel
+   ============================================================ */
+
+/* ---- Split-Screen Container ---- */
 .authPage {
     min-height: 100vh;
     display: flex;
+    background: var(--color-white);
+}
+
+/* ---- Branding Panel (Left) ---- */
+.brandingPanel {
+    flex: 0 0 45%;
+    background: var(--gradient-dark);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--space-16);
+    overflow: hidden;
+    min-height: 100vh;
+}
+
+/* Animated gradient orbs */
+.brandingPanel::before {
+    content: '';
+    position: absolute;
+    top: -20%;
+    left: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(225, 48, 108, 0.25) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: float 8s ease-in-out infinite;
+    pointer-events: none;
+}
+
+.brandingPanel::after {
+    content: '';
+    position: absolute;
+    bottom: -15%;
+    right: -10%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(131, 58, 180, 0.3) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: float 10s ease-in-out infinite reverse;
+    pointer-events: none;
+}
+
+.brandingContent {
+    position: relative;
+    z-index: 2;
+    color: var(--color-white);
+}
+
+.brandingOrb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.brandingOrb:nth-child(1) {
+    width: 180px;
+    height: 180px;
+    top: 8%;
+    right: 5%;
+    background: radial-gradient(circle, rgba(252, 175, 69, 0.2) 0%, transparent 70%);
+    animation: float 12s ease-in-out infinite;
+}
+
+.brandingOrb:nth-child(2) {
+    width: 120px;
+    height: 120px;
+    bottom: 15%;
+    left: 8%;
+    background: radial-gradient(circle, rgba(64, 93, 230, 0.2) 0%, transparent 70%);
+    animation: float 9s ease-in-out infinite 2s;
+}
+
+.brandingOrb:nth-child(3) {
+    width: 80px;
+    height: 80px;
+    top: 60%;
+    right: 20%;
+    background: radial-gradient(circle, rgba(225, 48, 108, 0.15) 0%, transparent 70%);
+    animation: float 7s ease-in-out infinite 1s;
+}
+
+/* Logo in branding panel */
+.brandingLogo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-12);
+    text-decoration: none;
+    color: var(--color-white);
+}
+
+.brandingLogoIcon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-xl);
+    background: var(--gradient-brand);
+    display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, var(--color-gray-50) 0%, var(--color-primary-light) 100%);
-    padding: var(--space-6);
+    box-shadow: 0 4px 15px rgba(225, 48, 108, 0.3);
 }
 
-.authCard {
-    background: var(--color-white);
-    border-radius: var(--radius-2xl);
-    box-shadow: var(--shadow-xl);
-    padding: var(--space-10);
-    width: 100%;
-    max-width: 460px;
-    animation: slideUp 0.4s ease;
+.brandingLogoText {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-extrabold);
+    letter-spacing: -0.02em;
 }
 
-.logo {
+.brandingLogoDM {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.brandingHeadline {
+    font-size: clamp(2rem, 3vw, 2.75rem);
+    font-weight: var(--font-weight-extrabold);
+    line-height: var(--line-height-tight);
+    margin-bottom: var(--space-5);
+    letter-spacing: -0.03em;
+}
+
+.brandingHeadlineAccent {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.brandingSubtitle {
+    font-size: var(--font-size-lg);
+    color: rgba(255, 255, 255, 0.6);
+    line-height: var(--line-height-relaxed);
+    margin-bottom: var(--space-10);
+    max-width: 380px;
+}
+
+/* Trust indicators */
+.trustIndicators {
     display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.trustItem {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.trustIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--color-ig-pink);
+}
+
+/* Testimonial card in branding panel */
+.testimonialCard {
+    margin-top: var(--space-10);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    backdrop-filter: blur(10px);
+}
+
+.testimonialText {
+    font-size: var(--font-size-sm);
+    color: rgba(255, 255, 255, 0.8);
+    line-height: var(--line-height-relaxed);
+    margin-bottom: var(--space-4);
+    font-style: italic;
+}
+
+.testimonialAuthor {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.testimonialAvatar {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background: var(--gradient-brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-white);
+}
+
+.testimonialName {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.testimonialRole {
+    font-size: var(--font-size-xs);
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* Stats row in branding */
+.brandingStats {
+    display: flex;
+    gap: var(--space-8);
+    margin-top: var(--space-10);
+    padding-top: var(--space-8);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.brandingStat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.brandingStatValue {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-extrabold);
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.brandingStatLabel {
+    font-size: var(--font-size-xs);
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+
+/* ---- Form Panel (Right) ---- */
+.formPanel {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-12) var(--space-16);
+    position: relative;
+    background: var(--color-white);
+}
+
+.formContainer {
+    width: 100%;
+    max-width: 420px;
+    animation: slideUp 0.5s ease;
+}
+
+/* Logo on form panel (for mobile / replaces branding logo) */
+.logo {
+    display: none;
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
     color: var(--color-primary);
     margin-bottom: var(--space-6);
+    text-decoration: none;
 }
 
 .logoText {
@@ -33,39 +291,59 @@
 }
 
 .logoDM {
-    color: var(--color-primary);
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
+/* Form heading */
 .title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-extrabold);
     color: var(--color-gray-900);
-    text-align: center;
     margin-bottom: var(--space-2);
+    letter-spacing: -0.02em;
 }
 
 .subtitle {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     color: var(--color-gray-500);
-    text-align: center;
     margin-bottom: var(--space-8);
     line-height: var(--line-height-relaxed);
 }
 
+/* Error message */
 .error {
     background: var(--color-error-light);
     color: #991B1B;
     padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     font-size: var(--font-size-sm);
-    margin-bottom: var(--space-4);
-    text-align: center;
+    margin-bottom: var(--space-5);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
+/* Form styles */
 .form {
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
+}
+
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.inputLabel {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-gray-700);
 }
 
 .inputWrapper {
@@ -74,22 +352,123 @@
 
 .inputIcon {
     position: absolute;
-    left: 12px;
+    left: 14px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--color-gray-400);
     pointer-events: none;
+    transition: color var(--transition-fast);
 }
 
-.iconInput {
-    padding-left: 40px !important;
+.inputField {
+    width: 100%;
+    padding: 14px 16px 14px 44px;
+    border: 1.5px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    color: var(--color-gray-900);
+    background: var(--color-white);
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+    outline: none;
+    font-family: var(--font-family);
 }
 
+.inputField:focus {
+    border-color: var(--color-ig-pink);
+    box-shadow: 0 0 0 3px rgba(225, 48, 108, 0.1);
+}
+
+.inputField:focus+.inputIcon,
+.inputField:focus~.inputIcon {
+    color: var(--color-ig-pink);
+}
+
+.inputField::placeholder {
+    color: var(--color-gray-400);
+}
+
+/* Password toggle button */
+.passwordToggle {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-gray-400);
+    cursor: pointer;
+    padding: var(--space-1);
+    border-radius: var(--radius-sm);
+    transition: color var(--transition-fast);
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.passwordToggle:hover {
+    color: var(--color-gray-600);
+}
+
+/* Submit button */
 .submitBtn {
     width: 100%;
+    padding: 14px 24px;
+    background: var(--gradient-btn);
+    color: var(--color-white);
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    transition: all var(--transition-base);
     margin-top: var(--space-2);
+    font-family: var(--font-family);
+    position: relative;
+    overflow: hidden;
 }
 
+.submitBtn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gradient-btn-hover);
+    opacity: 0;
+    transition: opacity var(--transition-base);
+}
+
+.submitBtn:hover::before {
+    opacity: 1;
+}
+
+.submitBtn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 25px rgba(225, 48, 108, 0.35);
+}
+
+.submitBtn:active {
+    transform: translateY(0);
+}
+
+.submitBtn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.submitBtnText {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+/* Spinner */
 .spinner {
     animation: spin 1s linear infinite;
 }
@@ -104,25 +483,46 @@
     }
 }
 
+/* Auth switch link */
 .switchAuth {
     text-align: center;
-    margin-top: var(--space-6);
+    margin-top: var(--space-8);
     font-size: var(--font-size-sm);
     color: var(--color-gray-500);
 }
 
 .switchLink {
-    color: var(--color-primary);
+    color: var(--color-ig-pink);
     font-weight: var(--font-weight-semibold);
     transition: color var(--transition-fast);
+    text-decoration: none;
 }
 
 .switchLink:hover {
-    color: var(--color-primary-hover);
+    color: var(--color-ig-magenta);
     text-decoration: underline;
 }
 
-/* Verify page styles */
+/* Divider */
+.divider {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--color-gray-400);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-gray-200);
+}
+
+/* ---- Verify page styles ---- */
 .verifyIcon {
     display: flex;
     justify-content: center;
@@ -130,12 +530,23 @@
     color: var(--color-success);
 }
 
+.verifyIconCircle {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-full);
+    background: var(--color-success-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: slideUp 0.5s ease;
+}
+
 .verifyText {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     color: var(--color-gray-600);
     text-align: center;
     line-height: var(--line-height-relaxed);
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-8);
 }
 
 .verifyActions {
@@ -145,7 +556,7 @@
     align-items: center;
 }
 
-/* Terms checkbox */
+/* ---- Terms checkbox ---- */
 .termsCheckbox {
     margin-top: var(--space-1);
 }
@@ -153,7 +564,7 @@
 .checkboxLabel {
     display: flex;
     align-items: flex-start;
-    gap: var(--space-2);
+    gap: var(--space-3);
     cursor: pointer;
     font-size: var(--font-size-sm);
     color: var(--color-gray-600);
@@ -162,19 +573,131 @@
 
 .checkbox {
     margin-top: 3px;
-    width: 16px;
-    height: 16px;
-    accent-color: var(--color-primary);
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-ig-pink);
     cursor: pointer;
     flex-shrink: 0;
+    border-radius: var(--radius-sm);
 }
 
 .termsLink {
-    color: var(--color-primary);
+    color: var(--color-ig-pink);
     font-weight: var(--font-weight-semibold);
-    text-decoration: underline;
+    text-decoration: none;
+    transition: color var(--transition-fast);
 }
 
 .termsLink:hover {
-    color: var(--color-primary-hover);
+    color: var(--color-ig-magenta);
+    text-decoration: underline;
+}
+
+
+/* ============================================================
+   Responsive — Mobile
+   ============================================================ */
+@media (max-width: 1024px) {
+    .brandingPanel {
+        flex: 0 0 40%;
+        padding: var(--space-10);
+    }
+
+    .brandingHeadline {
+        font-size: 1.75rem;
+    }
+
+    .testimonialCard {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .authPage {
+        flex-direction: column;
+    }
+
+    .brandingPanel {
+        flex: none;
+        min-height: auto;
+        padding: var(--space-10) var(--space-6) var(--space-8);
+    }
+
+    .brandingPanel::before,
+    .brandingPanel::after {
+        display: none;
+    }
+
+    .brandingOrb {
+        display: none;
+    }
+
+    .brandingHeadline {
+        font-size: 1.5rem;
+        margin-bottom: var(--space-3);
+    }
+
+    .brandingSubtitle {
+        font-size: var(--font-size-sm);
+        margin-bottom: var(--space-6);
+    }
+
+    .trustIndicators {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: var(--space-3);
+    }
+
+    .trustItem {
+        font-size: var(--font-size-xs);
+        gap: var(--space-2);
+    }
+
+    .trustIcon {
+        width: 28px;
+        height: 28px;
+    }
+
+    .brandingStats {
+        display: none;
+    }
+
+    .formPanel {
+        padding: var(--space-8) var(--space-6);
+    }
+
+    .formContainer {
+        max-width: 100%;
+    }
+
+    .logo {
+        display: none;
+    }
+
+    .title {
+        font-size: var(--font-size-2xl);
+    }
+}
+
+@media (max-width: 480px) {
+    .brandingPanel {
+        padding: var(--space-8) var(--space-5) var(--space-6);
+    }
+
+    .brandingLogo {
+        margin-bottom: var(--space-6);
+    }
+
+    .formPanel {
+        padding: var(--space-6) var(--space-5);
+    }
+
+    .inputField {
+        padding: 12px 14px 12px 40px;
+        font-size: var(--font-size-sm);
+    }
+
+    .submitBtn {
+        padding: 12px 20px;
+    }
 }

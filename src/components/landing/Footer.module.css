@@ -1,26 +1,61 @@
+/* ============================================================
+   Landing — Footer (Dark Premium + CTA Banner)
+   ============================================================ */
+
 .footer {
-    background: var(--color-gray-900);
+    background: var(--color-surface-dark);
     color: var(--color-gray-300);
-    padding-top: var(--space-16);
 }
 
-.footerCta {
+/* CTA Banner */
+.ctaBanner {
+    padding: var(--space-20) 0;
+}
+
+.ctaContent {
     text-align: center;
-    padding: var(--space-16) 0;
-    border-bottom: 1px solid var(--color-gray-700);
+    max-width: 600px;
+    margin: 0 auto;
 }
 
-.footerHeadline {
-    font-size: var(--font-size-3xl);
+.ctaTitle {
+    font-size: var(--font-size-4xl);
     font-weight: var(--font-weight-extrabold);
     color: var(--color-white);
     margin-bottom: var(--space-4);
+    letter-spacing: -0.02em;
 }
 
-.footerSub {
+.ctaSub {
     font-size: var(--font-size-base);
-    color: var(--color-gray-400);
+    color: rgba(255, 255, 255, 0.5);
     margin-bottom: var(--space-8);
+    line-height: var(--line-height-relaxed);
+}
+
+.ctaBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 14px 32px;
+    background: var(--gradient-btn);
+    color: var(--color-white);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    transition: all var(--transition-base);
+    box-shadow: 0 4px 20px rgba(225, 48, 108, 0.3);
+}
+
+.ctaBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(225, 48, 108, 0.4);
+}
+
+/* Footer Content */
+.footerContent {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .footerGrid {
@@ -30,6 +65,7 @@
     padding: var(--space-12) 0;
 }
 
+/* Brand */
 .footerBrand {
     display: flex;
     flex-direction: column;
@@ -40,26 +76,40 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    color: var(--color-primary);
+}
+
+.logoIcon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-md);
+    background: var(--gradient-brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(225, 48, 108, 0.2);
 }
 
 .logoText {
-    font-size: var(--font-size-xl);
+    font-size: var(--font-size-lg);
     font-weight: var(--font-weight-extrabold);
     color: var(--color-white);
 }
 
 .logoDM {
-    color: var(--color-primary);
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .brandDesc {
     font-size: var(--font-size-sm);
-    color: var(--color-gray-400);
+    color: rgba(255, 255, 255, 0.4);
     line-height: var(--line-height-relaxed);
     max-width: 300px;
 }
 
+/* Links */
 .footerLinks {
     display: flex;
     flex-direction: column;
@@ -75,21 +125,24 @@
 
 .footerLinks a {
     font-size: var(--font-size-sm);
-    color: var(--color-gray-400);
+    color: rgba(255, 255, 255, 0.4);
     transition: color var(--transition-fast);
+    text-decoration: none;
 }
 
 .footerLinks a:hover {
     color: var(--color-white);
 }
 
+/* Bottom */
 .footerBottom {
-    border-top: 1px solid var(--color-gray-700);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
     padding: var(--space-6) 0;
     text-align: center;
     font-size: var(--font-size-xs);
-    color: var(--color-gray-500);
+    color: rgba(255, 255, 255, 0.3);
 }
+
 
 @media (max-width: 768px) {
     .footerGrid {
@@ -101,4 +154,21 @@
     .brandDesc {
         max-width: none;
     }
+
+    .ctaTitle {
+        font-size: var(--font-size-3xl);
+    }
+}
+
+/* ── Scroll Reveal Animations ── */
+.revealHidden {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+}
+
+.revealIn {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
 }

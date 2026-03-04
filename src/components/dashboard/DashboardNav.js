@@ -32,7 +32,9 @@ export default function DashboardNav({ user, isConnected = false, profilePicUrl 
         <nav className={styles.dashNav}>
             <div className={styles.navInner}>
                 <Link href="/dashboard" className={styles.logo} onClick={closeMenu}>
-                    <MessageSquare size={24} strokeWidth={2.5} />
+                    <div className={styles.logoIcon}>
+                        <MessageSquare size={18} color="white" strokeWidth={2.5} />
+                    </div>
                     <span className={styles.logoText}>Auto<span className={styles.logoDM}>DM</span></span>
                 </Link>
 

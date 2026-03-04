@@ -128,16 +128,20 @@ export default async function DashboardPage() {
 
     return (
         <div className={styles.dashboardPage}>
-            <div className={styles.header}>
-                <div>
-                    <h1 className={styles.welcome}>Hi {displayName}, Welcome back!</h1>
-                </div>
-                <div className={styles.dmUsage}>
-                    <span className={styles.usageLabel}>MONTHLY DM USAGE</span>
-                    <div className="progress-bar" style={{ width: '150px' }}>
-                        <div className="progress-fill" style={{ width: `${dmUsagePercent}%` }}></div>
+            {/* ── Welcome Hero Banner ── */}
+            <div className={styles.welcomeBanner}>
+                <div className={styles.welcomeInner}>
+                    <div>
+                        <h1 className={styles.welcome}>Hi {displayName}, Welcome back!</h1>
+                        <p className={styles.welcomeSub}>Manage your Instagram DM automations and track performance.</p>
                     </div>
-                    <span className={styles.usageCount}>{monthlySent.toLocaleString()}/{MONTHLY_DM_LIMIT.toLocaleString()}</span>
+                    <div className={styles.dmUsage}>
+                        <span className={styles.usageLabel}>MONTHLY DM USAGE</span>
+                        <div className={styles.usageBarContainer}>
+                            <div className={styles.usageBarFill} style={{ width: `${dmUsagePercent}%` }} />
+                        </div>
+                        <span className={styles.usageCount}>{monthlySent.toLocaleString()}/{MONTHLY_DM_LIMIT.toLocaleString()}</span>
+                    </div>
                 </div>
             </div>
 
@@ -163,7 +167,7 @@ export default async function DashboardPage() {
                 <div className={styles.statCard}>
                     <div className={styles.statHeader}>
                         <span className={styles.statLabel}>MESSAGES SENT</span>
-                        <div className={styles.statIconWrapper}><Send size={18} /></div>
+                        <div className={`${styles.statIconWrapper} ${styles.statIconPink}`}><Send size={18} /></div>
                     </div>
                     <div className={styles.statBody}>
                         <span className={styles.statValue}>{totalSent.toLocaleString()}</span>
@@ -172,7 +176,7 @@ export default async function DashboardPage() {
                 <div className={styles.statCard}>
                     <div className={styles.statHeader}>
                         <span className={styles.statLabel}>ACTIVE AUTOMATIONS</span>
-                        <div className={styles.statIconWrapper}><MousePointerClick size={18} /></div>
+                        <div className={`${styles.statIconWrapper} ${styles.statIconPurple}`}><MousePointerClick size={18} /></div>
                     </div>
                     <div className={styles.statBody}>
                         <span className={styles.statValue}>{totalActivePosts}</span>
@@ -181,7 +185,7 @@ export default async function DashboardPage() {
                 <div className={styles.statCard}>
                     <div className={styles.statHeader}>
                         <span className={styles.statLabel}>THIS MONTH</span>
-                        <div className={styles.statIconWrapper}><MessageCircle size={18} /></div>
+                        <div className={`${styles.statIconWrapper} ${styles.statIconOrange}`}><MessageCircle size={18} /></div>
                     </div>
                     <div className={styles.statBody}>
                         <span className={styles.statValue}>{monthlySent.toLocaleString()}</span>

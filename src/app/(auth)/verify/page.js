@@ -1,34 +1,82 @@
 import Link from 'next/link';
-import { MessageSquare, MailCheck } from 'lucide-react';
+import { MessageSquare, MailCheck, Shield, Zap, CheckCircle } from 'lucide-react';
 import styles from '../auth.module.css';
 
 export default function VerifyPage() {
     return (
         <div className={styles.authPage}>
-            <div className={styles.authCard}>
-                <Link href="/" className={styles.logo}>
-                    <MessageSquare size={32} strokeWidth={2.5} />
-                    <span className={styles.logoText}>Auto<span className={styles.logoDM}>DM</span></span>
-                </Link>
+            {/* ── Branding Panel (Left) ── */}
+            <div className={styles.brandingPanel}>
+                <div className={styles.brandingOrb} />
+                <div className={styles.brandingOrb} />
+                <div className={styles.brandingOrb} />
 
-                <div className={styles.verifyIcon}>
-                    <MailCheck size={56} strokeWidth={1.5} />
+                <div className={styles.brandingContent}>
+                    <Link href="/" className={styles.brandingLogo}>
+                        <div className={styles.brandingLogoIcon}>
+                            <MessageSquare size={22} color="white" strokeWidth={2.5} />
+                        </div>
+                        <span className={styles.brandingLogoText}>
+                            Auto<span className={styles.brandingLogoDM}>DM</span>
+                        </span>
+                    </Link>
+
+                    <h1 className={styles.brandingHeadline}>
+                        You&apos;re Almost{' '}
+                        <span className={styles.brandingHeadlineAccent}>There!</span>
+                    </h1>
+
+                    <p className={styles.brandingSubtitle}>
+                        Just one more step to unlock the power of automated Instagram DMs.
+                    </p>
+
+                    <div className={styles.trustIndicators}>
+                        <div className={styles.trustItem}>
+                            <div className={styles.trustIcon}>
+                                <CheckCircle size={16} />
+                            </div>
+                            <span>Account created successfully</span>
+                        </div>
+                        <div className={styles.trustItem}>
+                            <div className={styles.trustIcon}>
+                                <Shield size={16} />
+                            </div>
+                            <span>Your data is encrypted & secure</span>
+                        </div>
+                        <div className={styles.trustItem}>
+                            <div className={styles.trustIcon}>
+                                <Zap size={16} />
+                            </div>
+                            <span>Ready to automate in 2 minutes</span>
+                        </div>
+                    </div>
                 </div>
+            </div>
 
-                <h1 className={styles.title}>Check Your Email</h1>
+            {/* ── Form Panel (Right) ── */}
+            <div className={styles.formPanel}>
+                <div className={styles.formContainer}>
+                    <div className={styles.verifyIcon}>
+                        <div className={styles.verifyIconCircle}>
+                            <MailCheck size={40} strokeWidth={1.5} />
+                        </div>
+                    </div>
 
-                <p className={styles.verifyText}>
-                    We&apos;ve sent a verification link to your email address.
-                    Please click the link to verify your account and get started.
-                </p>
+                    <h2 className={styles.title} style={{ textAlign: 'center' }}>Check Your Email</h2>
 
-                <div className={styles.verifyActions}>
-                    <Link href="/login" className="btn btn-primary">
-                        Go to Login
-                    </Link>
-                    <Link href="/" className={styles.switchLink} style={{ fontSize: 'var(--font-size-sm)' }}>
-                        Back to Home
-                    </Link>
+                    <p className={styles.verifyText}>
+                        We&apos;ve sent a verification link to your email address.
+                        Please click the link to verify your account and get started.
+                    </p>
+
+                    <div className={styles.verifyActions}>
+                        <Link href="/login" className={styles.submitBtn} style={{ textDecoration: 'none', textAlign: 'center' }}>
+                            <span className={styles.submitBtnText}>Go to Login</span>
+                        </Link>
+                        <Link href="/" className={styles.switchLink} style={{ fontSize: 'var(--font-size-sm)', marginTop: 'var(--space-4)' }}>
+                            Back to Home
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>

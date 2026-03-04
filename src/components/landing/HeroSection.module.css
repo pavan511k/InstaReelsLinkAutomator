@@ -1,222 +1,386 @@
+/* ============================================================
+   Landing — Hero Section (Dark Premium)
+   ============================================================ */
+
 .hero {
-    padding: var(--space-20) 0 var(--space-16);
-    background: linear-gradient(180deg, var(--color-gray-50) 0%, var(--color-white) 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: var(--space-16) 0;
+    background: var(--gradient-dark);
+    position: relative;
     overflow: hidden;
 }
 
+/* Floating Orbs */
+.heroOrb1 {
+    position: absolute;
+    top: -10%;
+    left: -5%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(225, 48, 108, 0.12) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: float 10s ease-in-out infinite;
+}
+
+.heroOrb2 {
+    position: absolute;
+    bottom: -15%;
+    right: -8%;
+    width: 450px;
+    height: 450px;
+    background: radial-gradient(circle, rgba(131, 58, 180, 0.15) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: float 12s ease-in-out infinite reverse;
+}
+
+.heroOrb3 {
+    position: absolute;
+    top: 40%;
+    right: 25%;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(252, 175, 69, 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: float 8s ease-in-out infinite 2s;
+}
+
+/* Layout */
 .heroContent {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-16);
     align-items: center;
+    position: relative;
+    z-index: 1;
+    width: 100%;
 }
 
+/* Badge */
+.heroBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: var(--space-6);
+    backdrop-filter: blur(8px);
+}
+
+.badgeDot {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-full);
+    background: var(--color-ig-pink);
+    box-shadow: 0 0 8px rgba(225, 48, 108, 0.6);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+/* Headline */
 .headline {
-    font-size: var(--font-size-5xl);
+    font-size: clamp(2.25rem, 5vw, 3.5rem);
     font-weight: var(--font-weight-black);
-    line-height: var(--line-height-tight);
-    color: var(--color-gray-900);
-    margin-bottom: var(--space-4);
+    line-height: 1.1;
+    color: var(--color-white);
+    margin-bottom: var(--space-6);
+    letter-spacing: -0.03em;
 }
 
 .highlight {
-    color: var(--color-primary);
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
+/* Subtitle */
 .subtitle {
     font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-primary);
-    margin-bottom: var(--space-6);
+    color: rgba(255, 255, 255, 0.55);
+    line-height: var(--line-height-relaxed);
+    margin-bottom: var(--space-8);
+    max-width: 500px;
 }
 
-.features {
+/* Checklist */
+.checklist {
     list-style: none;
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
-    margin-bottom: var(--space-8);
+    margin-bottom: var(--space-10);
 }
 
-.feature {
+.checkItem {
     display: flex;
     align-items: center;
     gap: var(--space-3);
     font-size: var(--font-size-sm);
-    color: var(--color-gray-700);
+    color: rgba(255, 255, 255, 0.7);
 }
 
 .checkIcon {
-    color: var(--color-success);
+    color: var(--color-ig-pink);
     flex-shrink: 0;
 }
 
-.checkIconBlue {
-    color: var(--color-primary);
-    flex-shrink: 0;
-}
-
-.checkIconGold {
-    color: var(--color-accent);
-    flex-shrink: 0;
-}
-
+/* CTAs */
 .heroCta {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-2);
+    align-items: center;
+    gap: var(--space-5);
 }
 
-.noCredit {
-    font-size: var(--font-size-xs);
-    color: var(--color-gray-500);
-}
-
-/* Visual / Phone Mockup */
-.heroVisual {
-    position: relative;
-    display: flex;
-    justify-content: center;
-}
-
-.phoneFrame {
-    width: 260px;
-    background: var(--color-white);
-    border-radius: 24px;
-    border: 3px solid var(--color-gray-200);
-    box-shadow: var(--shadow-xl);
-    overflow: hidden;
-}
-
-.phoneScreen {
-    padding: var(--space-3);
-}
-
-.mockPost {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-}
-
-.mockHeader {
-    display: flex;
+.ctaPrimary {
+    display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) 0;
+    padding: 14px 28px;
+    background: var(--gradient-btn);
+    color: var(--color-white);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    transition: all var(--transition-base);
+    box-shadow: 0 4px 20px rgba(225, 48, 108, 0.3);
 }
 
-.mockAvatar {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-full);
-    background: linear-gradient(135deg, #E1306C, #F77737, #FCAF45);
+.ctaPrimary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(225, 48, 108, 0.4);
 }
 
-.mockUsername {
+.ctaSecondary {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: rgba(255, 255, 255, 0.5);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 2px;
+}
+
+.ctaSecondary:hover {
+    color: var(--color-white);
+    border-bottom-color: var(--color-white);
+}
+
+/* ── Hero Visual — Flow Demo ── */
+.heroVisual {
+    display: flex;
+    justify-content: center;
+    animation: slideUp 0.8s ease 0.2s both;
+}
+
+.visualCard {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-8);
+    width: 100%;
+    max-width: 420px;
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.flowStep {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.flowLabel {
     font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/* Comment Box */
+.commentBox {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+}
+
+.commentAvatar {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-lg);
+    flex-shrink: 0;
+}
+
+.commentContent {
+    font-size: var(--font-size-sm);
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.4;
+}
+
+.commentContent strong {
+    color: var(--color-ig-pink);
     font-weight: var(--font-weight-semibold);
 }
 
-.mockImage {
-    width: 100%;
-    aspect-ratio: 1;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: var(--radius-sm);
+/* Flow Arrow */
+.flowArrow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-4);
 }
 
-.mockActions {
+.flowArrowLine {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(225, 48, 108, 0.4), rgba(131, 58, 180, 0.4));
+}
+
+.flowArrowDot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--gradient-brand);
+    box-shadow: 0 0 10px rgba(225, 48, 108, 0.5);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.flowArrowLabel {
+    font-size: var(--font-size-xs);
+    color: var(--color-ig-pink);
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+}
+
+/* DM Box */
+.dmBox {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
     display: flex;
-    gap: var(--space-3);
-    padding: var(--space-2) 0;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.dmHeader {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.dmBotIcon {
     font-size: var(--font-size-lg);
 }
 
-.mockComment {
-    font-size: var(--font-size-xs);
-    color: var(--color-gray-700);
-    padding: var(--space-1) 0;
-}
-
-/* DM Bubble */
-.dmBubble {
-    position: absolute;
-    right: -20px;
-    top: 30px;
-    width: 200px;
-    background: var(--color-white);
-    border-radius: var(--radius-xl);
-    padding: var(--space-4);
-    box-shadow: var(--shadow-xl);
-    border: 1px solid var(--color-gray-100);
-    animation: slideInRight 0.6s ease 0.3s both;
-}
-
-.notification {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    width: 22px;
-    height: 22px;
-    background: var(--color-error);
-    color: var(--color-white);
-    border-radius: var(--radius-full);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: var(--font-weight-bold);
-}
-
-.dmContent {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-}
-
-.dmTitle {
+.dmBotName {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    color: var(--color-gray-900);
+    color: rgba(255, 255, 255, 0.9);
 }
 
-.dmText {
-    font-size: var(--font-size-xs);
-    color: var(--color-gray-500);
-    line-height: var(--line-height-normal);
+.dmMessage {
+    font-size: var(--font-size-sm);
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.5;
 }
 
-.dmButton {
-    background: var(--color-gray-100);
-    text-align: center;
-    padding: var(--space-2);
+.dmLink {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(225, 48, 108, 0.1);
+    border: 1px solid rgba(225, 48, 108, 0.2);
     border-radius: var(--radius-md);
     font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-gray-700);
-    margin-top: var(--space-1);
+    color: var(--color-ig-pink);
+    font-weight: var(--font-weight-medium);
 }
 
+
+/* ── Responsive ── */
 @media (max-width: 768px) {
+    .hero {
+        min-height: auto;
+        padding: var(--space-16) 0 var(--space-12);
+    }
+
     .heroContent {
         grid-template-columns: 1fr;
         gap: var(--space-10);
         text-align: center;
     }
 
-    .features {
+    .heroBadge {
+        margin: 0 auto var(--space-6);
+    }
+
+    .subtitle {
+        max-width: none;
+    }
+
+    .checklist {
         align-items: center;
     }
 
     .heroCta {
+        flex-direction: column;
         align-items: center;
+        gap: var(--space-4);
     }
 
     .heroVisual {
-        justify-content: center;
+        order: -1;
     }
 
-    .dmBubble {
-        right: 10px;
+    .visualCard {
+        max-width: 350px;
     }
+}
+
+/* ── Scroll Reveal Animations ── */
+.animateHidden {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+}
+
+.animateIn {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+}
+
+.animateSlideLeft {
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+}
+
+.animateHidden.animateSlideLeft,
+.animateSlideLeft.animateHidden {
+    opacity: 0;
+    transform: translateX(40px);
 }

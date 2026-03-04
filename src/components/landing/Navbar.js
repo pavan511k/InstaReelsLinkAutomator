@@ -12,15 +12,18 @@ export default function Navbar() {
         <nav className={styles.navbar}>
             <div className={`container ${styles.navContent}`}>
                 <Link href="/" className={styles.logo}>
-                    <MessageSquare size={28} strokeWidth={2.5} />
+                    <div className={styles.logoIcon}>
+                        <MessageSquare size={18} color="white" strokeWidth={2.5} />
+                    </div>
                     <span className={styles.logoText}>Auto<span className={styles.logoDM}>DM</span></span>
                 </Link>
 
                 <div className={`${styles.navLinks} ${isMenuOpen ? styles.open : ''}`}>
-                    <a href="#features" className={styles.navLink}>Features</a>
-                    <Link href="/login" className={styles.navLink}>Log In</Link>
-                    <Link href="/signup" className={`btn btn-primary ${styles.ctaBtn}`}>
-                        Create Free Account
+                    <a href="#features" className={styles.navLink} onClick={() => setIsMenuOpen(false)}>Features</a>
+                    <a href="#how-it-works" className={styles.navLink} onClick={() => setIsMenuOpen(false)}>How It Works</a>
+                    <Link href="/login" className={styles.navLink} onClick={() => setIsMenuOpen(false)}>Log In</Link>
+                    <Link href="/signup" className={styles.ctaBtn} onClick={() => setIsMenuOpen(false)}>
+                        Get Started Free
                     </Link>
                 </div>
 

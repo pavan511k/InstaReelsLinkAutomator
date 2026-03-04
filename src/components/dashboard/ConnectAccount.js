@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Instagram } from 'lucide-react';
+import { Instagram, Link2, Loader2, Check, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import styles from './ConnectAccount.module.css';
 
@@ -10,6 +10,7 @@ const CONNECTION_OPTIONS = [
         id: 'instagram',
         title: 'Instagram Account',
         iconBg: '#E1306C',
+        cardClass: 'cardInstagram',
         description: 'Reply to comments and DMs from your Instagram business account.',
         features: [
             'AutoDM on Instagram post, reel & story comments',
@@ -22,6 +23,7 @@ const CONNECTION_OPTIONS = [
         id: 'facebook',
         title: 'Facebook Page',
         iconBg: '#1877F2',
+        cardClass: 'cardFacebook',
         description: 'Reply to comments and DMs from your Facebook Page.',
         features: [
             'AutoDM on Facebook post, reel & story comments',
@@ -34,6 +36,8 @@ const CONNECTION_OPTIONS = [
         id: 'both',
         title: 'Instagram + Facebook',
         iconBg: '#1A1A2E',
+        cardClass: 'cardBoth',
+        recommended: true,
         description: 'Connect both your Instagram account and Facebook Page for complete coverage and easier management.',
         features: [
             'AutoDM on Instagram and Facebook post, reel & story comments',
@@ -82,7 +86,10 @@ export default function ConnectAccount() {
     return (
         <div className={styles.container}>
             <div className={styles.header}>
-                <h1 className={styles.title}>Connect Account</h1>
+                <div className={styles.headerIcon}>
+                    <Link2 size={28} color="white" strokeWidth={2} />
+                </div>
+                <h1 className={styles.title}>Connect Your Account</h1>
                 <p className={styles.subtitle}>
                     Choose how you want to connect. Each option enables different features and requires different permissions.
                 </p>
@@ -96,7 +103,10 @@ export default function ConnectAccount() {
 
             <div className={styles.cards}>
                 {CONNECTION_OPTIONS.map((option) => (
-                    <div key={option.id} className={styles.card}>
+                    <div key={option.id} className={`${styles.card} ${styles[option.cardClass]}`}>
+                        {option.recommended && (
+                            <div className={styles.recommendedBadge}>Recommended</div>
+                        )}
                         <div className={styles.cardHeader}>
                             <div
                                 className={styles.cardIcon}
@@ -118,7 +128,7 @@ export default function ConnectAccount() {
                         <ul className={styles.featureList}>
                             {option.features.map((feature) => (
                                 <li key={feature} className={styles.featureItem}>
-                                    <span className={styles.bullet}>•</span>
+                                    <Check size={14} color="var(--color-ig-pink)" className={styles.checkIcon} />
                                     {feature}
                                 </li>
                             ))}
@@ -130,7 +140,12 @@ export default function ConnectAccount() {
                             onClick={() => handleConnect(option.id)}
                             disabled={!!isConnecting}
                         >
-                            {isConnecting === option.id ? 'Connecting...' : option.buttonLabel}
+                            {isConnecting === option.id ? (
+                                <>
+                                    <Loader2 size={16} className={styles.spinner} />
+                                    Connecting...
+                                </>
+                            ) : option.buttonLabel}
                         </button>
                     </div>
                 ))}
@@ -139,7 +154,8 @@ export default function ConnectAccount() {
             <div className={styles.footer}>
                 <div className={styles.footerLeft}>
                     <span className={styles.partnerText}>
-                        ⏱ AutoDM has been a Meta Business Partner since 2024
+                        <ShieldCheck size={16} color="var(--color-ig-pink)" />
+                        Secure connection via Meta Business Platform
                     </span>
                 </div>
                 <div className={styles.footerBadges}>

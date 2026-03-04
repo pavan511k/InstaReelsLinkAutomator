@@ -1,62 +1,134 @@
+/* ============================================================
+   Connect Account — Premium Onboarding Screen
+   ============================================================ */
+
 .container {
     max-width: 1100px;
     margin: 0 auto;
-    padding: var(--space-8) var(--space-6);
+    padding: var(--space-10) var(--space-6);
     animation: fadeIn var(--transition-slow);
 }
 
+/* ── Header ── */
 .header {
     text-align: center;
-    margin-bottom: var(--space-8);
+    margin-bottom: var(--space-10);
+}
+
+.headerIcon {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-2xl);
+    background: var(--gradient-brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-5);
+    box-shadow: 0 8px 30px rgba(225, 48, 108, 0.2);
 }
 
 .title {
     font-size: var(--font-size-3xl);
     font-weight: var(--font-weight-extrabold);
     color: var(--color-gray-900);
-    margin-bottom: var(--space-2);
+    margin-bottom: var(--space-3);
+    letter-spacing: -0.02em;
 }
 
 .subtitle {
     font-size: var(--font-size-sm);
     color: var(--color-gray-500);
-    max-width: 500px;
+    max-width: 480px;
     margin: 0 auto;
+    line-height: var(--line-height-relaxed);
 }
 
+/* ── Error Banner ── */
 .errorBanner {
     background: var(--color-error-light);
     color: #991B1B;
     padding: var(--space-4) var(--space-5);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
     font-size: var(--font-size-sm);
     text-align: center;
-    margin-bottom: var(--space-6);
+    margin-bottom: var(--space-8);
     border: 1px solid #FECACA;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
 }
 
-/* Cards Grid */
+/* ── Cards Grid ── */
 .cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-5);
-    margin-bottom: var(--space-8);
+    gap: var(--space-6);
+    margin-bottom: var(--space-10);
 }
 
 .card {
     background: var(--color-white);
     border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-xl);
-    padding: var(--space-6);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-8) var(--space-6) var(--space-6);
     display: flex;
     flex-direction: column;
-    transition: box-shadow var(--transition-fast);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
 
 .card:hover {
-    box-shadow: var(--shadow-lg);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+    border-color: transparent;
 }
 
+.card:hover::before {
+    opacity: 1;
+}
+
+/* Card-specific top borders */
+.cardInstagram::before {
+    background: linear-gradient(90deg, #E1306C, #F77737, #FCAF45);
+}
+
+.cardFacebook::before {
+    background: linear-gradient(90deg, #1877F2, #42A5F5);
+}
+
+.cardBoth::before {
+    background: var(--gradient-brand);
+}
+
+/* Recommended badge */
+.recommendedBadge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 3px 10px;
+    background: var(--gradient-btn);
+    color: var(--color-white);
+    font-size: 9px;
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-radius: var(--radius-full);
+}
+
+/* Card Header */
 .cardHeader {
     display: flex;
     align-items: center;
@@ -65,13 +137,14 @@
 }
 
 .cardIcon {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-lg);
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-xl);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .fbIcon {
@@ -91,18 +164,20 @@
     color: var(--color-gray-900);
 }
 
+/* Card Description */
 .cardDesc {
     font-size: var(--font-size-sm);
     color: var(--color-gray-500);
     line-height: var(--line-height-relaxed);
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
 }
 
+/* Feature List */
 .featureList {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-3);
     margin-bottom: var(--space-6);
     flex: 1;
 }
@@ -116,12 +191,12 @@
     line-height: var(--line-height-normal);
 }
 
-.bullet {
-    color: var(--color-gray-400);
+.checkIcon {
     flex-shrink: 0;
-    margin-top: 1px;
+    margin-top: 2px;
 }
 
+/* Connect Button */
 .connectBtn {
     width: 100%;
     padding: var(--space-3) var(--space-4);
@@ -129,20 +204,48 @@
     color: var(--color-white);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    transition: opacity var(--transition-fast), transform var(--transition-fast);
+    transition: all 0.3s ease;
     cursor: pointer;
+    border: none;
+    font-family: var(--font-family);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
 }
 
 .connectBtn:hover {
     opacity: 0.9;
     transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
-/* Footer */
+.connectBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── Footer / Trust Bar ── */
 .footer {
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-xl);
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-gray-100);
+    border-radius: var(--radius-2xl);
     padding: var(--space-5) var(--space-6);
     display: flex;
     align-items: center;
@@ -151,7 +254,10 @@
 
 .partnerText {
     font-size: var(--font-size-sm);
-    color: var(--color-gray-600);
+    color: var(--color-gray-500);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
 }
 
 .footerBadges {
@@ -164,6 +270,7 @@
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-4);
+    background: var(--color-white);
     border: 1px solid var(--color-gray-200);
     border-radius: var(--radius-lg);
 }
@@ -171,7 +278,10 @@
 .metaLogo {
     font-size: var(--font-size-xl);
     font-weight: var(--font-weight-bold);
-    color: var(--color-primary);
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .badgeTitle {
@@ -189,6 +299,10 @@
     line-height: 1.2;
 }
 
+
+/* ============================================================
+   Responsive
+   ============================================================ */
 @media (max-width: 768px) {
     .cards {
         grid-template-columns: 1fr;
