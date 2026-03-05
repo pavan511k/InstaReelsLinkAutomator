@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { MessageSquare, LayoutDashboard, Grid3X3, BookOpen, Settings, LogOut, Lock, Menu, X } from 'lucide-react';
+import Image from 'next/image';
+import { LayoutDashboard, Grid3X3, BookOpen, Settings, LogOut, Lock, Menu, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import styles from './DashboardNav.module.css';
 
@@ -32,8 +33,8 @@ export default function DashboardNav({ user, isConnected = false, profilePicUrl 
         <nav className={styles.dashNav}>
             <div className={styles.navInner}>
                 <Link href="/dashboard" className={styles.logo} onClick={closeMenu}>
-                    <MessageSquare size={24} strokeWidth={2.5} />
-                    <span className={styles.logoText}>Auto<span className={styles.logoDM}>DM</span></span>
+                    <Image src="/logo.png" alt="autodm" width={24} height={24} />
+                    <span className={styles.logoText}>auto<span className={styles.logoDM}>dm</span></span>
                 </Link>
 
                 {/* Hamburger Toggle */}

@@ -1,0 +1,116 @@
+/* ============================================================
+   How It Works — Landing Page
+   4-step grid with numbered cards
+   ============================================================ */
+
+.section {
+    padding: var(--space-20) 0 var(--space-16);
+    background: var(--color-gray-50);
+    border-top: 1px solid var(--color-gray-100);
+    border-bottom: 1px solid var(--color-gray-100);
+    position: relative;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: var(--space-12);
+}
+
+.label {
+    display: inline-block;
+    color: var(--color-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: var(--space-3);
+}
+
+.title {
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-extrabold);
+    color: var(--color-gray-900);
+    margin-bottom: var(--space-3);
+    letter-spacing: -0.02em;
+}
+
+.subtitle {
+    color: var(--color-gray-500);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: var(--line-height-relaxed);
+}
+
+/* ---- Steps Grid ---- */
+.stepsGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-6);
+    position: relative;
+    z-index: 1;
+}
+
+.stepCard {
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-100);
+    border-radius: var(--radius-xl);
+    padding: var(--space-8) var(--space-6);
+    text-align: center;
+    transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.stepCard:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    transform: translateY(-2px);
+}
+
+.stepNumber {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-black);
+    margin-bottom: var(--space-4);
+    opacity: 0.8;
+}
+
+.stepTitle {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-gray-900);
+    margin-bottom: var(--space-3);
+}
+
+.stepDesc {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-500);
+    line-height: var(--line-height-relaxed);
+}
+
+/* ---- Connector (cosmetic) ---- */
+.connector {
+    display: none;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1024px) {
+    .stepsGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .section {
+        padding: var(--space-12) 0;
+    }
+
+    .stepsGrid {
+        grid-template-columns: 1fr;
+        gap: var(--space-4);
+    }
+
+    .stepCard {
+        padding: var(--space-6) var(--space-4);
+    }
+
+    .title {
+        font-size: var(--font-size-3xl);
+    }
+}

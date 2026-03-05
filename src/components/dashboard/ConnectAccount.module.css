@@ -1,13 +1,81 @@
+/* ============================================================
+   Connect Account — Dashboard Onboarding
+   Clean, welcoming design for first-time account connection
+   ============================================================ */
+
 .container {
-    max-width: 1100px;
+    max-width: 960px;
     margin: 0 auto;
-    padding: var(--space-8) var(--space-6);
-    animation: fadeIn var(--transition-slow);
+    padding: var(--space-12) var(--space-6) var(--space-8);
+    animation: connectFadeIn 0.4s ease;
+}
+
+@keyframes connectFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ---- Hero Section ---- */
+.hero {
+    text-align: center;
+    margin-bottom: var(--space-10);
+}
+
+.heroIconGroup {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.heroIcon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-xl);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-white);
+}
+
+.heroIconInstagram {
+    background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF);
+}
+
+.heroIconFacebook {
+    background: #1877F2;
+}
+
+.heroConnector {
+    width: 40px;
+    height: 2px;
+    background: var(--color-gray-200);
+    position: relative;
+}
+
+.heroConnector::after {
+    content: '';
+    position: absolute;
+    right: -3px;
+    top: -4px;
+    width: 10px;
+    height: 10px;
+    border-top: 2px solid var(--color-gray-300);
+    border-right: 2px solid var(--color-gray-300);
+    transform: rotate(45deg);
 }
 
 .header {
     text-align: center;
-    margin-bottom: var(--space-8);
+    margin-bottom: var(--space-2);
 }
 
 .title {
@@ -15,15 +83,63 @@
     font-weight: var(--font-weight-extrabold);
     color: var(--color-gray-900);
     margin-bottom: var(--space-2);
+    letter-spacing: -0.02em;
 }
 
 .subtitle {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     color: var(--color-gray-500);
-    max-width: 500px;
+    max-width: 480px;
     margin: 0 auto;
+    line-height: var(--line-height-relaxed);
 }
 
+/* ---- Steps Indicator ---- */
+.steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-10);
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-400);
+    font-weight: var(--font-weight-medium);
+}
+
+.step.activeStep {
+    color: var(--color-primary);
+}
+
+.stepNumber {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    background: var(--color-gray-100);
+    color: var(--color-gray-400);
+    flex-shrink: 0;
+}
+
+.activeStep .stepNumber {
+    background: var(--color-primary);
+    color: var(--color-white);
+}
+
+.stepArrow {
+    color: var(--color-gray-300);
+}
+
+/* ---- Error Banner ---- */
 .errorBanner {
     background: var(--color-error-light);
     color: #991B1B;
@@ -35,12 +151,12 @@
     border: 1px solid #FECACA;
 }
 
-/* Cards Grid */
+/* ---- Cards Grid ---- */
 .cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--space-5);
-    margin-bottom: var(--space-8);
+    margin-bottom: var(--space-10);
 }
 
 .card {
@@ -50,11 +166,13 @@
     padding: var(--space-6);
     display: flex;
     flex-direction: column;
-    transition: box-shadow var(--transition-fast);
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+    position: relative;
 }
 
 .card:hover {
-    box-shadow: var(--shadow-lg);
+    border-color: var(--color-gray-300);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
 .cardHeader {
@@ -65,8 +183,8 @@
 }
 
 .cardIcon {
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     border-radius: var(--radius-lg);
     display: flex;
     align-items: center;
@@ -95,14 +213,15 @@
     font-size: var(--font-size-sm);
     color: var(--color-gray-500);
     line-height: var(--line-height-relaxed);
-    margin-bottom: var(--space-4);
+    margin-bottom: var(--space-5);
 }
 
+/* ---- Feature list with checkmarks ---- */
 .featureList {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-3);
     margin-bottom: var(--space-6);
     flex: 1;
 }
@@ -116,8 +235,8 @@
     line-height: var(--line-height-normal);
 }
 
-.bullet {
-    color: var(--color-gray-400);
+.featureCheckIcon {
+    color: var(--color-success);
     flex-shrink: 0;
     margin-top: 1px;
 }
@@ -131,14 +250,24 @@
     font-weight: var(--font-weight-semibold);
     transition: opacity var(--transition-fast), transform var(--transition-fast);
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
 }
 
-.connectBtn:hover {
+.connectBtn:hover:not(:disabled) {
     opacity: 0.9;
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Footer */
+.connectBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ---- Trust Footer ---- */
 .footer {
     background: var(--color-white);
     border: 1px solid var(--color-gray-200);
@@ -151,7 +280,10 @@
 
 .partnerText {
     font-size: var(--font-size-sm);
-    color: var(--color-gray-600);
+    color: var(--color-gray-500);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
 }
 
 .footerBadges {
@@ -166,6 +298,7 @@
     padding: var(--space-2) var(--space-4);
     border: 1px solid var(--color-gray-200);
     border-radius: var(--radius-lg);
+    background: var(--color-gray-50);
 }
 
 .metaLogo {
@@ -189,9 +322,21 @@
     line-height: 1.2;
 }
 
+/* ============================================================
+   Responsive
+   ============================================================ */
+
 @media (max-width: 768px) {
+    .container {
+        padding: var(--space-8) var(--space-4) var(--space-6);
+    }
+
     .cards {
         grid-template-columns: 1fr;
+    }
+
+    .steps {
+        flex-wrap: wrap;
     }
 
     .footer {
@@ -202,5 +347,14 @@
 
     .footerBadges {
         justify-content: center;
+    }
+
+    .heroIconGroup {
+        gap: var(--space-3);
+    }
+
+    .heroIcon {
+        width: 44px;
+        height: 44px;
     }
 }

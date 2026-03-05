@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Menu, X, MessageSquare } from 'lucide-react';
+import Image from 'next/image';
+import { Menu, X } from 'lucide-react';
 import styles from './Navbar.module.css';
 
 export default function Navbar() {
@@ -12,15 +13,16 @@ export default function Navbar() {
         <nav className={styles.navbar}>
             <div className={`container ${styles.navContent}`}>
                 <Link href="/" className={styles.logo}>
-                    <MessageSquare size={28} strokeWidth={2.5} />
-                    <span className={styles.logoText}>Auto<span className={styles.logoDM}>DM</span></span>
+                    <Image src="/logo.png" alt="AutoDM" width={32} height={32} className={styles.logoIcon} />
+                    <span className={styles.logoText}>auto<span className={styles.logoDM}>dm</span></span>
                 </Link>
 
                 <div className={`${styles.navLinks} ${isMenuOpen ? styles.open : ''}`}>
+                    <a href="#how-it-works" className={styles.navLink}>How It Works</a>
                     <a href="#features" className={styles.navLink}>Features</a>
                     <Link href="/login" className={styles.navLink}>Log In</Link>
                     <Link href="/signup" className={`btn btn-primary ${styles.ctaBtn}`}>
-                        Create Free Account
+                        Get Started Free
                     </Link>
                 </div>
 
