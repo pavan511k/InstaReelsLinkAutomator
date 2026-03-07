@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Check, Zap, Users, Shield } from 'lucide-react';
+import Image from 'next/image';
+import { Check, Zap, Shield, ArrowRight, Heart, MessageCircle, Send } from 'lucide-react';
 import styles from './HeroSection.module.css';
 
 export default function HeroSection() {
@@ -7,64 +8,106 @@ export default function HeroSection() {
         <section className={styles.hero}>
             <div className={`container ${styles.heroContent}`}>
                 <div className={styles.heroText}>
+                    <div className={styles.badge}>
+                        <span className={styles.badgeDot} />
+                        Official Meta Business Partner
+                    </div>
+
                     <h1 className={styles.headline}>
                         Reply to Instagram Comments with a DM, <span className={styles.highlight}>Instantly!</span>
                     </h1>
-                    <p className={styles.subtitle}>The #1 AutoDM Platform for Creators</p>
+
+                    <p className={styles.subtitle}>
+                        Automatically send DMs when followers comment on your posts, reels, and stories. Set up in 2 minutes.
+                    </p>
 
                     <ul className={styles.features}>
                         <li className={styles.feature}>
-                            <Check size={18} className={styles.checkIcon} />
+                            <Shield size={16} className={styles.checkIcon} />
                             <span>Meta Business Partner</span>
                         </li>
                         <li className={styles.feature}>
-                            <Shield size={18} className={styles.checkIconBlue} />
+                            <Check size={16} className={styles.checkIconBlue} />
                             <span>Works with Facebook</span>
                         </li>
                         <li className={styles.feature}>
-                            <Users size={18} className={styles.checkIconGold} />
-                            <span>Used by 46,000+ creators, brands and agencies!</span>
-                        </li>
-                        <li className={styles.feature}>
-                            <Zap size={18} className={styles.checkIconGold} />
+                            <Zap size={16} className={styles.checkIconGold} />
                             <span>Get started in seconds</span>
                         </li>
                     </ul>
 
                     <div className={styles.heroCta}>
-                        <Link href="/signup" className="btn btn-primary btn-lg">
-                            Create Account — It&apos;s Free!
+                        <Link href="/signup" className={styles.heroCtaBtn}>
+                            Get Started Free
+                            <ArrowRight size={16} />
                         </Link>
                         <p className={styles.noCredit}>No credit card required</p>
                     </div>
                 </div>
 
                 <div className={styles.heroVisual}>
+                    {/* Premium Phone Mockup */}
                     <div className={styles.phoneFrame}>
+                        <div className={styles.phoneNotch}>
+                            <div className={styles.phoneNotchCam} />
+                        </div>
                         <div className={styles.phoneScreen}>
-                            <div className={styles.mockPost}>
-                                <div className={styles.mockHeader}>
-                                    <div className={styles.mockAvatar}></div>
-                                    <div className={styles.mockUsername}>@yourcreator</div>
+                            {/* Instagram Top Bar */}
+                            <div className={styles.igTopBar}>
+                                <span className={styles.igLogo}>Instagram</span>
+                                <div className={styles.igIcons}>
+                                    <div className={styles.igIconDot} />
+                                    <div className={styles.igIconDot} />
                                 </div>
-                                <div className={styles.mockImage}></div>
-                                <div className={styles.mockActions}>
-                                    <span>❤️</span>
-                                    <span>💬</span>
-                                    <span>📤</span>
+                            </div>
+
+                            {/* Post */}
+                            <div className={styles.igPostHeader}>
+                                <div className={styles.igAvatar}>
+                                    <div className={styles.igAvatarInner}>
+                                        <div className={styles.igAvatarDot} />
+                                    </div>
                                 </div>
-                                <div className={styles.mockComment}>
-                                    <strong>user123</strong> Comment &quot;RECIPE&quot; for the link!
+                                <span className={styles.igUsername}>yourcreator</span>
+                            </div>
+
+                            <div className={styles.igImage}>
+                                <div className={styles.igImageOverlay}>
+                                    Comment &quot;LINK&quot; to get it 👇
                                 </div>
+                            </div>
+
+                            <div className={styles.igActions}>
+                                <Heart size={20} className={styles.igActionIcon} />
+                                <MessageCircle size={20} className={styles.igActionIcon} />
+                                <Send size={20} className={styles.igActionIcon} />
+                            </div>
+
+                            <div className={styles.igLikes}>2,847 likes</div>
+
+                            <div className={styles.igComment}>
+                                <span className={styles.igCommentUser}>user123 </span>
+                                <span className={styles.igCommentKeyword}>LINK</span> please! 🙏
                             </div>
                         </div>
                     </div>
+
+                    {/* DM Bubble */}
                     <div className={styles.dmBubble}>
                         <div className={styles.notification}>1</div>
+                        <div className={styles.dmHeader}>
+                            <div className={styles.dmAvatar}>
+                                <Image src="/logo.png" alt="" width={16} height={16} className={styles.dmAvatarIcon} />
+                            </div>
+                            <div>
+                                <div className={styles.dmFrom}>autodm</div>
+                                <div className={styles.dmTime}>Just now</div>
+                            </div>
+                        </div>
                         <div className={styles.dmContent}>
                             <p className={styles.dmTitle}>Here&apos;s your link! 🔗</p>
-                            <p className={styles.dmText}>Thanks for commenting! Here&apos;s the recipe link you asked for.</p>
-                            <div className={styles.dmButton}>See Recipe</div>
+                            <p className={styles.dmText}>Thanks for commenting! Here&apos;s what you asked for.</p>
+                            <div className={styles.dmButton}>Open Link →</div>
                         </div>
                     </div>
                 </div>

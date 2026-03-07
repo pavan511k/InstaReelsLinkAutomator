@@ -5,10 +5,10 @@ import { Users, Send, MousePointerClick, MessageCircle } from 'lucide-react';
 import styles from './StatsBar.module.css';
 
 const STATS = [
-    { icon: Users, value: 46000, suffix: '+', label: 'Happy AutoDM Users', color: '#F59E0B' },
-    { icon: Send, value: 300, suffix: ' Million', label: 'Instagram DMs Sent', color: '#2563EB' },
-    { icon: MousePointerClick, value: 30, suffix: ' Million', label: 'Link Clicks Monthly', color: '#10B981' },
-    { icon: MessageCircle, value: 20, suffix: ' Million', label: 'Comments Sent Monthly', color: '#8B5CF6' },
+    { icon: Users, value: 46000, suffix: '+', label: 'Happy AutoDM Users', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.1)' },
+    { icon: Send, value: 300, suffix: ' Million', label: 'Instagram DMs Sent', color: '#2563EB', bg: 'rgba(37, 99, 235, 0.1)' },
+    { icon: MousePointerClick, value: 30, suffix: ' Million', label: 'Link Clicks Monthly', color: '#10B981', bg: 'rgba(16, 185, 129, 0.1)' },
+    { icon: MessageCircle, value: 20, suffix: ' Million', label: 'Comments Sent Monthly', color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.1)' },
 ];
 
 function AnimatedCounter({ target, suffix }) {
@@ -56,7 +56,9 @@ export default function StatsBar() {
             <div className={`container ${styles.statsGrid}`}>
                 {STATS.map((stat) => (
                     <div key={stat.label} className={styles.statItem}>
-                        <stat.icon size={28} color={stat.color} />
+                        <div className={styles.statIconWrap} style={{ background: stat.bg }}>
+                            <stat.icon size={22} color={stat.color} />
+                        </div>
                         <div className={styles.statValue}>
                             <AnimatedCounter target={stat.value} suffix={stat.suffix} />
                         </div>

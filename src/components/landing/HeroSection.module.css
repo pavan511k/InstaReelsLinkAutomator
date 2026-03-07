@@ -1,39 +1,122 @@
+/* ============================================================
+   Hero Section — Full-Screen Dark Hero with Premium Phone Mockup
+   ============================================================ */
+
 .hero {
-    padding: var(--space-20) 0 var(--space-16);
-    background: linear-gradient(180deg, var(--color-gray-50) 0%, var(--color-white) 100%);
+    min-height: calc(100vh - 64px);
+    background: linear-gradient(160deg, #0F172A 0%, #1E3A5F 50%, #1E40AF 100%);
+    display: flex;
+    align-items: center;
     overflow: hidden;
+    position: relative;
+    padding: var(--space-8) 0;
+}
+
+/* Ambient glow */
+.hero::before {
+    content: '';
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(37, 99, 235, 0.12) 0%, transparent 70%);
+    top: -15%;
+    right: 0%;
+    pointer-events: none;
+}
+
+.hero::after {
+    content: '';
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+    bottom: 0%;
+    left: -5%;
+    pointer-events: none;
 }
 
 .heroContent {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-16);
+    gap: var(--space-12);
     align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+/* ---- Text Side ---- */
+.heroText {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-4);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: rgba(255, 255, 255, 0.7);
+    width: fit-content;
+    margin-bottom: var(--space-6);
+}
+
+.badgeDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-success);
+    animation: dotPulse 2s ease infinite;
+}
+
+@keyframes dotPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
 }
 
 .headline {
     font-size: var(--font-size-5xl);
     font-weight: var(--font-weight-black);
     line-height: var(--line-height-tight);
-    color: var(--color-gray-900);
-    margin-bottom: var(--space-4);
+    color: var(--color-white);
+    margin-bottom: var(--space-5);
+    letter-spacing: -0.02em;
 }
 
 .highlight {
-    color: var(--color-primary);
+    background: linear-gradient(135deg, #60A5FA, #A78BFA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .subtitle {
     font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-primary);
-    margin-bottom: var(--space-6);
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: var(--space-8);
+    line-height: var(--line-height-relaxed);
+    max-width: 480px;
 }
 
+/* Feature Pills */
 .features {
     list-style: none;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: var(--space-3);
     margin-bottom: var(--space-8);
 }
@@ -41,9 +124,10 @@
 .feature {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     font-size: var(--font-size-sm);
-    color: var(--color-gray-700);
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: var(--font-weight-medium);
 }
 
 .checkIcon {
@@ -52,7 +136,7 @@
 }
 
 .checkIconBlue {
-    color: var(--color-primary);
+    color: #60A5FA;
     flex-shrink: 0;
 }
 
@@ -61,95 +145,248 @@
     flex-shrink: 0;
 }
 
+/* CTA */
 .heroCta {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    gap: var(--space-3);
+}
+
+.heroCtaBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     gap: var(--space-2);
+    padding: var(--space-4) var(--space-8);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+    border-radius: var(--radius-lg);
+    background: var(--color-white);
+    color: var(--color-gray-900);
+    transition: all var(--transition-base);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.heroCtaBtn:hover {
+    background: var(--color-gray-100);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 .noCredit {
     font-size: var(--font-size-xs);
-    color: var(--color-gray-500);
+    color: rgba(255, 255, 255, 0.4);
 }
 
-/* Visual / Phone Mockup */
+/* ---- Premium Phone Mockup ---- */
 .heroVisual {
     position: relative;
     display: flex;
     justify-content: center;
+    align-items: center;
 }
 
 .phoneFrame {
-    width: 260px;
-    background: var(--color-white);
-    border-radius: 24px;
-    border: 3px solid var(--color-gray-200);
-    box-shadow: var(--shadow-xl);
-    overflow: hidden;
+    width: 280px;
+    background: #111827;
+    border-radius: 36px;
+    padding: 8px;
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 24px 80px rgba(0, 0, 0, 0.4),
+        0 8px 24px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+/* Notch */
+.phoneNotch {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 28px;
+    background: #111827;
+    border-radius: 0 0 18px 18px;
+    z-index: 2;
+}
+
+.phoneNotchCam {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #1F2937;
+    border: 2px solid #374151;
+    position: absolute;
+    top: 8px;
+    right: 22px;
 }
 
 .phoneScreen {
-    padding: var(--space-3);
+    background: var(--color-white);
+    border-radius: 28px;
+    overflow: hidden;
+    position: relative;
 }
 
-.mockPost {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-}
-
-.mockHeader {
+/* ---- Instagram UI inside phone ---- */
+.igTopBar {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) 0;
+    justify-content: space-between;
+    padding: 36px 14px 10px;
+    border-bottom: 1px solid var(--color-gray-100);
 }
 
-.mockAvatar {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-full);
-    background: linear-gradient(135deg, #E1306C, #F77737, #FCAF45);
+.igLogo {
+    font-size: 15px;
+    font-weight: var(--font-weight-extrabold);
+    color: var(--color-gray-900);
+    letter-spacing: -0.02em;
 }
 
-.mockUsername {
-    font-size: var(--font-size-xs);
+.igIcons {
+    display: flex;
+    gap: 12px;
+}
+
+.igIconDot {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    background: var(--color-gray-200);
+}
+
+/* Post */
+.igPostHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+}
+
+.igAvatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF, #515BD4);
+    padding: 2px;
+    flex-shrink: 0;
+}
+
+.igAvatarInner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--color-white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.igAvatarDot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #E1306C, #F77737);
+}
+
+.igUsername {
+    font-size: 12px;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-gray-900);
+}
+
+.igImage {
+    width: 100%;
+    aspect-ratio: 1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Overlay text on image */
+.igImageOverlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 20px 12px 12px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.5));
+    color: white;
+    font-size: 11px;
     font-weight: var(--font-weight-semibold);
 }
 
-.mockImage {
-    width: 100%;
-    aspect-ratio: 1;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: var(--radius-sm);
-}
-
-.mockActions {
+.igActions {
     display: flex;
-    gap: var(--space-3);
-    padding: var(--space-2) 0;
-    font-size: var(--font-size-lg);
+    gap: 12px;
+    padding: 10px 14px 6px;
+    align-items: center;
 }
 
-.mockComment {
-    font-size: var(--font-size-xs);
+.igActionIcon {
+    width: 22px;
+    height: 22px;
+    color: var(--color-gray-800);
+}
+
+.igLikes {
+    font-size: 12px;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-gray-900);
+    padding: 0 14px 4px;
+}
+
+.igComment {
+    font-size: 12px;
     color: var(--color-gray-700);
-    padding: var(--space-1) 0;
+    padding: 2px 14px 12px;
+    line-height: 1.4;
 }
 
-/* DM Bubble */
+.igCommentUser {
+    font-weight: var(--font-weight-bold);
+    color: var(--color-gray-900);
+}
+
+.igCommentKeyword {
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--color-primary);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: var(--font-weight-semibold);
+}
+
+/* ---- DM Notification Bubble ---- */
 .dmBubble {
     position: absolute;
-    right: -20px;
-    top: 30px;
-    width: 200px;
+    right: -24px;
+    top: 50px;
+    width: 220px;
     background: var(--color-white);
     border-radius: var(--radius-xl);
     padding: var(--space-4);
-    box-shadow: var(--shadow-xl);
-    border: 1px solid var(--color-gray-100);
-    animation: slideInRight 0.6s ease 0.3s both;
+    box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.25),
+        0 0 0 1px rgba(0, 0, 0, 0.04);
+    animation: dmSlideIn 0.7s ease 0.5s both;
+    z-index: 3;
+}
+
+@keyframes dmSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px) translateY(8px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0) translateY(0) scale(1);
+    }
 }
 
 .notification {
@@ -166,12 +403,46 @@
     justify-content: center;
     font-size: 11px;
     font-weight: var(--font-weight-bold);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+.dmHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.dmAvatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563EB, #60A5FA);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dmAvatarIcon {
+    color: white;
+}
+
+.dmFrom {
+    font-size: 11px;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-gray-900);
+}
+
+.dmTime {
+    font-size: 10px;
+    color: var(--color-gray-400);
 }
 
 .dmContent {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: 6px;
 }
 
 .dmTitle {
@@ -187,25 +458,39 @@
 }
 
 .dmButton {
-    background: var(--color-gray-100);
+    background: var(--color-primary);
+    color: var(--color-white);
     text-align: center;
-    padding: var(--space-2);
+    padding: 8px;
     border-radius: var(--radius-md);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
-    color: var(--color-gray-700);
-    margin-top: var(--space-1);
+    margin-top: 4px;
 }
 
+/* ---- Responsive ---- */
 @media (max-width: 768px) {
+    .hero {
+        min-height: auto;
+        padding: var(--space-12) 0 var(--space-10);
+    }
+
     .heroContent {
         grid-template-columns: 1fr;
-        gap: var(--space-10);
+        gap: var(--space-8);
         text-align: center;
     }
 
+    .headline {
+        font-size: var(--font-size-4xl);
+    }
+
+    .subtitle {
+        max-width: none;
+    }
+
     .features {
-        align-items: center;
+        justify-content: center;
     }
 
     .heroCta {
@@ -216,7 +501,31 @@
         justify-content: center;
     }
 
+    .phoneFrame {
+        width: 240px;
+    }
+
     .dmBubble {
-        right: 10px;
+        right: -8px;
+        top: 30px;
+        width: 180px;
+    }
+
+    .badge {
+        align-self: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .headline {
+        font-size: var(--font-size-3xl);
+    }
+
+    .phoneFrame {
+        width: 220px;
+    }
+
+    .dmBubble {
+        display: none;
     }
 }

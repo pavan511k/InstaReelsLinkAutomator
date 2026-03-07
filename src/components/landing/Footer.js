@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { MessageSquare } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowRight } from 'lucide-react';
 import styles from './Footer.module.css';
 
 export default function Footer() {
@@ -8,21 +9,22 @@ export default function Footer() {
             <div className={`container ${styles.footerContent}`}>
                 <div className={styles.footerCta}>
                     <h2 className={styles.footerHeadline}>
-                        Just like Instagram... AutoDM is free to use!
+                        Ready to automate your DMs?
                     </h2>
                     <p className={styles.footerSub}>
-                        Join thousands of creators & get started with your free AutoDM account today!
+                        Join thousands of creators and get started with your free AutoDM account today.
                     </p>
-                    <Link href="/signup" className="btn btn-primary btn-lg">
-                        👉 Create your Free Account
+                    <Link href="/signup" className={styles.footerCtaBtn}>
+                        Get Started Free
+                        <ArrowRight size={16} />
                     </Link>
                 </div>
 
                 <div className={styles.footerGrid}>
                     <div className={styles.footerBrand}>
                         <div className={styles.logo}>
-                            <MessageSquare size={24} />
-                            <span className={styles.logoText}>Auto<span className={styles.logoDM}>DM</span></span>
+                            <Image src="/logo.png" alt="AutoDM" width={28} height={28} style={{ filter: 'brightness(2)' }} />
+                            <span className={styles.logoText}>auto<span className={styles.logoDM}>dm</span></span>
                         </div>
                         <p className={styles.brandDesc}>
                             The #1 AutoDM platform for Instagram creators, brands, and agencies.
@@ -43,7 +45,7 @@ export default function Footer() {
                 </div>
 
                 <div className={styles.footerBottom}>
-                    <p>© {new Date().getFullYear()} AutoDM. All rights reserved.</p>
+                    <p>© {new Date().getFullYear()} autodm. All rights reserved.</p>
                 </div>
             </div>
         </footer>

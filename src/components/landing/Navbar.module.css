@@ -1,10 +1,16 @@
+/* ============================================================
+   Navbar — Landing Page
+   Clean, minimal sticky header matching the auth design system
+   ============================================================ */
+
 .navbar {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--color-gray-100);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(226, 232, 240, 0.6);
 }
 
 .navContent {
@@ -14,6 +20,7 @@
     height: 64px;
 }
 
+/* ---- Logo ---- */
 .logo {
     display: flex;
     align-items: center;
@@ -22,20 +29,28 @@
     text-decoration: none;
 }
 
+.logoIcon {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+}
+
 .logoText {
     font-size: var(--font-size-xl);
     font-weight: var(--font-weight-extrabold);
     color: var(--color-gray-900);
+    letter-spacing: -0.02em;
 }
 
 .logoDM {
     color: var(--color-primary);
 }
 
+/* ---- Nav Links ---- */
 .navLinks {
     display: flex;
     align-items: center;
-    gap: var(--space-8);
+    gap: var(--space-6);
 }
 
 .navLink {
@@ -43,21 +58,52 @@
     font-weight: var(--font-weight-medium);
     color: var(--color-gray-600);
     transition: color var(--transition-fast);
+    position: relative;
+    padding: var(--space-2) 0;
 }
 
 .navLink:hover {
     color: var(--color-gray-900);
 }
 
-.ctaBtn {
-    margin-left: var(--space-2);
+.navLink::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--color-primary);
+    transition: width var(--transition-base);
+    border-radius: 1px;
 }
 
+.navLink:hover::after {
+    width: 100%;
+}
+
+/* ---- CTA Button ---- */
+.ctaBtn {
+    margin-left: var(--space-2);
+    padding: var(--space-2) var(--space-5) !important;
+    font-size: var(--font-size-sm) !important;
+    border-radius: var(--radius-lg) !important;
+}
+
+/* ---- Mobile Toggle ---- */
 .menuToggle {
     display: none;
     color: var(--color-gray-700);
+    padding: var(--space-1);
+    border-radius: var(--radius-md);
+    transition: background var(--transition-fast);
 }
 
+.menuToggle:hover {
+    background: var(--color-gray-100);
+}
+
+/* ---- Responsive ---- */
 @media (max-width: 768px) {
     .menuToggle {
         display: flex;
@@ -87,5 +133,9 @@
 
     .ctaBtn {
         margin-left: 0;
+    }
+
+    .navLink::after {
+        display: none;
     }
 }
