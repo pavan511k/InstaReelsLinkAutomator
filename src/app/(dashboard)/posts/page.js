@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { createClient } from '@/lib/supabase-server';
 import PostsTable from '@/components/dashboard/PostsTable';
 import styles from './posts.module.css';
