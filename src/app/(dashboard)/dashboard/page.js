@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import { createClient } from '@/lib/supabase-server';
 import ConnectAccount from '@/components/dashboard/ConnectAccount';
 import ConnectedAccountBanner from '@/components/dashboard/ConnectedAccountBanner';
