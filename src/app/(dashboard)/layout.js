@@ -41,7 +41,7 @@ export default async function DashboardLayout({ children }) {
                 isConnected={isConnected}
                 profilePicUrl={profilePicUrl}
             />
-            <main style={{ minHeight: 'calc(100vh - 56px)', background: 'var(--color-gray-50)' }}>
+            <main style={{ minHeight: 'calc(100vh - 60px)', background: '#F1F5F9' }}>
                 {children}
             </main>
         </div>

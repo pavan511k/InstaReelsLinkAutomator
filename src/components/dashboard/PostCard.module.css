@@ -1,25 +1,51 @@
+/* ============================================================
+   PostCard — Premium Card Design
+   Glass effect, refined hover, status indicators
+   ============================================================ */
+
 .card {
     background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
+    border: 1px solid rgba(226, 232, 240, 0.5);
+    border-radius: 16px;
     overflow: hidden;
-    transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
     min-width: 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .card:hover {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+    transform: translateY(-4px);
+    border-color: rgba(37, 99, 235, 0.15);
 }
 
-/* Thumbnail */
+/* ── Thumbnail ────────────────────────────────────────────────── */
 .thumbnailWrapper {
     position: relative;
-    aspect-ratio: 1;
+    aspect-ratio: 4/3;
     overflow: hidden;
     background: var(--color-gray-100);
+}
+
+/* Gradient overlay on hover */
+.thumbnailWrapper::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        transparent 40%,
+        rgba(0, 0, 0, 0.4) 100%
+    );
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.card:hover .thumbnailWrapper::after {
+    opacity: 1;
 }
 
 .thumbnail {
@@ -27,6 +53,11 @@
     height: 100%;
     object-fit: cover;
     display: block;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover .thumbnail {
+    transform: scale(1.05);
 }
 
 .thumbnailPlaceholder {
@@ -36,115 +67,142 @@
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.5);
 }
 
+/* ── Badges ───────────────────────────────────────────────────── */
 .reelBadge {
     position: absolute;
-    top: 8px;
-    left: 8px;
-    background: rgba(0, 0, 0, 0.6);
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     color: var(--color-white);
-    padding: 3px 6px;
-    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     font-size: 10px;
-    font-weight: var(--font-weight-semibold);
+    font-weight: 600;
+    z-index: 2;
 }
 
 .platformBadge {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
     color: var(--color-white);
-    border: 2px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     z-index: 2;
 }
 
 .platformBadgeFacebook {
     background: #1877F2;
+    border-radius: 10px;
 }
 
-/* Body */
+/* ── Body ─────────────────────────────────────────────────────── */
 .cardBody {
-    padding: var(--space-3);
+    padding: 14px 16px 8px;
     flex: 1;
 }
 
 .caption {
-    font-size: var(--font-size-xs);
-    color: var(--color-gray-700);
-    line-height: 1.4;
-    margin-bottom: var(--space-1);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-gray-800);
+    line-height: 1.45;
+    margin-bottom: 4px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    min-height: 32px;
+    min-height: 38px;
 }
 
 .timestamp {
     font-size: 11px;
     color: var(--color-gray-400);
+    font-weight: 500;
 }
 
-/* Actions */
+/* ── Actions ──────────────────────────────────────────────────── */
 .cardActions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 0 var(--space-3) var(--space-3);
+    padding: 6px 14px 14px;
 }
 
 .setupBtn {
-    flex: 1;
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-primary);
+    width: 100%;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #2563EB, #1d4ed8);
     color: var(--color-white);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
-    transition: background var(--transition-fast);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
+    gap: 8px;
+    border: none;
+    letter-spacing: -0.01em;
 }
 
 .setupBtn:hover {
-    background: var(--color-primary-dark);
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
 }
 
+.setupBtn:active {
+    transform: translateY(0);
+}
+
+.setupBtn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* ── Active status ────────────────────────────────────────────── */
 .activeBtn {
-    background: white;
-    color: var(--color-success);
-    border: 1px solid var(--color-success);
+    background: linear-gradient(135deg, #059669, #047857);
+    border: none;
 }
 
 .activeBtn:hover {
-    background: var(--color-success);
-    color: white;
+    background: linear-gradient(135deg, #047857, #065f46);
+    box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+    border-color: transparent;
 }
 
+.activeBtn:focus-visible {
+    outline-color: var(--color-success);
+}
+
+/* ── Paused status ────────────────────────────────────────────── */
 .pausedBtn {
-    background: white;
-    color: var(--color-warning);
-    border: 1px solid var(--color-warning);
+    background: linear-gradient(135deg, #D97706, #B45309);
+    border: none;
 }
 
 .pausedBtn:hover {
-    background: var(--color-warning);
-    color: white;
+    background: linear-gradient(135deg, #B45309, #92400E);
+    box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35);
+    border-color: transparent;
+}
+
+.pausedBtn:focus-visible {
+    outline-color: var(--color-warning);
 }

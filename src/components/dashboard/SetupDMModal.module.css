@@ -1,13 +1,24 @@
+/* ============================================================
+   Setup DM Modal — Premium SaaS Modal Layout
+   Bigger modal (1100px), fixed body height, dark preview
+   ============================================================ */
+
 .modal {
     background: var(--color-white);
     border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-xl);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05);
     width: 95%;
-    max-width: 960px;
-    max-height: 90vh;
+    max-width: 1100px;
+    height: 85vh;
+    max-height: 720px;
     display: flex;
     flex-direction: column;
-    animation: slideUp var(--transition-slow);
+    animation: modalSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalSlideUp {
+    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .modalTitle {
@@ -19,7 +30,7 @@
 .postCaption {
     font-size: var(--font-size-sm);
     font-style: italic;
-    color: var(--color-gray-600);
+    color: var(--color-gray-500);
     margin-top: var(--space-1);
     max-width: 400px;
     overflow: hidden;
@@ -39,31 +50,50 @@
     background: var(--color-gray-100);
 }
 
+/* ── Split Body — fixed height, no jumps ──────────────────────── */
 .body {
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 1fr 340px;
     flex: 1;
     overflow: hidden;
+    min-height: 0;
 }
 
 .formPanel {
-    padding: var(--space-6);
+    padding: var(--space-5) var(--space-6);
     overflow-y: auto;
     display: flex;
     flex-direction: column;
 }
 
 .previewPanel {
-    background: var(--color-gray-50);
+    background: #f1f5f9;
     border-left: 1px solid var(--color-gray-200);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--space-6);
+    padding: var(--space-4);
+    position: relative;
+    overflow: hidden;
 }
 
+/* Subtle radial glow behind phone */
+.previewPanel::before {
+    content: '';
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(37, 99, 235, 0.06) 0%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+/* ── Save Bar ─────────────────────────────────────────────────── */
 .saveBar {
-    padding-top: var(--space-6);
+    padding-top: var(--space-5);
     margin-top: auto;
     border-top: 1px solid var(--color-gray-100);
     display: flex;
@@ -82,15 +112,11 @@
 }
 
 @keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-
-    to {
-        transform: rotate(360deg);
-    }
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
+/* ── Loading State ────────────────────────────────────────────── */
 .loadingConfig {
     display: flex;
     flex-direction: column;
@@ -107,16 +133,19 @@
     font-size: var(--font-size-sm);
 }
 
+/* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 768px) {
     .modal {
-        max-height: 95vh;
+        height: 95vh;
+        max-height: none;
         width: 100%;
-        margin: var(--space-4);
+        margin: var(--space-2);
+        border-radius: var(--radius-lg);
     }
 
     .body {
         grid-template-columns: 1fr;
-        grid-template-rows: auto auto;
+        grid-template-rows: 1fr auto;
         overflow-y: auto;
     }
 
@@ -129,5 +158,6 @@
         border-left: none;
         border-top: 1px solid var(--color-gray-200);
         padding: var(--space-4);
+        min-height: 480px;
     }
 }

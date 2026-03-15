@@ -1,58 +1,126 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Plus, Upload, Link as LinkIcon, Trash2, Image as ImageIcon, BookmarkPlus, FileDown } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { Plus, Trash2, Image as ImageIcon, BookmarkPlus, FileDown, Loader2, Link2, ExternalLink } from 'lucide-react';
 import styles from './DMSetupTab.module.css';
 import settingsStyles from './SettingsContent.module.css';
 
-export default function DMSetupTab({ config, onChange, onImageUpload, templates = [], onSaveTemplate, onLoadTemplate, onDeleteTemplate }) {
+const EMPTY_SLIDE = { imageUrl: '', headline: '', buttonLabel: 'Shop Now', buttonUrl: '', buttons: [{ type: 'url', label: 'Shop Now', value: '' }] };
+
+export default function DMSetupTab({ config, onChange, templates = [], onSaveTemplate, onLoadTemplate, onDeleteTemplate }) {
     const fileInputRefs = useRef({});
+    const [activeSlideIndex, setActiveSlideIndex] = useState(0);
     const [showTemplateNameModal, setShowTemplateNameModal] = useState(false);
     const [templateName, setTemplateName] = useState('');
+    const [isFetchingUrl, setIsFetchingUrl] = useState(false);
+    const [fetchError, setFetchError] = useState('');
 
     const updateConfig = (updates) => {
         onChange({ ...config, ...updates });
     };
 
+    // ─── Slide Management ────────────────────────────────────────
+
     const addSlide = () => {
-        const newSlides = [
-            ...config.slides,
-            { imageUrl: '', buttons: [{ type: 'url', label: '', value: '' }] },
-        ];
+        const newSlides = [...config.slides, { ...EMPTY_SLIDE, buttons: [{ type: 'url', label: 'Shop Now', value: '' }] }];
         updateConfig({ slides: newSlides });
+        setActiveSlideIndex(newSlides.length - 1);
     };
 
     const removeSlide = (index) => {
         if (config.slides.length <= 1) return;
         const newSlides = config.slides.filter((_, i) => i !== index);
         updateConfig({ slides: newSlides });
+        setActiveSlideIndex(Math.min(activeSlideIndex, newSlides.length - 1));
     };
 
-    const updateSlideButton = (slideIndex, btnIndex, field, value) => {
+    const currentSlide = config.slides[activeSlideIndex] || config.slides[0] || EMPTY_SLIDE;
+
+    const updateCurrentSlide = useCallback((updates) => {
         const newSlides = [...config.slides];
-        newSlides[slideIndex].buttons[btnIndex][field] = value;
+        newSlides[activeSlideIndex] = { ...newSlides[activeSlideIndex], ...updates };
+
+        // Sync the flat fields into the buttons array for backward compatibility
+        if (updates.buttonLabel !== undefined || updates.buttonUrl !== undefined) {
+            const label = updates.buttonLabel ?? newSlides[activeSlideIndex].buttonLabel ?? '';
+            const value = updates.buttonUrl ?? newSlides[activeSlideIndex].buttonUrl ?? '';
+            newSlides[activeSlideIndex].buttons = [{ type: 'url', label, value }];
+        }
+
         updateConfig({ slides: newSlides });
+    }, [config.slides, activeSlideIndex, updateConfig]);
+
+    // ─── URL Fetch ───────────────────────────────────────────────
+
+    const handleUrlChange = (url) => {
+        updateCurrentSlide({ buttonUrl: url });
+        setFetchError('');
     };
 
-    const removeButton = (slideIndex, btnIndex) => {
-        const newSlides = [...config.slides];
-        if (newSlides[slideIndex].buttons.length <= 1) return;
-        newSlides[slideIndex].buttons.splice(btnIndex, 1);
-        updateConfig({ slides: newSlides });
+    const fetchUrlMetadata = async (url) => {
+        if (!url || isFetchingUrl) return;
+
+        // Basic URL check
+        try {
+            new URL(url);
+        } catch {
+            setFetchError('Enter a valid URL');
+            return;
+        }
+
+        setIsFetchingUrl(true);
+        setFetchError('');
+
+        try {
+            const res = await fetch('/api/url-metadata', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                const updates = {};
+                if (data.title && !currentSlide.headline) {
+                    updates.headline = data.title;
+                }
+                if (data.image && !currentSlide.imageUrl) {
+                    updates.imageUrl = data.image;
+                }
+                if (Object.keys(updates).length > 0) {
+                    updateCurrentSlide(updates);
+                }
+            } else {
+                setFetchError(data.error || 'Could not fetch URL info');
+            }
+        } catch (err) {
+            setFetchError(`Fetch failed: ${err.message}`);
+        } finally {
+            setIsFetchingUrl(false);
+        }
     };
 
-    const addButton = (slideIndex) => {
-        if (config.slides[slideIndex].buttons.length >= 3) return;
-        const newSlides = [...config.slides];
-        newSlides[slideIndex].buttons.push({ type: 'url', label: '', value: '' });
-        updateConfig({ slides: newSlides });
+    const handleUrlBlur = () => {
+        const url = currentSlide.buttonUrl?.trim();
+        if (url && !currentSlide.headline && !currentSlide.imageUrl) {
+            fetchUrlMetadata(url);
+        }
     };
 
-    const handleFileSelect = (slideIndex, e) => {
+    const handleUrlKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            fetchUrlMetadata(currentSlide.buttonUrl?.trim());
+        }
+    };
+
+    // ─── Image Upload ────────────────────────────────────────────
+
+    const handleFileSelect = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // Validate file type and size
         const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
         if (!validTypes.includes(file.type)) {
             alert('Please select a valid image file (JPEG, PNG, WebP, or GIF)');
@@ -63,26 +131,19 @@ export default function DMSetupTab({ config, onChange, onImageUpload, templates 
             return;
         }
 
-        // Read as data URL for preview
         const reader = new FileReader();
         reader.onload = (event) => {
-            const newSlides = [...config.slides];
-            newSlides[slideIndex].imageUrl = event.target.result;
-            updateConfig({ slides: newSlides });
-            if (onImageUpload) onImageUpload(slideIndex, file);
+            updateCurrentSlide({ imageUrl: event.target.result });
         };
         reader.readAsDataURL(file);
     };
 
-    const triggerFileInput = (slideIndex) => {
-        const input = fileInputRefs.current[slideIndex];
+    const triggerFileInput = () => {
+        const input = fileInputRefs.current[activeSlideIndex];
         if (input) input.click();
     };
 
-    const addVariable = (variable) => {
-        const newMessage = config.message + ` {${variable}}`;
-        updateConfig({ message: newMessage });
-    };
+    // ─── Templates ───────────────────────────────────────────────
 
     const handleSaveAsTemplate = () => {
         setTemplateName('');
@@ -95,6 +156,13 @@ export default function DMSetupTab({ config, onChange, onImageUpload, templates 
         }
         setShowTemplateNameModal(false);
         setTemplateName('');
+    };
+
+    // ─── Variables ───────────────────────────────────────────────
+
+    const addVariable = (variable) => {
+        const newMessage = config.message + ` {${variable}}`;
+        updateConfig({ message: newMessage });
     };
 
     return (
@@ -155,7 +223,6 @@ export default function DMSetupTab({ config, onChange, onImageUpload, templates 
                     </div>
                 )}
 
-
                 {/* DM Type Selector */}
                 <div className="form-group">
                     <label className="form-label">DM Type</label>
@@ -169,111 +236,137 @@ export default function DMSetupTab({ config, onChange, onImageUpload, templates 
                     </select>
                 </div>
 
-                {/* Button Template */}
+                {/* ══════════ Button Template — Carousel Slides ══════════ */}
                 {config.type === 'button_template' && (
                     <div className={styles.section}>
-                        <div className={styles.slidesHeader}>
-                            <h4 className={styles.sectionTitle}>Carousel Slides</h4>
-                            <button className="btn btn-sm btn-secondary" onClick={addSlide}>
-                                <Plus size={14} /> Add Slide
-                            </button>
+                        {/* Carousel Slider Pills */}
+                        <div className={styles.carouselPills}>
+                            <span className={styles.carouselLabel}>Carousel Slider</span>
+                            <div className={styles.pillRow}>
+                                {config.slides.map((_, index) => (
+                                    <button
+                                        key={index}
+                                        className={`${styles.pill} ${index === activeSlideIndex ? styles.pillActive : ''}`}
+                                        onClick={() => setActiveSlideIndex(index)}
+                                    >
+                                        {index + 1}
+                                    </button>
+                                ))}
+                                <button
+                                    className={styles.pillAdd}
+                                    onClick={addSlide}
+                                    title="Add new slide"
+                                >
+                                    <Plus size={14} />
+                                </button>
+                                {config.slides.length > 1 && (
+                                    <button
+                                        className={styles.pillDelete}
+                                        onClick={() => removeSlide(activeSlideIndex)}
+                                        title="Delete current slide"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
-                        <div className={styles.slidesList}>
-                            {config.slides.map((slide, slideIndex) => (
-                                <div key={slideIndex} className={styles.slide}>
-                                    <div className={styles.slideHeader}>
-                                        <span className={styles.slideNum}>Slide {slideIndex + 1}</span>
-                                        {config.slides.length > 1 && (
-                                            <button
-                                                className={styles.removeSlide}
-                                                onClick={() => removeSlide(slideIndex)}
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Image upload zone */}
+                        {/* Active Slide Form */}
+                        <div className={styles.slideForm}>
+                            {/* Button URL */}
+                            <div className={styles.formField}>
+                                <label className={styles.fieldLabel}>
+                                    <Link2 size={14} />
+                                    Button Destination
+                                </label>
+                                <div className={styles.urlInputRow}>
                                     <input
-                                        type="file"
-                                        accept="image/*"
-                                        ref={(el) => (fileInputRefs.current[slideIndex] = el)}
-                                        onChange={(e) => handleFileSelect(slideIndex, e)}
-                                        className={styles.hiddenFileInput}
+                                        className={`form-input ${styles.urlInput}`}
+                                        placeholder="https://amazon.in/product..."
+                                        value={currentSlide.buttonUrl || ''}
+                                        onChange={(e) => handleUrlChange(e.target.value)}
+                                        onBlur={handleUrlBlur}
+                                        onKeyDown={handleUrlKeyDown}
                                     />
-
-                                    {slide.imageUrl ? (
-                                        <div className={styles.uploadedImage} onClick={() => triggerFileInput(slideIndex)}>
-                                            <img src={slide.imageUrl} alt={`Slide ${slideIndex + 1}`} />
-                                            <div className={styles.imageOverlay}>
-                                                <ImageIcon size={20} />
-                                                <span>Change image</span>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            className={styles.uploadZone}
-                                            onClick={() => triggerFileInput(slideIndex)}
-                                        >
-                                            <Upload size={24} />
-                                            <p>Click to upload image</p>
-                                            <span>JPEG, PNG, WebP · Max 5MB</span>
+                                    {isFetchingUrl && (
+                                        <div className={styles.fetchSpinner}>
+                                            <Loader2 size={16} className={styles.spinning} />
                                         </div>
                                     )}
-
-                                    {/* Buttons */}
-                                    <div className={styles.buttonsSection}>
-                                        <h5 className={styles.subTitle}>Button Destinations (max 3)</h5>
-                                        {slide.buttons.map((btn, btnIndex) => (
-                                            <div key={btnIndex} className={styles.buttonRow}>
-                                                <select
-                                                    className={`form-input ${styles.typeSelect}`}
-                                                    value={btn.type}
-                                                    onChange={(e) => updateSlideButton(slideIndex, btnIndex, 'type', e.target.value)}
-                                                >
-                                                    <option value="url">URL</option>
-                                                    <option value="phone">Phone</option>
-                                                </select>
-                                                <input
-                                                    className="form-input"
-                                                    placeholder="Button label"
-                                                    value={btn.label}
-                                                    onChange={(e) => updateSlideButton(slideIndex, btnIndex, 'label', e.target.value)}
-                                                />
-                                                <input
-                                                    className="form-input"
-                                                    placeholder={btn.type === 'url' ? 'https://...' : '+1234567890'}
-                                                    value={btn.value}
-                                                    onChange={(e) => updateSlideButton(slideIndex, btnIndex, 'value', e.target.value)}
-                                                />
-                                                {slide.buttons.length > 1 && (
-                                                    <button
-                                                        className={styles.removeBtnSmall}
-                                                        onClick={() => removeButton(slideIndex, btnIndex)}
-                                                        title="Remove button"
-                                                    >
-                                                        <Trash2 size={12} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
-                                        {slide.buttons.length < 3 && (
-                                            <button
-                                                className={styles.addBtn}
-                                                onClick={() => addButton(slideIndex)}
-                                            >
-                                                <LinkIcon size={14} /> Add Button
-                                            </button>
-                                        )}
-                                    </div>
                                 </div>
-                            ))}
+                                {fetchError && (
+                                    <span className={styles.fetchError}>{fetchError}</span>
+                                )}
+                            </div>
+
+                            {/* Button Name */}
+                            <div className={styles.formField}>
+                                <label className={styles.fieldLabel}>Button Name</label>
+                                <input
+                                    className="form-input"
+                                    placeholder="Shop Now"
+                                    value={currentSlide.buttonLabel || ''}
+                                    onChange={(e) => updateCurrentSlide({ buttonLabel: e.target.value })}
+                                />
+                            </div>
+
+                            {/* Headline */}
+                            <div className={styles.formField}>
+                                <label className={styles.fieldLabel}>Headline</label>
+                                <input
+                                    className="form-input"
+                                    placeholder="Product name or headline..."
+                                    value={currentSlide.headline || ''}
+                                    onChange={(e) => updateCurrentSlide({ headline: e.target.value })}
+                                />
+                                {isFetchingUrl && (
+                                    <span className={styles.fetchHint}>Fetching from URL...</span>
+                                )}
+                            </div>
+
+                            {/* Image */}
+                            <div className={styles.formField}>
+                                <label className={styles.fieldLabel}>Image</label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    ref={(el) => (fileInputRefs.current[activeSlideIndex] = el)}
+                                    onChange={handleFileSelect}
+                                    className={styles.hiddenFileInput}
+                                />
+
+                                {currentSlide.imageUrl ? (
+                                    <div className={styles.uploadedImage} onClick={triggerFileInput}>
+                                        <img src={currentSlide.imageUrl} alt={`Slide ${activeSlideIndex + 1}`} />
+                                        <div className={styles.imageOverlay}>
+                                            <ImageIcon size={20} />
+                                            <span>Change image</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        className={styles.uploadBtn}
+                                        onClick={triggerFileInput}
+                                    >
+                                        <ImageIcon size={16} />
+                                        Upload Image
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Description (locked) */}
+                            <div className={styles.formField}>
+                                <label className={styles.fieldLabel}>Description</label>
+                                <div className={styles.lockedField}>
+                                    <span>Sent with AutoDM</span>
+                                    <ExternalLink size={12} />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {/* Message Template */}
+                {/* ══════════ Message Template ══════════ */}
                 {config.type === 'message_template' && (
                     <div className={styles.section}>
                         <div className="form-group">
@@ -318,49 +411,47 @@ export default function DMSetupTab({ config, onChange, onImageUpload, templates 
             </div>
 
             {/* Save as Template Name Modal */}
-            {
-                showTemplateNameModal && (
-                    <div className={settingsStyles.modalOverlay} onClick={() => setShowTemplateNameModal(false)}>
-                        <div className={settingsStyles.modal} onClick={(e) => e.stopPropagation()}>
-                            <div className={settingsStyles.modalIcon} style={{ background: '#eff6ff', color: '#2563eb' }}>
-                                <BookmarkPlus size={32} />
-                            </div>
-                            <h3 className={settingsStyles.modalTitle}>Save as Template</h3>
-                            <p className={settingsStyles.modalDesc}>
-                                Give this DM setup a name so you can reuse it for future posts.
-                            </p>
-                            <div className={settingsStyles.formGroup}>
-                                <label className={settingsStyles.formLabel}>Template Name</label>
-                                <input
-                                    className={settingsStyles.formInput}
-                                    placeholder="E.g., Product launch DM"
-                                    value={templateName}
-                                    onChange={(e) => setTemplateName(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveTemplateConfirm()}
-                                    autoFocus
-                                />
-                            </div>
-                            <div className={settingsStyles.modalActions}>
-                                <button
-                                    className={settingsStyles.cancelBtn}
-                                    onClick={() => setShowTemplateNameModal(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    className={settingsStyles.refreshBtn}
-                                    onClick={handleSaveTemplateConfirm}
-                                    disabled={!templateName.trim()}
-                                    style={{ opacity: templateName.trim() ? 1 : 0.5 }}
-                                >
-                                    <BookmarkPlus size={14} />
-                                    Save Template
-                                </button>
-                            </div>
+            {showTemplateNameModal && (
+                <div className={settingsStyles.modalOverlay} onClick={() => setShowTemplateNameModal(false)}>
+                    <div className={settingsStyles.modal} onClick={(e) => e.stopPropagation()}>
+                        <div className={settingsStyles.modalIcon} style={{ background: '#eff6ff', color: '#2563eb' }}>
+                            <BookmarkPlus size={32} />
+                        </div>
+                        <h3 className={settingsStyles.modalTitle}>Save as Template</h3>
+                        <p className={settingsStyles.modalDesc}>
+                            Give this DM setup a name so you can reuse it for future posts.
+                        </p>
+                        <div className={settingsStyles.formGroup}>
+                            <label className={settingsStyles.formLabel}>Template Name</label>
+                            <input
+                                className={settingsStyles.formInput}
+                                placeholder="E.g., Product launch DM"
+                                value={templateName}
+                                onChange={(e) => setTemplateName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSaveTemplateConfirm()}
+                                autoFocus
+                            />
+                        </div>
+                        <div className={settingsStyles.modalActions}>
+                            <button
+                                className={settingsStyles.cancelBtn}
+                                onClick={() => setShowTemplateNameModal(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className={settingsStyles.refreshBtn}
+                                onClick={handleSaveTemplateConfirm}
+                                disabled={!templateName.trim()}
+                                style={{ opacity: templateName.trim() ? 1 : 0.5 }}
+                            >
+                                <BookmarkPlus size={14} />
+                                Save Template
+                            </button>
                         </div>
                     </div>
-                )
-            }
+                </div>
+            )}
         </>
     );
 }

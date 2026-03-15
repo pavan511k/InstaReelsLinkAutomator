@@ -99,9 +99,8 @@ export default function ConnectedAccountBanner({ accounts = [], connectedPlatfor
                                         ? `@${account.ig_username}`
                                         : account.fb_page_name || 'Connected Account'}
                                 </span>
-                                <span className={`${styles.accountPlatform} ${styles[`platform_${account.platform}`]}`}>
-                                    {getPlatformIcon(account.platform)}
-                                    {getPlatformLabel(account.platform)} Connected
+                                <span className={styles.accountStatus}>
+                                    Securely Connected
                                 </span>
                             </div>
                         </div>

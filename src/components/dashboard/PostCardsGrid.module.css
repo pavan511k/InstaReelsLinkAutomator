@@ -1,58 +1,64 @@
+/* ============================================================
+   PostCardsGrid — Adapted for Right Panel
+   2-column grid to fit the narrower right content area
+   ============================================================ */
+
 .container {
     margin-top: var(--space-4);
 }
 
 .grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-4);
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-5);
 }
 
 .emptyState {
     text-align: center;
     padding: var(--space-12) var(--space-6);
-    color: var(--color-gray-500);
+    color: var(--color-gray-400);
     font-size: var(--font-size-sm);
 }
 
 .viewAllWrapper {
     display: flex;
     justify-content: center;
-    margin-top: var(--space-5);
+    margin-top: var(--space-6);
 }
 
 .viewAllBtn {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-5);
+    padding: var(--space-3) var(--space-6);
     background: var(--color-gray-900);
     color: var(--color-white);
     border-radius: var(--radius-full);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
     text-decoration: none;
-    transition: background var(--transition-fast);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .viewAllBtn:hover {
     background: var(--color-gray-700);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
-@media (max-width: 1024px) {
-    .grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
+.viewAllBtn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
 }
 
 @media (max-width: 768px) {
     .grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
     }
 }
 
-@media (max-width: 480px) {
+@media (min-width: 1200px) {
     .grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, 1fr);
     }
 }

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase-server';
 import ConnectAccount from '@/components/dashboard/ConnectAccount';
 import ConnectedAccountBanner from '@/components/dashboard/ConnectedAccountBanner';
 import PostCardsGrid from '@/components/dashboard/PostCardsGrid';
+import DailyDMChart from '@/components/dashboard/DailyDMChart';
 import { Send, MousePointerClick, MessageCircle, TrendingUp } from 'lucide-react';
 import styles from './dashboard.module.css';
 
@@ -67,40 +68,55 @@ export default async function DashboardPage() {
     let totalSent = 0;
     let monthlySent = 0;
     let totalActivePosts = 0;
+    let dailyDMData = [];
 
     try {
-        // Total DMs sent (all time) — count rows with status='sent'
-        const { count: sentCount } = await supabase
-            .from('dm_sent_log')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'sent')
-            .in('automation_id', (
-                await supabase
-                    .from('dm_automations')
-                    .select('id')
-                    .eq('user_id', user.id)
-            ).data?.map((a) => a.id) || []);
+        // Get user's automation IDs first (reuse for all queries)
+        const { data: userAutomations } = await supabase
+            .from('dm_automations')
+            .select('id')
+            .eq('user_id', user.id);
 
-        totalSent = sentCount || 0;
+        const automationIds = (userAutomations || []).map((a) => a.id);
 
-        // DMs sent this month
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
+        if (automationIds.length > 0) {
+            // Total DMs sent (all time)
+            const { count: sentCount } = await supabase
+                .from('dm_sent_log')
+                .select('id', { count: 'exact', head: true })
+                .eq('status', 'sent')
+                .in('automation_id', automationIds);
 
-        const { count: monthlyCount } = await supabase
-            .from('dm_sent_log')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'sent')
-            .gte('created_at', startOfMonth.toISOString())
-            .in('automation_id', (
-                await supabase
-                    .from('dm_automations')
-                    .select('id')
-                    .eq('user_id', user.id)
-            ).data?.map((a) => a.id) || []);
+            totalSent = sentCount || 0;
 
-        monthlySent = monthlyCount || 0;
+            // DMs sent this month
+            const startOfMonth = new Date();
+            startOfMonth.setDate(1);
+            startOfMonth.setHours(0, 0, 0, 0);
+
+            const { count: monthlyCount } = await supabase
+                .from('dm_sent_log')
+                .select('id', { count: 'exact', head: true })
+                .eq('status', 'sent')
+                .gte('sent_at', startOfMonth.toISOString())
+                .in('automation_id', automationIds);
+
+            monthlySent = monthlyCount || 0;
+
+            // Daily DMs sent (last 14 days) — fetch rows and aggregate client-side
+            const fourteenDaysAgo = new Date();
+            fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+
+            const { data: dmRows } = await supabase
+                .from('dm_sent_log')
+                .select('sent_at')
+                .eq('status', 'sent')
+                .gte('sent_at', fourteenDaysAgo.toISOString())
+                .in('automation_id', automationIds)
+                .order('sent_at', { ascending: true });
+
+            dailyDMData = aggregateDailyDMs(dmRows || [], fourteenDaysAgo);
+        }
 
         // Active automations count
         const { count: activeCount } = await supabase
@@ -124,74 +140,123 @@ export default async function DashboardPage() {
 
     const setupPosts = allPosts.filter((p) => p.status === 'setup');
     const setupCount = setupPosts.length;
-
-    // Determine which platforms are connected
     const connectedPlatforms = connectedAccounts.map((a) => a.platform);
 
     return (
         <div className={styles.dashboardPage}>
+            {/* Welcome Header */}
             <div className={styles.header}>
-                <div>
-                    <h1 className={styles.welcome}>Hi {displayName}, Welcome back!</h1>
+                <div className={styles.headerLeft}>
+                    <h1 className={styles.welcome}>
+                        Welcome back, <span className={styles.welcomeName}>{displayName}</span>
+                    </h1>
+                    <p className={styles.welcomeSub}>Here is what is happening with your automations today.</p>
                 </div>
-                <div className={styles.dmUsage}>
-                    <span className={styles.usageLabel}>MONTHLY DM USAGE</span>
-                    <div className="progress-bar" style={{ width: '150px' }}>
-                        <div className="progress-fill" style={{ width: `${dmUsagePercent}%` }}></div>
-                    </div>
-                    <span className={styles.usageCount}>{monthlySent.toLocaleString()}/{MONTHLY_DM_LIMIT.toLocaleString()}</span>
+                <div className={styles.headerRight}>
+                    <span className={styles.usageBadge}>
+                        MONTHLY DM USAGE <strong>{monthlySent.toLocaleString()}/{MONTHLY_DM_LIMIT.toLocaleString()}</strong>
+                    </span>
                 </div>
             </div>
 
-            {/* Connected Account Banners — one per account */}
-            <ConnectedAccountBanner
-                accounts={connectedAccounts}
-                connectedPlatforms={connectedPlatforms}
-            />
+            {/* Two-column layout */}
+            <div className={styles.dashboardGrid}>
+                {/* ── Left Sidebar ── */}
+                <aside className={styles.sidebar}>
+                    {/* Active Connections Card */}
+                    <div className={styles.sidebarCard}>
+                        <h3 className={styles.sidebarCardTitle}>Active Connections</h3>
+                        <ConnectedAccountBanner
+                            accounts={connectedAccounts}
+                            connectedPlatforms={connectedPlatforms}
+                        />
+                    </div>
 
-            {/* Ready to Setup Section — shown first since it's the primary action */}
-            <div className={styles.section}>
-                <div className={styles.sectionHeader}>
-                    <h2 className={styles.sectionTitle}>
-                        Ready to Setup {setupCount > 0 && <span className="badge-count">{setupCount}</span>}
-                    </h2>
-                    <p className={styles.sectionSub}>AutoDM isn&apos;t active on these posts yet</p>
-                </div>
-                <PostCardsGrid posts={setupPosts} totalCount={setupPosts.length} />
-            </div>
+                    {/* Performance Overview — Colorful KPIs */}
+                    <div className={styles.sidebarCard}>
+                        <h3 className={styles.sidebarCardTitle}>Performance Overview</h3>
+                        <div className={styles.kpiList}>
+                            <div className={styles.kpiItem}>
+                                <div className={`${styles.kpiIcon} ${styles.kpiIconGreen}`}>
+                                    <Send size={18} />
+                                </div>
+                                <div className={styles.kpiContent}>
+                                    <span className={styles.kpiValue}>{totalSent.toLocaleString()}</span>
+                                    <span className={styles.kpiLabel}>TOTAL MESSAGES</span>
+                                </div>
+                            </div>
+                            <div className={styles.kpiItem}>
+                                <div className={`${styles.kpiIcon} ${styles.kpiIconBlue}`}>
+                                    <MousePointerClick size={18} />
+                                </div>
+                                <div className={styles.kpiContent}>
+                                    <span className={styles.kpiValue}>{totalActivePosts}</span>
+                                    <span className={styles.kpiLabel}>ACTIVE TRIGGERS</span>
+                                </div>
+                            </div>
+                            <div className={styles.kpiItem}>
+                                <div className={`${styles.kpiIcon} ${styles.kpiIconPurple}`}>
+                                    <MessageCircle size={18} />
+                                </div>
+                                <div className={styles.kpiContent}>
+                                    <span className={styles.kpiValue}>{monthlySent.toLocaleString()}</span>
+                                    <span className={styles.kpiLabel}>THIS MONTH</span>
+                                </div>
+                            </div>
+                            <div className={styles.kpiItem}>
+                                <div className={`${styles.kpiIcon} ${styles.kpiIconAmber}`}>
+                                    <TrendingUp size={18} />
+                                </div>
+                                <div className={styles.kpiContent}>
+                                    <span className={styles.kpiValue}>{dmUsagePercent}%</span>
+                                    <span className={styles.kpiLabel}>USAGE LIMIT</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-            {/* Stats Cards */}
-            <div className={styles.statsGrid}>
-                <div className={styles.statCard}>
-                    <div className={styles.statHeader}>
-                        <span className={styles.statLabel}>MESSAGES SENT</span>
-                        <div className={styles.statIconWrapper}><Send size={18} /></div>
+                    {/* Daily DMs Chart */}
+                    <DailyDMChart data={dailyDMData} />
+                </aside>
+
+                {/* ── Right Content ── */}
+                <main className={styles.mainContent}>
+                    <div className={styles.section}>
+                        <div className={styles.sectionHeader}>
+                            <h2 className={styles.sectionTitle}>
+                                Posts Ready for Automation {setupCount > 0 && <span className={styles.badge}>{setupCount}</span>}
+                            </h2>
+                            <p className={styles.sectionSub}>Select a recent post to configure an AutoDM reply triggered by comments.</p>
+                        </div>
+                        <PostCardsGrid posts={setupPosts} totalCount={setupPosts.length} />
                     </div>
-                    <div className={styles.statBody}>
-                        <span className={styles.statValue}>{totalSent.toLocaleString()}</span>
-                    </div>
-                </div>
-                <div className={styles.statCard}>
-                    <div className={styles.statHeader}>
-                        <span className={styles.statLabel}>ACTIVE AUTOMATIONS</span>
-                        <div className={styles.statIconWrapper}><MousePointerClick size={18} /></div>
-                    </div>
-                    <div className={styles.statBody}>
-                        <span className={styles.statValue}>{totalActivePosts}</span>
-                    </div>
-                </div>
-                <div className={styles.statCard}>
-                    <div className={styles.statHeader}>
-                        <span className={styles.statLabel}>THIS MONTH</span>
-                        <div className={styles.statIconWrapper}><MessageCircle size={18} /></div>
-                    </div>
-                    <div className={styles.statBody}>
-                        <span className={styles.statValue}>{monthlySent.toLocaleString()}</span>
-                    </div>
-                </div>
+                </main>
             </div>
         </div>
     );
+}
+
+/** Aggregate dm_sent_log rows into daily counts, filling in zero-days */
+function aggregateDailyDMs(rows, startDate) {
+    const countsByDay = {};
+
+    for (const row of rows) {
+        const day = new Date(row.sent_at).toISOString().split('T')[0];
+        countsByDay[day] = (countsByDay[day] || 0) + 1;
+    }
+
+    const result = [];
+    const current = new Date(startDate);
+    const today = new Date();
+
+    while (current <= today) {
+        const key = current.toISOString().split('T')[0];
+        const label = current.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        result.push({ date: label, count: countsByDay[key] || 0 });
+        current.setDate(current.getDate() + 1);
+    }
+
+    return result;
 }
 
 function formatRelativeTime(timestamp) {

@@ -98,10 +98,24 @@ export async function sendButtonTemplateDM(igUserId, recipientId, slides, access
     const url = `${GRAPH_API_BASE}/${igUserId}/messages`;
 
     // Build Generic Template elements from slides
+    // Supports both new flat format (headline/buttonLabel/buttonUrl) and legacy buttons[] array
     const elements = slides.map((slide) => {
         const element = {
-            title: 'AutoDM',
-            buttons: slide.buttons
+            title: slide.headline || 'AutoDM',
+            subtitle: 'Sent with AutoDM',
+        };
+
+        // New flat format: buttonLabel + buttonUrl
+        if (slide.buttonLabel && slide.buttonUrl) {
+            element.buttons = [{
+                type: 'web_url',
+                url: slide.buttonUrl,
+                title: slide.buttonLabel,
+            }];
+        }
+        // Legacy format: buttons[] array
+        else if (slide.buttons && Array.isArray(slide.buttons)) {
+            element.buttons = slide.buttons
                 .filter((b) => b.label && b.value)
                 .map((b) => {
                     if (b.type === 'url') {
@@ -120,8 +134,8 @@ export async function sendButtonTemplateDM(igUserId, recipientId, slides, access
                     }
                     return null;
                 })
-                .filter(Boolean),
-        };
+                .filter(Boolean);
+        }
 
         if (slide.imageUrl && !slide.imageUrl.startsWith('data:')) {
             element.image_url = slide.imageUrl;

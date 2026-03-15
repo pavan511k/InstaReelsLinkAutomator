@@ -1,13 +1,13 @@
 /* ============================================================
    Connect Account — Dashboard Onboarding
-   Clean, welcoming design for first-time account connection
+   Polished to match dark navy nav, refined shadows & focus states
    ============================================================ */
 
 .container {
     max-width: 960px;
     margin: 0 auto;
     padding: var(--space-12) var(--space-6) var(--space-8);
-    animation: connectFadeIn 0.4s ease;
+    animation: connectFadeIn 0.5s ease;
 }
 
 @keyframes connectFadeIn {
@@ -44,20 +44,27 @@
     align-items: center;
     justify-content: center;
     color: var(--color-white);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.heroIcon:hover {
+    transform: scale(1.05);
 }
 
 .heroIconInstagram {
     background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF);
+    box-shadow: 0 4px 16px rgba(221, 42, 123, 0.25);
 }
 
 .heroIconFacebook {
     background: #1877F2;
+    box-shadow: 0 4px 16px rgba(24, 119, 242, 0.25);
 }
 
 .heroConnector {
     width: 40px;
     height: 2px;
-    background: var(--color-gray-200);
+    background: linear-gradient(90deg, var(--color-gray-200), var(--color-gray-300));
     position: relative;
 }
 
@@ -117,8 +124,8 @@
 }
 
 .stepNumber {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     border-radius: var(--radius-full);
     display: flex;
     align-items: center;
@@ -128,11 +135,13 @@
     background: var(--color-gray-100);
     color: var(--color-gray-400);
     flex-shrink: 0;
+    transition: all var(--transition-fast);
 }
 
 .activeStep .stepNumber {
     background: var(--color-primary);
     color: var(--color-white);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
 .stepArrow {
@@ -141,14 +150,14 @@
 
 /* ---- Error Banner ---- */
 .errorBanner {
-    background: var(--color-error-light);
+    background: rgba(239, 68, 68, 0.06);
     color: #991B1B;
     padding: var(--space-4) var(--space-5);
     border-radius: var(--radius-lg);
     font-size: var(--font-size-sm);
     text-align: center;
     margin-bottom: var(--space-6);
-    border: 1px solid #FECACA;
+    border: 1px solid rgba(239, 68, 68, 0.15);
 }
 
 /* ---- Cards Grid ---- */
@@ -161,18 +170,22 @@
 
 .card {
     background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
+    border: 1px solid rgba(226, 232, 240, 0.6);
     border-radius: var(--radius-xl);
     padding: var(--space-6);
     display: flex;
     flex-direction: column;
-    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        border-color 0.2s ease;
     position: relative;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .card:hover {
-    border-color: var(--color-gray-300);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    border-color: rgba(37, 99, 235, 0.15);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06), 0 12px 28px rgba(0, 0, 0, 0.06);
+    transform: translateY(-3px);
 }
 
 .cardHeader {
@@ -248,7 +261,7 @@
     color: var(--color-white);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    transition: opacity var(--transition-fast), transform var(--transition-fast);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -258,8 +271,13 @@
 
 .connectBtn:hover:not(:disabled) {
     opacity: 0.9;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.connectBtn:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
 }
 
 .connectBtn:disabled {
@@ -270,12 +288,13 @@
 /* ---- Trust Footer ---- */
 .footer {
     background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
+    border: 1px solid rgba(226, 232, 240, 0.6);
     border-radius: var(--radius-xl);
     padding: var(--space-5) var(--space-6);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .partnerText {
@@ -296,7 +315,7 @@
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-4);
-    border: 1px solid var(--color-gray-200);
+    border: 1px solid rgba(226, 232, 240, 0.6);
     border-radius: var(--radius-lg);
     background: var(--color-gray-50);
 }

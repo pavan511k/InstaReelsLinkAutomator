@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Upload, Camera } from 'lucide-react';
 import styles from './PhonePreview.module.css';
 
 export default function PhonePreview({ config, onImageUpload }) {
@@ -52,6 +52,10 @@ export default function PhonePreview({ config, onImageUpload }) {
         if (newIndex !== activeSlide) setActiveSlide(newIndex);
     };
 
+    const currentSlide = slides[activeSlide] || {};
+    const headline = currentSlide.headline || '';
+    const buttonLabel = currentSlide.buttonLabel || currentSlide.buttons?.[0]?.label || '';
+
     const renderButtonTemplate = () => (
         <div className={styles.buttonPreview}>
             {/* Hidden file input */}
@@ -63,56 +67,74 @@ export default function PhonePreview({ config, onImageUpload }) {
                 className={styles.hiddenInput}
             />
 
-            {/* Carousel */}
-            <div className={styles.carouselContainer}>
-                <div
-                    className={styles.carouselTrack}
-                    ref={carouselRef}
-                    onScroll={handleScroll}
-                >
-                    {slides.map((slide, i) => (
-                        <div
-                            key={i}
-                            className={styles.carouselSlide}
-                            onClick={() => handleImageClick(i)}
-                        >
-                            {slide.imageUrl ? (
-                                <img src={slide.imageUrl} alt={`Slide ${i + 1}`} className={styles.slideImage} />
-                            ) : (
-                                <div className={styles.imagePlaceholder}>
-                                    <Upload size={20} />
-                                    <span>Tap to upload</span>
-                                </div>
+            {/* Card Container */}
+            <div className={styles.cardContainer}>
+                {/* Carousel */}
+                <div className={styles.carouselContainer}>
+                    <div
+                        className={styles.carouselTrack}
+                        ref={carouselRef}
+                        onScroll={handleScroll}
+                    >
+                        {slides.map((slide, i) => (
+                            <div
+                                key={i}
+                                className={styles.carouselSlide}
+                                onClick={() => handleImageClick(i)}
+                            >
+                                {slide.imageUrl ? (
+                                    <img src={slide.imageUrl} alt={`Slide ${i + 1}`} className={styles.slideImage} />
+                                ) : (
+                                    <div className={styles.imagePlaceholder}>
+                                        <Camera size={24} />
+                                        <span>Tap to upload</span>
+                                    </div>
+                                )}
+                                {slide.imageUrl && (
+                                    <div className={styles.uploadOverlay}>
+                                        <Upload size={16} />
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Navigation arrows */}
+                    {totalSlides > 1 && (
+                        <>
+                            {activeSlide > 0 && (
+                                <button
+                                    className={`${styles.carouselNav} ${styles.carouselNavLeft}`}
+                                    onClick={() => scrollToSlide(activeSlide - 1)}
+                                >
+                                    <ChevronLeft size={14} />
+                                </button>
                             )}
-                            {slide.imageUrl && (
-                                <div className={styles.uploadOverlay}>
-                                    <Upload size={16} />
-                                </div>
+                            {activeSlide < totalSlides - 1 && (
+                                <button
+                                    className={`${styles.carouselNav} ${styles.carouselNavRight}`}
+                                    onClick={() => scrollToSlide(activeSlide + 1)}
+                                >
+                                    <ChevronRight size={14} />
+                                </button>
                             )}
-                        </div>
-                    ))}
+                        </>
+                    )}
                 </div>
 
-                {/* Navigation arrows */}
-                {totalSlides > 1 && (
-                    <>
-                        {activeSlide > 0 && (
-                            <button
-                                className={`${styles.carouselNav} ${styles.carouselNavLeft}`}
-                                onClick={() => scrollToSlide(activeSlide - 1)}
-                            >
-                                <ChevronLeft size={14} />
-                            </button>
-                        )}
-                        {activeSlide < totalSlides - 1 && (
-                            <button
-                                className={`${styles.carouselNav} ${styles.carouselNavRight}`}
-                                onClick={() => scrollToSlide(activeSlide + 1)}
-                            >
-                                <ChevronRight size={14} />
-                            </button>
-                        )}
-                    </>
+                {/* Card Info — below image */}
+                <div className={styles.cardInfo}>
+                    {headline && (
+                        <p className={styles.cardTitle}>{headline}</p>
+                    )}
+                    <span className={styles.cardSubtitle}>Sent with AutoDM</span>
+                </div>
+
+                {/* Single Button */}
+                {buttonLabel && (
+                    <div className={styles.cardButton}>
+                        {buttonLabel}
+                    </div>
                 )}
             </div>
 
@@ -128,15 +150,6 @@ export default function PhonePreview({ config, onImageUpload }) {
                     ))}
                 </div>
             )}
-
-            {/* Buttons from active slide */}
-            <div className={styles.previewButtons}>
-                {slides[activeSlide]?.buttons.map((btn, i) => (
-                    <div key={i} className={styles.previewBtn}>
-                        {btn.label || `Button ${i + 1}`}
-                    </div>
-                ))}
-            </div>
         </div>
     );
 
@@ -165,16 +178,22 @@ export default function PhonePreview({ config, onImageUpload }) {
     return (
         <div className={styles.phone}>
             <div className={styles.phoneBezel}>
-                <div className={styles.notch}></div>
+                <div className={styles.dynamicIsland}></div>
                 <div className={styles.screen}>
                     <div className={styles.chatHeader}>
                         <div className={styles.chatAvatar}></div>
-                        <span className={styles.chatName}>AutoDM</span>
+                        <div className={styles.chatHeaderInfo}>
+                            <span className={styles.chatName}>AutoDM</span>
+                            <span className={styles.chatOnline}>Active now</span>
+                        </div>
                     </div>
                     <div className={styles.chatBody}>
                         {renderContent()}
                     </div>
                     <div className={styles.chatBar}>
+                        <div className={styles.chatBarCamera}>
+                            <Camera size={18} />
+                        </div>
                         <span>Message...</span>
                     </div>
                 </div>
