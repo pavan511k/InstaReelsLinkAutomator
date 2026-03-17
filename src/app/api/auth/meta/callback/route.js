@@ -84,10 +84,24 @@ export async function GET(request) {
                 return NextResponse.redirect(`${appUrl}/dashboard?error=save_failed`);
             }
         } else {
+            // Seed default global config for brand-new accounts
+            const DEFAULT_KEYWORDS = [
+                'link', 'links', 'price', 'details', 'dm', 'pp',
+                'interested', 'info', 'how', 'where', 'send', 'share',
+            ];
+            const defaultConfig = {
+                keywords:          DEFAULT_KEYWORDS,
+                excludeKeywords:   [],
+                triggerType:       'keywords',
+                defaultMessage:    '',
+                defaultButtonName: '',
+                utmTag:            '',
+            };
+
             // Insert new account row (allows FB + IG simultaneously)
             const { error: insertError } = await supabase
                 .from('connected_accounts')
-                .insert({ ...accountData, is_active: true });
+                .insert({ ...accountData, is_active: true, default_config: defaultConfig });
 
             if (insertError) {
                 console.error('Failed to save account:', insertError);
@@ -110,7 +124,8 @@ export async function GET(request) {
             console.warn('[OAuth Callback] Auto-sync failed (non-critical):', syncErr.message);
         }
 
-        return NextResponse.redirect(`${appUrl}/dashboard?connected=${connectionType}`);
+        // Send new users straight to Posts & Reels so they can configure automations immediately
+        return NextResponse.redirect(`${appUrl}/posts?connected=${connectionType}`);
     } catch (err) {
         console.error('OAuth callback error:', err);
         return NextResponse.redirect(

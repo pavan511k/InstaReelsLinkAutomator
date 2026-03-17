@@ -1,0 +1,35 @@
+.section {
+  padding: 72px 24px;
+  font-family: 'Inter', sans-serif;
+}
+.inner {
+  max-width: 1160px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+}
+.card {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 28px 24px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  transition: background 200ms, border-color 200ms, transform 200ms;
+}
+.card:hover {
+  background: rgba(255,255,255,0.055);
+  border-color: rgba(255,255,255,0.12);
+  transform: translateY(-2px);
+}
+.iconWrap {
+  width: 42px; height: 42px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.value {
+  font-size: 2rem; font-weight: 800;
+  color: #FFFFFF; letter-spacing: -0.045em; line-height: 1;
+}
+.label {
+  font-size: 0.845rem; font-weight: 400;
+  color: rgba(255,255,255,0.42); line-height: 1.4;
+}
+@media (max-width: 800px) { .inner { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 460px) { .inner { grid-template-columns: 1fr; } }

@@ -1,0 +1,84 @@
+.section {
+  padding: 96px 24px;
+  font-family: 'Inter', sans-serif;
+}
+.inner { max-width: 1160px; margin: 0 auto; }
+
+.header { text-align: center; margin-bottom: 56px; }
+.eyebrow {
+  display: inline-block;
+  font-size: 12px; font-weight: 700;
+  color: #A78BFA; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 16px;
+}
+.title {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 800; color: #FFFFFF;
+  letter-spacing: -0.04em; line-height: 1.15; margin: 0 0 16px;
+}
+.subtitle {
+  font-size: 1rem; color: rgba(255,255,255,0.45);
+  font-weight: 400; line-height: 1.7;
+  max-width: 520px; margin: 0 auto;
+}
+
+/* Bento grid */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto auto;
+  gap: 16px;
+}
+
+.card {
+  position: relative;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 28px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 18px;
+  overflow: hidden;
+  transition: background 200ms, border-color 200ms, transform 200ms;
+}
+.card:hover {
+  background: rgba(255,255,255,0.055);
+  border-color: rgba(255,255,255,0.12);
+  transform: translateY(-3px);
+}
+
+/* ScrollReveal wrapper IS the grid item — span applied there */
+.large { grid-column: span 2; }
+.small { grid-column: span 1; }
+
+/* Card fills the wrapper height so tall large cells look right */
+.card { height: 100%; }
+
+.iconWrap {
+  width: 44px; height: 44px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+.cardTitle {
+  font-size: 1.05rem; font-weight: 700;
+  color: rgba(255,255,255,0.92);
+  letter-spacing: -0.025em; margin: 0;
+}
+.cardDesc {
+  font-size: 0.875rem; font-weight: 400;
+  color: rgba(255,255,255,0.42);
+  line-height: 1.65; margin: 0;
+}
+
+/* Decorative glow overlay */
+.glow {
+  position: absolute; inset: 0;
+  pointer-events: none; border-radius: inherit;
+}
+
+@media (max-width: 860px) {
+  .bento { grid-template-columns: 1fr 1fr; }
+  .large { grid-column: span 2; }
+}
+@media (max-width: 520px) {
+  .bento { grid-template-columns: 1fr; }
+  .large, .small { grid-column: span 1; }
+}

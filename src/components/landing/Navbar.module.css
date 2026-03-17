@@ -1,141 +1,136 @@
-/* ============================================================
-   Navbar — Landing Page
-   Clean, minimal sticky header matching the auth design system
-   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-.navbar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+.header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  padding: 0 24px;
+  height: 64px;
+  display: flex; align-items: center;
+  font-family: 'Inter', sans-serif;
+  transition: background 200ms, border-color 200ms, backdrop-filter 200ms;
+  border-bottom: 1px solid transparent;
 }
 
-.navContent {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 64px;
+.scrolled {
+  background: rgba(10, 9, 21, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
-/* ---- Logo ---- */
+.inner {
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+
+/* Logo */
 .logo {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    color: var(--color-primary);
-    text-decoration: none;
+  display: flex; align-items: center; gap: 9px;
+  text-decoration: none; flex-shrink: 0;
 }
-
-.logoIcon {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
+.logoMark {
+  width: 32px; height: 32px; border-radius: 9px;
+  background: linear-gradient(135deg, #7C3AED, #5B21B6);
+  border: 1px solid rgba(255,255,255,0.14);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(124,58,237,0.45);
 }
-
 .logoText {
-    font-size: var(--font-size-xl);
-    font-weight: var(--font-weight-extrabold);
-    color: var(--color-gray-900);
-    letter-spacing: -0.02em;
+  font-size: 1.05rem; font-weight: 800;
+  color: #FFFFFF; letter-spacing: -0.03em;
 }
+.logoDM { color: #A78BFA; }
 
-.logoDM {
-    color: var(--color-primary);
+/* Nav */
+.nav {
+  display: flex; align-items: center; gap: 6px; flex: 1;
 }
-
-/* ---- Nav Links ---- */
-.navLinks {
-    display: flex;
-    align-items: center;
-    gap: var(--space-6);
-}
-
 .navLink {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-gray-600);
-    transition: color var(--transition-fast);
-    position: relative;
-    padding: var(--space-2) 0;
+  font-size: 0.875rem; font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  text-decoration: none; padding: 6px 12px;
+  border-radius: 8px;
+  transition: color 150ms, background 150ms;
 }
-
 .navLink:hover {
-    color: var(--color-gray-900);
+  color: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.06);
 }
 
-.navLink::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: var(--color-primary);
-    transition: width var(--transition-base);
-    border-radius: 1px;
+/* CTAs */
+.ctas {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.loginBtn {
+  font-size: 0.875rem; font-weight: 500;
+  color: rgba(255,255,255,0.6);
+  text-decoration: none; padding: 8px 14px;
+  border-radius: 8px;
+  transition: color 150ms, background 150ms;
+}
+.loginBtn:hover { color: #fff; background: rgba(255,255,255,0.07); }
+
+.signupBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.875rem; font-weight: 600;
+  color: #fff; text-decoration: none;
+  padding: 8px 16px; border-radius: 8px;
+  background: #7C3AED;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 4px 12px rgba(124,58,237,0.35);
+  transition: background 150ms, box-shadow 150ms;
+}
+.signupBtn:hover {
+  background: #6D28D9;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.14), 0 6px 18px rgba(124,58,237,0.48);
 }
 
-.navLink:hover::after {
-    width: 100%;
+/* Mobile */
+.toggle {
+  display: none;
+  margin-left: auto;
+  background: none; border: none; cursor: pointer;
+  color: rgba(255,255,255,0.7); padding: 6px;
+  border-radius: 8px; transition: background 150ms;
 }
+.toggle:hover { background: rgba(255,255,255,0.07); }
 
-/* ---- CTA Button ---- */
-.ctaBtn {
-    margin-left: var(--space-2);
-    padding: var(--space-2) var(--space-5) !important;
-    font-size: var(--font-size-sm) !important;
-    border-radius: var(--radius-lg) !important;
+.mobileMenu {
+  position: fixed;
+  top: 64px; left: 0; right: 0;
+  background: #0F0A1E;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 16px 24px 24px;
+  display: flex; flex-direction: column; gap: 4px;
 }
-
-/* ---- Mobile Toggle ---- */
-.menuToggle {
-    display: none;
-    color: var(--color-gray-700);
-    padding: var(--space-1);
-    border-radius: var(--radius-md);
-    transition: background var(--transition-fast);
+.mobileLink {
+  font-size: 0.9rem; font-weight: 500;
+  color: rgba(255,255,255,0.65);
+  text-decoration: none; padding: 11px 12px;
+  border-radius: 8px; transition: background 150ms, color 150ms;
 }
+.mobileLink:hover { background: rgba(255,255,255,0.06); color: #fff; }
 
-.menuToggle:hover {
-    background: var(--color-gray-100);
+.mobileCtas {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 12px; padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
 }
+.mobileLogin {
+  font-size: 0.9rem; font-weight: 500;
+  color: rgba(255,255,255,0.6); text-decoration: none;
+  padding: 11px 12px; border-radius: 8px; text-align: center;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: background 150ms;
+}
+.mobileLogin:hover { background: rgba(255,255,255,0.06); }
 
-/* ---- Responsive ---- */
 @media (max-width: 768px) {
-    .menuToggle {
-        display: flex;
-        align-items: center;
-    }
-
-    .navLinks {
-        position: fixed;
-        top: 64px;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: var(--color-white);
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        padding-top: var(--space-12);
-        gap: var(--space-6);
-        transform: translateX(100%);
-        transition: transform var(--transition-slow);
-        z-index: 99;
-    }
-
-    .navLinks.open {
-        transform: translateX(0);
-    }
-
-    .ctaBtn {
-        margin-left: 0;
-    }
-
-    .navLink::after {
-        display: none;
-    }
+  .nav, .ctas { display: none; }
+  .toggle { display: flex; }
 }

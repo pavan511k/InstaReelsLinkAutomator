@@ -1,0 +1,281 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.page {
+    max-width: 1100px;
+    margin: 0 auto;
+    font-family: 'Inter', sans-serif;
+    animation: fadeIn 0.35s ease both;
+    padding-bottom: 64px;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.header { text-align: center; margin-bottom: 48px; }
+
+.eyebrow {
+    display: inline-block;
+    font-size: 11px; font-weight: 700;
+    color: #A78BFA; letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 14px;
+}
+
+.title {
+    font-size: 2rem; font-weight: 800;
+    color: #FFFFFF; letter-spacing: -0.04em;
+    margin: 0 0 12px;
+}
+
+.subtitle {
+    font-size: 0.9375rem; font-weight: 400;
+    color: rgba(255,255,255,0.42);
+    margin: 0 auto;
+    max-width: 420px;
+    line-height: 1.65;
+}
+
+/* ── Plan grid ───────────────────────────────────────────────── */
+.plans {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+    align-items: start;
+}
+
+/* Plan card */
+.planCard {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+    transition: border-color 200ms;
+}
+.planCard:hover { border-color: rgba(255,255,255,0.14); }
+
+.planHighlight {
+    background: rgba(124,58,237,0.08) !important;
+    border-color: rgba(167,139,250,0.3) !important;
+    box-shadow: 0 0 0 1px rgba(167,139,250,0.12), 0 20px 48px rgba(124,58,237,0.15);
+}
+.planHighlight:hover { border-color: rgba(167,139,250,0.45) !important; }
+
+/* Most popular badge */
+.badge {
+    position: absolute;
+    top: -12px; left: 50%; transform: translateX(-50%);
+    display: inline-flex; align-items: center;
+    padding: 4px 14px; border-radius: 100px;
+    font-size: 11px; font-weight: 700;
+    background: linear-gradient(135deg, #7C3AED, #5B21B6);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(124,58,237,0.4);
+    white-space: nowrap;
+}
+
+/* Plan header */
+.planHeader { margin-bottom: 20px; }
+
+.planName {
+    font-size: 1.0625rem; font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    letter-spacing: -0.02em;
+    margin: 0 0 10px;
+}
+
+.planPrice {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+.priceAmount {
+    font-size: 2rem; font-weight: 800;
+    color: #FFFFFF; letter-spacing: -0.05em;
+    line-height: 1;
+}
+.pricePeriod {
+    font-size: 0.875rem; font-weight: 400;
+    color: rgba(255,255,255,0.38);
+}
+
+.planDesc {
+    font-size: 0.845rem; font-weight: 400;
+    color: rgba(255,255,255,0.4);
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* CTA button */
+.ctaBtn {
+    display: flex; align-items: center; justify-content: center;
+    gap: 7px;
+    height: 42px; padding: 0 20px;
+    border-radius: 11px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem; font-weight: 600;
+    text-decoration: none;
+    transition: all 150ms;
+    margin-bottom: 24px;
+}
+.ctaBtnPrimary {
+    background: #7C3AED;
+    color: #fff;
+    border: none;
+    box-shadow: 0 4px 16px rgba(124,58,237,0.4);
+    cursor: pointer;
+}
+.ctaBtnPrimary:hover:not(:disabled) { background: #6D28D9; }
+.ctaBtnPrimary:disabled { opacity: 0.65; cursor: not-allowed; }
+
+/* Spinner inside button */
+.spin {
+    animation: spinBtn 0.75s linear infinite;
+    flex-shrink: 0;
+}
+@keyframes spinBtn { to { transform: rotate(360deg); } }
+
+/* Error banner */
+.errorBanner {
+    padding: 12px 18px;
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 10px;
+    color: #FCA5A5;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Trust badges */
+.trustRow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.trustBadge {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.32);
+    padding: 5px 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 100px;
+    white-space: nowrap;
+}
+.ctaBtnSecondary {
+    background: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.ctaBtnSecondary:hover {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.9);
+}
+.ctaBtnDisabled {
+    background: rgba(255,255,255,0.04);
+    color: rgba(255,255,255,0.25);
+    border: 1px solid rgba(255,255,255,0.07);
+    cursor: not-allowed;
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.divider {
+    height: 1px;
+    background: rgba(255,255,255,0.07);
+    margin-bottom: 20px;
+}
+
+/* Feature list */
+.featureList {
+    list-style: none;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 0; margin: 0;
+}
+.featureItem {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 0.845rem; font-weight: 400;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.4;
+}
+.featureCheck {
+    width: 18px; height: 18px; flex-shrink: 0;
+    background: rgba(16,185,129,0.15);
+    border: 1px solid rgba(16,185,129,0.25);
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    color: #10B981; margin-top: 1px;
+}
+.featureMissing { color: rgba(255,255,255,0.25); }
+.featureDash {
+    width: 18px; flex-shrink: 0; text-align: center;
+    color: rgba(255,255,255,0.2); font-weight: 600; margin-top: 1px;
+}
+
+/* ── Note ────────────────────────────────────────────────────── */
+.note {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 18px;
+    background: rgba(124,58,237,0.07);
+    border: 1px solid rgba(167,139,250,0.15);
+    border-radius: 12px;
+    font-size: 13px; font-weight: 400;
+    color: rgba(196,181,253,0.8);
+    margin-bottom: 56px;
+}
+.note svg { flex-shrink: 0; color: #A78BFA; }
+
+/* ── FAQ ─────────────────────────────────────────────────────── */
+.faqSection { max-width: 680px; margin: 0 auto; }
+
+.faqTitle {
+    font-size: 1.25rem; font-weight: 700;
+    color: rgba(255,255,255,0.9);
+    letter-spacing: -0.03em;
+    margin: 0 0 28px; text-align: center;
+}
+
+.faqList { display: flex; flex-direction: column; gap: 0; }
+
+.faqItem {
+    padding: 18px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.faqItem:last-child { border-bottom: none; }
+
+.faqQ {
+    font-size: 0.9rem; font-weight: 600;
+    color: rgba(255,255,255,0.82);
+    margin: 0 0 8px; letter-spacing: -0.01em;
+}
+.faqA {
+    font-size: 0.855rem; font-weight: 400;
+    color: rgba(255,255,255,0.42);
+    line-height: 1.7;
+    margin: 0;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 900px) {
+    .plans { grid-template-columns: 1fr; max-width: 480px; margin-left: auto; margin-right: auto; }
+    .title { font-size: 1.65rem; }
+}
+@media (max-width: 640px) {
+    .title { font-size: 1.4rem; }
+}

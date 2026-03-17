@@ -191,17 +191,36 @@ async function deleteUserPlatformData(appScopedUserId, confirmationCode) {
             })
             .in('id', accountIds);
 
-        // Pause all automations
+        // Pause all automations + delete follow-up queue entries
         const { data: posts } = await supabase
             .from('instagram_posts')
             .select('id')
             .in('account_id', accountIds);
 
         if (posts && posts.length > 0) {
+            const postIds = posts.map((p) => p.id);
+
             await supabase
                 .from('dm_automations')
                 .update({ is_active: false })
-                .in('post_id', posts.map((p) => p.id));
+                .in('post_id', postIds);
+
+            // Delete follow-up queue entries for these automations
+            try {
+                const { data: automations } = await supabase
+                    .from('dm_automations')
+                    .select('id')
+                    .in('post_id', postIds);
+
+                if (automations && automations.length > 0) {
+                    await supabase
+                        .from('dm_followup_queue')
+                        .delete()
+                        .in('automation_id', automations.map((a) => a.id));
+                }
+            } catch {
+                // dm_followup_queue may not exist yet
+            }
         }
 
         // Mark deletion as complete

@@ -4,15 +4,22 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { LayoutDashboard, Grid3X3, BookOpen, Settings, LogOut, Lock, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Grid3X3, BookOpen, Settings, LogOut, Lock, Menu, X, ChevronDown } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import styles from './DashboardNav.module.css';
 
+const NAV_ITEMS = [
+    { href: '/dashboard',  label: 'Overview',      icon: LayoutDashboard, requiresConnection: false },
+    { href: '/posts',      label: 'Posts & Reels', icon: Grid3X3,          requiresConnection: true  },
+    { href: '/stories',    label: 'Stories',       icon: BookOpen,         requiresConnection: true  },
+    { href: '/settings',   label: 'Settings',      icon: Settings,         requiresConnection: false },
+];
+
 export default function DashboardNav({ user, isConnected = false, profilePicUrl = null }) {
     const pathname = usePathname();
-    const router = useRouter();
+    const router   = useRouter();
     const supabase = createClient();
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -20,89 +27,124 @@ export default function DashboardNav({ user, isConnected = false, profilePicUrl 
         router.refresh();
     };
 
-    const navItems = [
-        { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, requiresConnection: false },
-        { href: '/posts', label: 'Posts & Reels', icon: Grid3X3, requiresConnection: true },
-        { href: '/stories', label: 'Stories', icon: BookOpen, requiresConnection: true },
-        { href: '/settings', label: 'Settings', icon: Settings, requiresConnection: false },
-    ];
-
-    const closeMenu = () => setIsMenuOpen(false);
+    const displayName  = user?.email?.split('@')[0] || 'User';
+    const initials     = displayName.slice(0, 2).toUpperCase();
 
     return (
-        <nav className={styles.dashNav}>
-            <div className={styles.navInner}>
-                <Link href="/dashboard" className={styles.logo} onClick={closeMenu}>
-                    <Image src="/logo.png" alt="autodm" width={24} height={24} />
-                    <span className={styles.logoText}>auto<span className={styles.logoDM}>dm</span></span>
+        <header className={styles.header}>
+            <div className={styles.inner}>
+
+                {/* Logo */}
+                <Link href="/dashboard" className={styles.logo}>
+                    <div className={styles.logoMark}>
+                        <Image src="/logo.png" alt="AutoDM" width={16} height={16} />
+                    </div>
+                    <span className={styles.logoText}>
+                        auto<span className={styles.logoDM}>dm</span>
+                    </span>
                 </Link>
 
-                {/* Hamburger Toggle */}
-                <button
-                    className={styles.mobileToggle}
-                    onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    aria-label="Toggle menu"
-                >
-                    {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-                </button>
+                {/* Desktop nav */}
+                <nav className={styles.nav}>
+                    {NAV_ITEMS.map(({ href, label, icon: Icon, requiresConnection }) => {
+                        const locked  = requiresConnection && !isConnected;
+                        const active  = pathname === href;
 
-                <div className={`${styles.navContent} ${isMenuOpen ? styles.navContentOpen : ''}`}>
-                    <div className={styles.navLinks}>
-                        {navItems.map((item) => {
-                            const isDisabled = item.requiresConnection && !isConnected;
-                            const isActive = pathname === item.href;
-
-                            if (isDisabled) {
-                                return (
-                                    <span
-                                        key={item.href}
-                                        className={`${styles.navLink} ${styles.disabled}`}
-                                        title="Connect your account first"
-                                    >
-                                        <item.icon size={16} />
-                                        {item.label}
-                                        <Lock size={12} className={styles.lockIcon} />
-                                    </span>
-                                );
-                            }
-
+                        if (locked) {
                             return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    onClick={closeMenu}
-                                    className={`${styles.navLink} ${isActive ? styles.active : ''}`}
-                                >
-                                    <item.icon size={16} />
-                                    {item.label}
-                                </Link>
+                                <span key={href} className={`${styles.navLink} ${styles.locked}`} title="Connect your account first">
+                                    <Icon size={15} strokeWidth={2} />
+                                    {label}
+                                    <Lock size={11} className={styles.lockIcon} strokeWidth={2.5} />
+                                </span>
                             );
-                        })}
-                    </div>
+                        }
 
-                    <div className={styles.navRight}>
-                        {!isConnected && (
-                            <Link href="/dashboard" className={styles.connectProfileBtn} onClick={closeMenu}>
-                                Connect Profile
+                        return (
+                            <Link
+                                key={href}
+                                href={href}
+                                className={`${styles.navLink} ${active ? styles.active : ''}`}
+                            >
+                                <Icon size={15} strokeWidth={2} />
+                                {label}
                             </Link>
-                        )}
-                        <div className={styles.userInfo}>
-                            <div className={styles.avatar}>
-                                {profilePicUrl ? (
-                                    <img src={profilePicUrl} alt="" className={styles.avatarImg} />
-                                ) : (
-                                    user?.email?.[0]?.toUpperCase() || 'U'
-                                )}
-                            </div>
-                            <span className={styles.userEmail}>{user?.email || 'User'}</span>
+                        );
+                    })}
+                </nav>
+
+                {/* Right: connect CTA + user */}
+                <div className={styles.right}>
+                    {!isConnected && (
+                        <Link href="/dashboard" className={styles.connectBtn}>
+                            Connect profile
+                        </Link>
+                    )}
+
+                    {/* User menu */}
+                    <div className={styles.userWrap}>
+                        <div className={styles.avatar}>
+                            {profilePicUrl
+                                ? <img src={profilePicUrl} alt="" className={styles.avatarImg} />
+                                : <span>{initials}</span>
+                            }
                         </div>
-                        <button onClick={handleLogout} className={styles.logoutBtn} title="Log Out">
-                            <LogOut size={18} />
-                            <span className={styles.logoutText}>Log Out</span>
+                        <span className={styles.userEmail}>{user?.email}</span>
+                        <button onClick={handleLogout} className={styles.logoutBtn} title="Sign out">
+                            <LogOut size={15} strokeWidth={2} />
                         </button>
                     </div>
+
+                    {/* Mobile toggle */}
+                    <button className={styles.toggle} onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">
+                        {menuOpen ? <X size={18} /> : <Menu size={18} />}
+                    </button>
                 </div>
             </div>
-        </nav>
+
+            {/* Mobile menu */}
+            {menuOpen && (
+                <div className={styles.mobileMenu}>
+                    {NAV_ITEMS.map(({ href, label, icon: Icon, requiresConnection }) => {
+                        const locked = requiresConnection && !isConnected;
+                        const active = pathname === href;
+
+                        if (locked) {
+                            return (
+                                <span key={href} className={`${styles.mobileLink} ${styles.locked}`}>
+                                    <Icon size={16} strokeWidth={2} /> {label}
+                                    <Lock size={12} className={styles.lockIcon} strokeWidth={2.5} />
+                                </span>
+                            );
+                        }
+
+                        return (
+                            <Link
+                                key={href}
+                                href={href}
+                                className={`${styles.mobileLink} ${active ? styles.active : ''}`}
+                                onClick={() => setMenuOpen(false)}
+                            >
+                                <Icon size={16} strokeWidth={2} /> {label}
+                            </Link>
+                        );
+                    })}
+
+                    <div className={styles.mobileDivider} />
+                    <div className={styles.mobileUser}>
+                        <div className={styles.avatar}>
+                            {profilePicUrl
+                                ? <img src={profilePicUrl} alt="" className={styles.avatarImg} />
+                                : <span>{initials}</span>
+                            }
+                        </div>
+                        <span className={styles.userEmail}>{user?.email}</span>
+                    </div>
+                    <button onClick={handleLogout} className={styles.mobileLogout}>
+                        <LogOut size={15} strokeWidth={2} /> Sign out
+                    </button>
+                </div>
+            )}
+        </header>
     );
 }

@@ -1,0 +1,166 @@
+/* ================================================================
+   Verify Email — Split Panel
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── Left Panel ──────────────────────────────────────────────── */
+.leftPanel {
+  position: relative;
+  display: flex; flex-direction: column;
+  padding: 48px 52px 52px;
+  background: #0F0A1E; overflow: hidden;
+}
+.leftGrid {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 26px 26px; pointer-events: none;
+}
+.leftGlow1 {
+  position: absolute; width: 600px; height: 600px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,58,237,0.28) 0%, transparent 65%);
+  top: -15%; left: -20%; filter: blur(40px); pointer-events: none;
+  animation: glow 10s ease-in-out infinite alternate;
+}
+.leftGlow2 {
+  position: absolute; width: 400px; height: 400px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(168,85,247,0.18) 0%, transparent 65%);
+  bottom: -10%; right: -10%; filter: blur(50px); pointer-events: none;
+  animation: glow 14s ease-in-out 2s infinite alternate-reverse;
+}
+@keyframes glow {
+  from { opacity: 0.7; transform: scale(1); }
+  to   { opacity: 1;   transform: scale(1.1); }
+}
+
+.leftLogo {
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; width: fit-content;
+  position: relative; z-index: 2; margin-bottom: 60px;
+}
+.leftLogoMark {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #7C3AED, #5B21B6);
+  border: 1px solid rgba(255,255,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.leftLogoText { font-size: 1.1rem; font-weight: 800; color: #FFFFFF; letter-spacing: -0.03em; }
+.leftLogoDM   { color: #A78BFA; }
+
+.leftHero { position: relative; z-index: 2; margin-bottom: 52px; }
+.leftTitle {
+  font-size: clamp(1.75rem, 2.5vw, 2.2rem);
+  font-weight: 800; color: #FFFFFF;
+  letter-spacing: -0.04em; line-height: 1.18; margin: 0 0 16px;
+}
+.leftSubtitle {
+  font-size: 0.9rem; color: rgba(255,255,255,0.45);
+  font-weight: 400; line-height: 1.7; max-width: 360px;
+}
+
+/* Next steps */
+.nextSteps { position: relative; z-index: 2; }
+.nextTitle {
+  font-size: 11px; font-weight: 700;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 16px;
+}
+.nextList { display: flex; flex-direction: column; gap: 14px; }
+.nextItem {
+  display: flex; align-items: flex-start; gap: 13px;
+  font-size: 0.875rem; color: rgba(255,255,255,0.6); font-weight: 400; line-height: 1.5;
+}
+.nextNum {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(124,58,237,0.2);
+  border: 1px solid rgba(167,139,250,0.25);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #A78BFA;
+  flex-shrink: 0;
+}
+
+/* ── Right Panel ─────────────────────────────────────────────── */
+.rightPanel {
+  display: flex; align-items: center; justify-content: center;
+  background: #FFFFFF; padding: 48px 24px;
+}
+.contentWrap { width: 100%; max-width: 380px; }
+
+.iconWrap {
+  width: 72px; height: 72px; border-radius: 20px;
+  background: linear-gradient(145deg, #EDE9FE, #DDD6FE);
+  border: 1px solid rgba(167,139,250,0.3);
+  display: flex; align-items: center; justify-content: center;
+  color: #7C3AED; margin-bottom: 28px;
+  box-shadow: 0 4px 20px rgba(124,58,237,0.18);
+}
+
+.title {
+  font-size: 1.875rem; font-weight: 800; color: #0A0118;
+  letter-spacing: -0.04em; line-height: 1.15; margin: 0 0 12px;
+}
+.subtitle {
+  font-size: 0.9rem; color: #6B7280;
+  font-weight: 400; line-height: 1.7; margin: 0 0 28px;
+}
+
+.tipBox {
+  padding: 16px 18px;
+  background: #FFFBEB;
+  border: 1px solid rgba(245,158,11,0.25);
+  border-radius: 12px;
+  margin-bottom: 32px;
+}
+.tipTitle {
+  font-size: 0.8rem; font-weight: 700; color: #92400E; margin: 0 0 6px;
+}
+.tipText {
+  font-size: 0.82rem; color: #78350F; font-weight: 400; line-height: 1.6; margin: 0;
+}
+
+.actions {
+  display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
+}
+
+.primaryBtn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 46px; padding: 0 24px;
+  background: #7C3AED;
+  color: #fff; font-family: 'Inter', sans-serif;
+  font-size: 0.9rem; font-weight: 600; letter-spacing: -0.01em;
+  text-decoration: none; border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 4px 14px rgba(109,40,217,0.4);
+  transition: background 150ms, box-shadow 150ms;
+}
+.primaryBtn:hover {
+  background: #6D28D9;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 6px 20px rgba(109,40,217,0.5);
+}
+
+.ghostBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.845rem; font-weight: 500; color: #6B7280;
+  text-decoration: none; transition: color 150ms;
+  padding: 4px 0;
+}
+.ghostBtn:hover { color: #374151; }
+
+/* Responsive */
+@media (max-width: 860px) {
+  .page { grid-template-columns: 1fr; }
+  .leftPanel { padding: 32px 28px 36px; min-height: auto; }
+  .nextSteps { display: none; }
+  .rightPanel { padding: 40px 24px; }
+}
+@media (max-width: 480px) {
+  .leftTitle { font-size: 1.5rem; }
+  .title { font-size: 1.5rem; }
+}

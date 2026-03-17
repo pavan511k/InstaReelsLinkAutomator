@@ -107,12 +107,12 @@ export default function ConnectedAccountBanner({ accounts = [], connectedPlatfor
 
                         <div className={styles.actions}>
                             <button
-                                className="btn btn-primary btn-sm"
+                                className={styles.syncBtn}
                                 onClick={() => handleSync(account.id)}
                                 disabled={syncingId === account.id}
                             >
                                 <RefreshCw size={14} className={syncingId === account.id ? styles.spinning : ''} />
-                                {syncingId === account.id ? 'Syncing...' : 'Sync Posts'}
+                                {syncingId === account.id ? 'Syncing...' : 'Sync posts'}
                             </button>
 
                             <button

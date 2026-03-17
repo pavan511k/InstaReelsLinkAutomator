@@ -2,21 +2,52 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Download, Edit3, Pause, Play, Trash2, Instagram, Facebook, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Download, Edit3, Pause, Play, Trash2, Instagram, Facebook, AlertTriangle, ScrollText, Copy, Timer, MousePointerClick, CalendarClock, Radio } from 'lucide-react';
+import Link from 'next/link';
 import PostCard from './PostCard';
 import SetupDMModal from './SetupDMModal';
+import DuplicateModal from './DuplicateModal';
+import ClickStatsModal from './ClickStatsModal';
+import BroadcastModal from './BroadcastModal';
 import styles from './PostsTable.module.css';
 import settingsStyles from './SettingsContent.module.css';
 
 const STATUS_FILTERS = [
-    { key: 'all', label: 'All' },
-    { key: 'active', label: 'Active' },
-    { key: 'setup', label: 'Setup' },
-    { key: 'paused', label: 'Paused' },
+    { key: 'all',       label: 'All' },
+    { key: 'active',    label: 'Active' },
+    { key: 'scheduled', label: 'Scheduled' },
+    { key: 'setup',     label: 'Setup' },
+    { key: 'paused',    label: 'Paused' },
 ];
 
 const INITIAL_CARDS = 8;
 const LOAD_MORE_COUNT = 8;
+
+/** Returns a short label for a scheduled start time, or null */
+function formatScheduled(isoString) {
+    if (!isoString) return null;
+    const diff = new Date(isoString) - new Date();
+    if (diff <= 0) return null; // already past, cron should have activated
+    const mins  = Math.floor(diff / 60_000);
+    const hours = Math.floor(diff / 3_600_000);
+    const days  = Math.floor(diff / 86_400_000);
+    if (days >= 2)   return `Starts in ${days}d`;
+    if (hours >= 1)  return `Starts in ${hours}h`;
+    return           `Starts in ${mins}m`;
+}
+
+/** Returns { label, urgent } for an expiry ISO string, or null if no expiry */
+function formatExpiry(isoString) {
+    if (!isoString) return null;
+    const diff = new Date(isoString) - new Date();
+    if (diff <= 0) return { label: 'Expired', urgent: true,  expired: true };
+    const mins  = Math.floor(diff / 60_000);
+    const hours = Math.floor(diff / 3_600_000);
+    const days  = Math.floor(diff / 86_400_000);
+    if (days >= 2)   return { label: `Expires in ${days}d`,  urgent: false, expired: false };
+    if (hours >= 1)  return { label: `Expires in ${hours}h`, urgent: true,  expired: false };
+    return           { label: `Expires in ${mins}m`,          urgent: true,  expired: false };
+}
 
 export default function PostsTable({ posts = [], onSetupDM, isConnected = false, connectedAccounts = [] }) {
     const router = useRouter();
@@ -28,8 +59,11 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
     const [syncMessage, setSyncMessage] = useState('');
     const [showSetupModal, setShowSetupModal] = useState(false);
     const [selectedPost, setSelectedPost] = useState(null);
-    const [postToDelete, setPostToDelete] = useState(null);
-    const [isDeleting, setIsDeleting] = useState(false);
+    const [postToDelete,   setPostToDelete]   = useState(null);
+    const [isDeleting,     setIsDeleting]     = useState(false);
+    const [duplicatePost,  setDuplicatePost]  = useState(null);
+    const [clickStatsPost,  setClickStatsPost]  = useState(null);
+    const [broadcastPost,   setBroadcastPost]   = useState(null);
 
     // Platform filtering
     const platformFiltered = activePlatformFilter === 'all'
@@ -117,8 +151,12 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
         }
     };
 
-    const handleDeleteAutomation = (post) => {
-        setPostToDelete(post);
+    const handleDeleteAutomation = (post) => { setPostToDelete(post); };
+    const handleDuplicate = (post) => { setDuplicatePost(post); };
+    const handleDuplicateClose = () => { setDuplicatePost(null); };
+    const handleDuplicateSuccess = () => {
+        setDuplicatePost(null);
+        router.refresh();
     };
 
     const handleConfirmDelete = async () => {
@@ -148,21 +186,24 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
     const getStatusBadge = (status, post) => {
         switch (status) {
             case 'active':
-                return <span className={`badge badge-success`}>✅ Active</span>;
+                return <span className="badge badge-success">✅ Active</span>;
+            case 'scheduled':
+                return <span className={styles.scheduledBadge}>🚀 Scheduled</span>;
             case 'setup':
                 return (
                     <button className={styles.setupBadge} onClick={() => handleSetupDM(post)}>
-                        <span className={styles.pulseDot}></span> Configure AutoDM
+                        <span className={styles.pulseDot} /> Configure AutoDM
                     </button>
                 );
             case 'paused':
-                return <span className={`badge badge-warning`}>⏸ Paused</span>;
+                return <span className="badge badge-warning">⏸ Paused</span>;
             default:
                 return null;
         }
     };
 
     const getStatusFilterCount = (filterKey) => {
+        if (filterKey === 'all') return platformFiltered.length;
         return platformFiltered.filter((p) => p.status === filterKey).length;
     };
 
@@ -274,12 +315,17 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                     {/* All Posts — Status Table */}
                     <div className={styles.tableSection}>
                         <div className={styles.tableSectionHeader}>
-                            <h2 className={styles.tableSectionTitle}>All Posts</h2>
-                            <div className="filter-pills">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <h2 className={styles.tableSectionTitle}>All Posts</h2>
+                                <Link href="/logs" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#A78BFA', textDecoration: 'none' }}>
+                                    <ScrollText size={13} /> View DM Logs
+                                </Link>
+                            </div>
+                            <div className={styles.filterPills}>
                                 {STATUS_FILTERS.map((filter) => (
                                     <button
                                         key={filter.key}
-                                        className={`filter-pill ${activeStatusFilter === filter.key ? 'active' : ''}`}
+                                        className={`${styles.filterPill} ${activeStatusFilter === filter.key ? styles.filterPillActive : ''}`}
                                         onClick={() => setActiveStatusFilter(filter.key)}
                                     >
                                         {filter.label}
@@ -327,34 +373,89 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td>{getStatusBadge(post.status, post)}</td>
+                                            <td>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-start' }}>
+                                                    {getStatusBadge(post.status, post)}
+
+                                                    {/* Scheduled start countdown */}
+                                                    {post.status === 'scheduled' && post.scheduledStartAt && (() => {
+                                                        const label = formatScheduled(post.scheduledStartAt);
+                                                        if (!label) return null;
+                                                        return (
+                                                            <span
+                                                                className={styles.scheduledCountdownBadge}
+                                                                title={new Date(post.scheduledStartAt).toLocaleString('en-IN')}
+                                                            >
+                                                                <CalendarClock size={10} strokeWidth={2.5} />
+                                                                {label}
+                                                            </span>
+                                                        );
+                                                    })()}
+
+                                                    {/* Expiry countdown */}
+                                                    {(post.status === 'active' || post.status === 'paused') && (() => {
+                                                        const exp = formatExpiry(post.expiresAt);
+                                                        if (!exp) return null;
+                                                        return (
+                                                            <span
+                                                                className={exp.expired ? styles.expiryBadgeExpired : exp.urgent ? styles.expiryBadgeUrgent : styles.expiryBadge}
+                                                                title={post.expiresAt ? new Date(post.expiresAt).toLocaleString('en-IN') : ''}
+                                                            >
+                                                                <Timer size={10} strokeWidth={2.5} />
+                                                                {exp.label}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </td>
                                             <td className={styles.metricCell}>{post.sent}</td>
-                                            <td className={styles.metricCell}>{post.open}</td>
-                                            <td className={styles.metricCell}>{post.clicks}</td>
-                                            <td className={styles.metricCell}>{post.ctr}</td>
+                                            <td className={styles.metricCell}>{post.open || '—'}</td>
+                                            <td className={styles.metricCell}>
+                                                {post.automationId ? (
+                                                    <button
+                                                        className={`${styles.clicksCell} ${post.clicks > 0 ? styles.clicksCellActive : ''}`}
+                                                        onClick={() => setClickStatsPost(post)}
+                                                        title="View click breakdown"
+                                                    >
+                                                        {post.clicks > 0 && <MousePointerClick size={11} strokeWidth={2.5} />}
+                                                        {post.clicks}
+                                                    </button>
+                                                ) : (
+                                                    <span className={styles.metricCell}>—</span>
+                                                )}
+                                            </td>
+                                            <td className={styles.metricCell}>
+                                                {post.ctr !== '-' ? (
+                                                    <span className={styles.ctrCell}>{post.ctr}</span>
+                                                ) : '—'}
+                                            </td>
                                             <td>
                                                 <div className={styles.actions}>
-                                                    {(post.status === 'active' || post.status === 'paused') && (
+                                                    {(post.status === 'active' || post.status === 'paused' || post.status === 'scheduled') && (
                                                         <>
-                                                            <button
-                                                                className={styles.actionBtn}
-                                                                title="Edit"
-                                                                onClick={() => handleSetupDM(post)}
-                                                            >
+                                                            <button className={styles.actionBtn} title="Edit" onClick={() => handleSetupDM(post)}>
                                                                 <Edit3 size={14} />
                                                             </button>
-                                                            <button
-                                                                className={styles.actionBtn}
-                                                                title={post.status === 'active' ? 'Pause' : 'Resume'}
-                                                                onClick={() => handleToggleStatus(post)}
-                                                            >
-                                                                {post.status === 'active' ? <Pause size={14} /> : <Play size={14} />}
+                                                            {/* Scheduled posts: no pause/resume — edit to cancel the schedule */}
+                                                            {post.status !== 'scheduled' && (
+                                                                <button className={styles.actionBtn} title={post.status === 'active' ? 'Pause' : 'Resume'} onClick={() => handleToggleStatus(post)}>
+                                                                    {post.status === 'active' ? <Pause size={14} /> : <Play size={14} />}
+                                                                </button>
+                                                            )}
+                                                            {/* Broadcast DM — only for active/paused (not scheduled) */}
+                                                            {post.status !== 'scheduled' && (
+                                                                <button
+                                                                    className={`${styles.actionBtn} ${styles.actionBroadcast}`}
+                                                                    title="Broadcast DM to all commenters"
+                                                                    onClick={() => setBroadcastPost(post)}
+                                                                >
+                                                                    <Radio size={14} />
+                                                                </button>
+                                                            )}
+                                                            <button className={styles.actionBtn} title="Duplicate to another post" onClick={() => handleDuplicate(post)}>
+                                                                <Copy size={14} />
                                                             </button>
-                                                            <button
-                                                                className={`${styles.actionBtn} ${styles.actionDanger}`}
-                                                                title="Remove"
-                                                                onClick={() => handleDeleteAutomation(post)}
-                                                            >
+                                                            <button className={`${styles.actionBtn} ${styles.actionDanger}`} title="Remove" onClick={() => handleDeleteAutomation(post)}>
                                                                 <Trash2 size={14} />
                                                             </button>
                                                         </>
@@ -392,6 +493,33 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                     onClose={handleCloseModal}
                     postId={selectedPost?.id}
                     postCaption={selectedPost?.caption || ''}
+                />
+            )}
+
+            {/* Broadcast Modal */}
+            {broadcastPost && (
+                <BroadcastModal
+                    post={broadcastPost}
+                    onClose={() => setBroadcastPost(null)}
+                />
+            )}
+
+            {/* Click Stats Modal */}
+            {clickStatsPost && (
+                <ClickStatsModal
+                    automationId={clickStatsPost.automationId}
+                    postCaption={clickStatsPost.caption}
+                    onClose={() => setClickStatsPost(null)}
+                />
+            )}
+
+            {/* Duplicate Automation Modal */}
+            {duplicatePost && (
+                <DuplicateModal
+                    sourcePost={duplicatePost}
+                    allPosts={posts}
+                    onClose={handleDuplicateClose}
+                    onSuccess={handleDuplicateSuccess}
                 />
             )}
 

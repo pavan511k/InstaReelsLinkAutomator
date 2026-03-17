@@ -1,0 +1,42 @@
+.bar {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+  padding: 20px 24px;
+  font-family: 'Inter', sans-serif;
+}
+.inner {
+  max-width: 1160px; margin: 0 auto;
+  display: flex; align-items: center; gap: 32px;
+  flex-wrap: wrap;
+}
+.label {
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.28);
+  white-space: nowrap; letter-spacing: 0.02em;
+}
+.logos {
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap;
+}
+.logo {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  transition: background 150ms, border-color 150ms;
+}
+.logo:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.12); }
+.logoIcon {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: rgba(124,58,237,0.25);
+  border: 1px solid rgba(167,139,250,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 800; color: #A78BFA;
+  letter-spacing: -0.02em;
+}
+.logoName {
+  font-size: 12.5px; font-weight: 600;
+  color: rgba(255,255,255,0.45);
+}

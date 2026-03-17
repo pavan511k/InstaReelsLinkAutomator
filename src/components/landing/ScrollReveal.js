@@ -3,58 +3,64 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * ScrollReveal — wraps children and animates them on scroll into view.
- * Uses IntersectionObserver. No external dependencies.
+ * ScrollReveal — animates children into view on scroll.
+ * Uses IntersectionObserver + inline CSS transitions.
+ * No external dependencies.
  *
- * @param {string} animation - 'fadeUp' | 'fadeIn' | 'fadeLeft' | 'fadeRight'
- * @param {number} delay - delay in ms before animation starts
- * @param {number} threshold - 0-1, how much of the element must be visible
+ * @param {'fadeUp'|'fadeDown'|'fadeLeft'|'fadeRight'|'fadeIn'|'scaleUp'} animation
+ * @param {number} delay  - extra delay in ms (stagger children by passing index * 80)
+ * @param {number} threshold - 0–1, fraction visible before triggering
+ * @param {number} duration  - transition duration in ms
  */
 export default function ScrollReveal({
-    children,
-    animation = 'fadeUp',
-    delay = 0,
-    threshold = 0.15,
-    className = '',
+  children,
+  animation = 'fadeUp',
+  delay     = 0,
+  threshold = 0.12,
+  duration  = 560,
+  className = '',
 }) {
-    const ref = useRef(null);
-    const [isVisible, setIsVisible] = useState(false);
+  const ref     = useRef(null);
+  const [vis, setVis] = useState(false);
 
-    useEffect(() => {
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry.isIntersecting) {
-                    setIsVisible(true);
-                    observer.unobserve(entry.target);
-                }
-            },
-            { threshold }
-        );
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
 
-        if (ref.current) observer.observe(ref.current);
-        return () => observer.disconnect();
-    }, [threshold]);
-
-    const baseStyle = {
-        opacity: isVisible ? 1 : 0,
-        transform: isVisible ? 'none' : getInitialTransform(animation),
-        transition: `opacity 0.6s ease ${delay}ms, transform 0.6s ease ${delay}ms`,
-        willChange: 'opacity, transform',
-    };
-
-    return (
-        <div ref={ref} style={baseStyle} className={className}>
-            {children}
-        </div>
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVis(true);
+          obs.unobserve(el);
+        }
+      },
+      { threshold }
     );
-}
 
-function getInitialTransform(animation) {
-    switch (animation) {
-        case 'fadeUp': return 'translateY(32px)';
-        case 'fadeIn': return 'none';
-        case 'fadeLeft': return 'translateX(-32px)';
-        case 'fadeRight': return 'translateX(32px)';
-        default: return 'translateY(32px)';
-    }
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+
+  const transforms = {
+    fadeUp:    'translateY(28px)',
+    fadeDown:  'translateY(-28px)',
+    fadeLeft:  'translateX(28px)',
+    fadeRight: 'translateX(-28px)',
+    fadeIn:    'none',
+    scaleUp:   'scale(0.95)',
+  };
+
+  const style = {
+    opacity:    vis ? 1 : 0,
+    transform:  vis ? 'none' : (transforms[animation] ?? 'translateY(28px)'),
+    transition: `opacity ${duration}ms cubic-bezier(0.22,1,0.36,1) ${delay}ms,
+                 transform ${duration}ms cubic-bezier(0.22,1,0.36,1) ${delay}ms`,
+    willChange: 'opacity, transform',
+  };
+
+  return (
+    <div ref={ref} style={style} className={className}>
+      {children}
+    </div>
+  );
 }

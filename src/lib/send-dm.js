@@ -2,21 +2,18 @@
  * Instagram DM Sending Utility
  * Uses Instagram Messaging API (Graph API) to send DMs
  */
+import { applyTracking } from '@/lib/click-tracking';
 
 const GRAPH_API_VERSION = 'v21.0';
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 /**
- * Send a text message DM to a user
- * @param {string} igUserId - Instagram Business Account ID (sender)
- * @param {string} recipientId - Instagram user ID (recipient)
- * @param {string} message - Text message to send
- * @param {string} accessToken - Page access token
+ * Send a plain text DM
  */
 export async function sendTextDM(igUserId, recipientId, message, accessToken) {
     const url = `${GRAPH_API_BASE}/${igUserId}/messages`;
 
-    const response = await fetch(url, {
+    const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -26,112 +23,123 @@ export async function sendTextDM(igUserId, recipientId, message, accessToken) {
         }),
     });
 
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || 'Failed to send DM');
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'Failed to send DM');
     }
-
-    return response.json();
+    return res.json();
 }
 
 /**
- * Send a private reply to a Facebook Page comment
- * @param {string} commentId - The FB comment ID to reply to privately
- * @param {string} message - Text message to send
- * @param {string} accessToken - Page access token
+ * Send a Quick Reply DM
+ * Instagram supports up to 13 quick reply chips, each ≤20 chars
+ * https://developers.facebook.com/docs/messenger-platform/send-messages/quick-replies
  */
-export async function sendFacebookPrivateReply(commentId, message, accessToken) {
-    const url = `${GRAPH_API_BASE}/${commentId}/private_replies`;
-
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            message: message,
-            access_token: accessToken,
-        }),
-    });
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || 'Failed to send Facebook private reply');
-    }
-
-    return response.json();
-}
-
-/**
- * Reply to a specific Instagram comment
- * @param {string} commentId - The ID of the comment to reply to
- * @param {string} message - The reply text
- * @param {string} accessToken - Page access token
- */
-export async function replyToComment(commentId, message, accessToken) {
-    const url = `${GRAPH_API_BASE}/${commentId}/replies`;
-
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            message: message,
-            access_token: accessToken,
-        }),
-    });
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || 'Failed to reply to comment');
-    }
-
-    return response.json();
-}
-
-/**
- * Send a button template DM (Generic Template) to a user
- * Instagram supports Generic Templates with buttons via the Send API
- * @param {string} igUserId - Instagram Business Account ID
- * @param {string} recipientId - Instagram user ID
- * @param {Array} slides - Array of slide configs with imageUrl and buttons
- * @param {string} accessToken - Page access token
- */
-export async function sendButtonTemplateDM(igUserId, recipientId, slides, accessToken) {
+export async function sendQuickReplyDM(igUserId, recipientId, message, quickReplies, accessToken) {
     const url = `${GRAPH_API_BASE}/${igUserId}/messages`;
 
-    // Build Generic Template elements from slides
-    // Supports both new flat format (headline/buttonLabel/buttonUrl) and legacy buttons[] array
+    const validReplies = (quickReplies || [])
+        .filter((qr) => qr.title?.trim())
+        .slice(0, 13) // Instagram max
+        .map((qr) => ({
+            content_type: 'text',
+            title: qr.title.trim().slice(0, 20), // 20-char limit
+            payload: qr.payload || qr.title.trim().toUpperCase().replace(/\s+/g, '_'),
+        }));
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            recipient: { id: recipientId },
+            message: {
+                text: message,
+                quick_replies: validReplies,
+            },
+            access_token: accessToken,
+        }),
+    });
+
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'Failed to send quick reply DM');
+    }
+    return res.json();
+}
+
+/**
+ * Send a Multi-CTA DM (Generic Template — no image, just title + multiple URL buttons)
+ * Supports up to 3 buttons per Instagram's Generic Template spec
+ */
+export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, accessToken, trackingMap = {}) {
+    const url = `${GRAPH_API_BASE}/${igUserId}/messages`;
+
+    const validButtons = (buttons || [])
+        .filter((b) => b.label?.trim() && b.url?.trim())
+        .slice(0, 3) // Instagram max 3 buttons per element
+        .map((b) => ({
+            type: 'web_url',
+            url: applyTracking(b.url.trim(), trackingMap),
+            title: b.label.trim().slice(0, 20),
+        }));
+
+    if (validButtons.length === 0) {
+        throw new Error('Multi-CTA requires at least one button with a label and URL');
+    }
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            recipient: { id: recipientId },
+            message: {
+                attachment: {
+                    type: 'template',
+                    payload: {
+                        template_type: 'generic',
+                        elements: [{
+                            title: message || 'Check this out',
+                            subtitle: 'Sent with AutoDM',
+                            buttons: validButtons,
+                        }],
+                    },
+                },
+            },
+            access_token: accessToken,
+        }),
+    });
+
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'Failed to send Multi-CTA DM');
+    }
+    return res.json();
+}
+
+/**
+ * Send a Button Template DM (Generic Template with image carousel)
+ */
+export async function sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap = {}) {
+    const url = `${GRAPH_API_BASE}/${igUserId}/messages`;
+
     const elements = slides.map((slide) => {
         const element = {
             title: slide.headline || 'AutoDM',
             subtitle: 'Sent with AutoDM',
         };
 
-        // New flat format: buttonLabel + buttonUrl
         if (slide.buttonLabel && slide.buttonUrl) {
             element.buttons = [{
                 type: 'web_url',
-                url: slide.buttonUrl,
+                url: applyTracking(slide.buttonUrl, trackingMap),
                 title: slide.buttonLabel,
             }];
-        }
-        // Legacy format: buttons[] array
-        else if (slide.buttons && Array.isArray(slide.buttons)) {
+        } else if (slide.buttons && Array.isArray(slide.buttons)) {
             element.buttons = slide.buttons
                 .filter((b) => b.label && b.value)
                 .map((b) => {
-                    if (b.type === 'url') {
-                        return {
-                            type: 'web_url',
-                            url: b.value,
-                            title: b.label,
-                        };
-                    }
-                    if (b.type === 'phone') {
-                        return {
-                            type: 'phone_number',
-                            payload: b.value,
-                            title: b.label,
-                        };
-                    }
+                    if (b.type === 'url') return { type: 'web_url', url: applyTracking(b.value, trackingMap), title: b.label };
+                    if (b.type === 'phone') return { type: 'phone_number', payload: b.value, title: b.label };
                     return null;
                 })
                 .filter(Boolean);
@@ -144,7 +152,7 @@ export async function sendButtonTemplateDM(igUserId, recipientId, slides, access
         return element;
     });
 
-    const response = await fetch(url, {
+    const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -152,67 +160,194 @@ export async function sendButtonTemplateDM(igUserId, recipientId, slides, access
             message: {
                 attachment: {
                     type: 'template',
-                    payload: {
-                        template_type: 'generic',
-                        elements,
-                    },
+                    payload: { template_type: 'generic', elements },
                 },
             },
             access_token: accessToken,
         }),
     });
 
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || 'Failed to send button template DM');
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'Failed to send button template DM');
+    }
+    return res.json();
+}
+
+/**
+ * Send a Facebook Private Reply (text only — FB limitation)
+ */
+export async function sendFacebookPrivateReply(commentId, message, accessToken) {
+    const url = `${GRAPH_API_BASE}/${commentId}/private_replies`;
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, access_token: accessToken }),
+    });
+
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'Failed to send Facebook private reply');
+    }
+    return res.json();
+}
+
+/**
+ * Reply to an Instagram comment publicly
+ */
+export async function replyToComment(commentId, message, accessToken) {
+    const url = `${GRAPH_API_BASE}/${commentId}/replies`;
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, access_token: accessToken }),
+    });
+
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'Failed to reply to comment');
+    }
+    return res.json();
+}
+
+/**
+ * Check whether a specific user is following our Instagram Business Account.
+ *
+ * Strategy: the user JUST followed (they replied "Yes" after following),
+ * so they will be in the first 1-2 pages of the followers endpoint.
+ * We check up to 200 recent followers — practical and fast.
+ *
+ * @param {string} igAccountId  — our IG Business Account ID
+ * @param {string} checkUserId  — the IG user ID we're looking for
+ * @param {string} accessToken  — page access token
+ * @returns {Promise<boolean>}
+ */
+export async function checkUserIsFollower(igAccountId, checkUserId, accessToken) {
+    let url = `${GRAPH_API_BASE}/${igAccountId}/followers?fields=id&limit=100&access_token=${encodeURIComponent(accessToken)}`;
+
+    // Check up to 2 pages (200 recent followers)
+    for (let page = 0; page < 2; page++) {
+        const res = await fetch(url);
+        if (!res.ok) {
+            const err = await res.json();
+            console.warn('[FollowCheck] API error:', err.error?.message);
+            return false; // fail-safe: don't block user if API fails
+        }
+
+        const data = await res.json();
+        const followers = data.data || [];
+
+        if (followers.some((f) => f.id === checkUserId)) {
+            return true;
+        }
+
+        // No more pages
+        if (!data.paging?.next) break;
+        url = data.paging.next;
     }
 
-    return response.json();
+    return false;
 }
 
 /**
- * Resolve variables in a message template
- * @param {string} template - Message with {variable} placeholders
- * @param {object} context - Variable values
+ * Send the initial "follow-gate" DM.
+ * This is the first message in the follow-up flow — it asks the user to
+ * follow the account and reply YES to receive the reward link.
+ *
+ * @param {string} igUserId    — our IG Business Account ID (sender)
+ * @param {string} recipientId — the user to send to
+ * @param {string} message     — the gate message text
+ * @param {string} accessToken
+ */
+export async function sendFollowGateDM(igUserId, recipientId, message, accessToken) {
+    // Send with YES and NO quick reply chips so the user doesn't need to type anything.
+    // YES triggers the follow-check flow; NO gives them a polite decline.
+    const url = `${GRAPH_API_BASE}/${igUserId}/messages`;
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            recipient: { id: recipientId },
+            message: {
+                text: message,
+                quick_replies: [
+                    {
+                        content_type: 'text',
+                        title: '✅ Yes, I followed!',
+                        payload: 'CONFIRMED_FOLLOW',
+                    },
+                    {
+                        content_type: 'text',
+                        title: '❌ No, not yet',
+                        payload: 'NOT_FOLLOWING',
+                    },
+                ],
+            },
+            access_token: accessToken,
+        }),
+    });
+
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'Failed to send follow-gate DM');
+    }
+    return res.json();
+}
+
+/**
+ * Resolve {variable} placeholders in a message template
  */
 export function resolveMessageVariables(template, context) {
-    return template.replace(/\{(\w+)\}/g, (match, variable) => {
-        return context[variable] || match;
-    });
+    return template.replace(/\{(\w+)\}/g, (match, variable) => context[variable] || match);
 }
 
 /**
- * Send a DM based on automation config
- * Routes to the correct send function based on dm_type
- * @param {object} automation - The automation DB record
- * @param {string} recipientId - The IG User ID or FB Comment ID
- * @param {string} accessToken - Page Access Token
- * @param {string} igUserId - IG Sender ID or FB Page ID
- * @param {object} context - Variable replacement context
- * @param {string} platform - 'instagram' or 'facebook'
+ * Route to the correct send function based on dm_type
+ * @param {object} automation
+ * @param {string} recipientId
+ * @param {string} accessToken
+ * @param {string} igUserId
+ * @param {object} context         - { username, first_name, comment_id }
+ * @param {string} platform
+ * @param {object} trackingMap     - { originalUrl → trackedUrl } from dm_link_codes
  */
-export async function sendAutomatedDM(automation, recipientId, accessToken, igUserId, context = {}, platform = 'instagram') {
+export async function sendAutomatedDM(automation, recipientId, accessToken, igUserId, context = {}, platform = 'instagram', trackingMap = {}) {
     const { dm_type, dm_config } = automation;
 
-    // Facebook requires using the `private_replies` edge on the comment ID to initiate a DM.
-    // In our webhook logic, `context.comment_id` is passed so we can use it.
+    // Facebook only supports text via private_replies
     if (platform === 'facebook') {
         const message = resolveMessageVariables(dm_config.message || 'Check your DMs!', context);
-        // Facebook Private Replies only support text natively without prior interaction.
-        // If it was a button template, we degrade gracefully to text for the first message,
-        // or we could try sending a template. For safety, we use text.
         return sendFacebookPrivateReply(context.comment_id || recipientId, message, accessToken);
     }
 
     switch (dm_type) {
         case 'button_template': {
             const slides = dm_config.slides || [];
-            return sendButtonTemplateDM(igUserId, recipientId, slides, accessToken);
+            return sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap);
         }
 
         case 'message_template': {
             const message = resolveMessageVariables(dm_config.message || '', context);
             return sendTextDM(igUserId, recipientId, message, accessToken);
+        }
+
+        case 'quick_reply': {
+            const message = resolveMessageVariables(dm_config.message || '', context);
+            return sendQuickReplyDM(igUserId, recipientId, message, dm_config.quickReplies || [], accessToken);
+        }
+
+        case 'multi_cta': {
+            const message = resolveMessageVariables(dm_config.message || '', context);
+            return sendMultiCtaDM(igUserId, recipientId, message, dm_config.buttons || [], accessToken, trackingMap);
+        }
+
+        case 'follow_up': {
+            // Send the initial gate message ("follow us and reply YES")
+            const message = resolveMessageVariables(dm_config.gateMessage || '', context);
+            return sendFollowGateDM(igUserId, recipientId, message, accessToken);
         }
 
         default:

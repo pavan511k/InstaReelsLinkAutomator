@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, CalendarClock } from 'lucide-react';
 import DMSetupTab from './DMSetupTab';
 import TriggerSetupTab from './TriggerSetupTab';
 import SettingsTab from './SettingsTab';
@@ -20,6 +20,9 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
     const [isLoadingConfig, setIsLoadingConfig] = useState(true);
     const [saveMessage, setSaveMessage] = useState('');
     const [templates, setTemplates] = useState([]);
+    const [userPlan, setUserPlan] = useState('free');
+    const [activeSlideIndex,  setActiveSlideIndex]  = useState(0);
+    const [activeAbVariant,   setActiveAbVariant]   = useState('A');
     const [dmConfig, setDmConfig] = useState({
         type: 'button_template',
         slides: [{ imageUrl: '', buttons: [{ type: 'url', label: '', value: '' }] }],
@@ -34,10 +37,13 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
         sendOncePerUser: true,
         excludeMentions: false,
     });
+    const DEFAULT_REPLY_MESSAGE = 'Hey! Check your DM ❤️ Didn\'t receive the link? Follow and comment again.';
+
     const [settingsConfig, setSettingsConfig] = useState({
         delayMessage: false,
         disableUniversalTriggers: false,
-        commentAutoReply: false,
+        commentAutoReply: true,
+        replyMessage: DEFAULT_REPLY_MESSAGE,
         flowAutomation: false,
     });
 
@@ -87,7 +93,9 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                                     ...prev,
                                     slides: prev.slides.map((s) => ({
                                         ...s,
-                                        buttons: s.buttons.map((b) => ({
+                                        // populate both flat format (current) and legacy buttons[] format
+                                        buttonLabel: s.buttonLabel || defaults.defaultButtonName,
+                                        buttons: (s.buttons || []).map((b) => ({
                                             ...b,
                                             label: b.label || defaults.defaultButtonName,
                                         })),
@@ -114,6 +122,25 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                 setTemplates(data.templates || []);
             } catch {
                 // Templates table may not exist yet
+            }
+
+            // Fetch user plan from connected_accounts
+            try {
+                const { createClient: createClientPlan } = await import('@/lib/supabase-client');
+                const supabasePlan = createClientPlan();
+                const { data: { user: planUser } } = await supabasePlan.auth.getUser();
+                if (planUser) {
+                    const { data: planAccounts } = await supabasePlan
+                        .from('connected_accounts')
+                        .select('plan')
+                        .eq('user_id', planUser.id)
+                        .eq('is_active', true)
+                        .limit(1);
+                    const plan = planAccounts?.[0]?.plan || 'free';
+                    setUserPlan(plan);
+                }
+            } catch {
+                // Plan fetch failed — default to free
             }
 
             setIsLoadingConfig(false);
@@ -158,6 +185,7 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
         if (template.dm_config) setDmConfig(template.dm_config);
         if (template.trigger_config) setTriggerConfig(template.trigger_config);
         if (template.settings_config) setSettingsConfig(template.settings_config);
+        setActiveSlideIndex(0); // reset to first slide when loading a template
         setSaveMessage(`✅ Loaded template: ${template.name}`);
         setTimeout(() => setSaveMessage(''), 3000);
     };
@@ -189,6 +217,11 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                         onSaveTemplate={handleSaveTemplate}
                         onLoadTemplate={handleLoadTemplate}
                         onDeleteTemplate={handleDeleteTemplate}
+                        userPlan={userPlan}
+                        activeSlideIndex={activeSlideIndex}
+                        onSlideChange={setActiveSlideIndex}
+                        activeAbVariant={activeAbVariant}
+                        onAbVariantChange={setActiveAbVariant}
                     />
                 );
             case 'trigger-setup':
@@ -200,22 +233,63 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
         }
     };
 
+    const validateVariant = (cfg, label) => {
+        switch (cfg?.type) {
+            case 'button_template': {
+                const hasButton = (cfg.slides || []).some((s) =>
+                    (s.buttonLabel?.trim() && s.buttonUrl?.trim()) ||
+                    (s.buttons || []).some((b) => b.label?.trim() && b.value?.trim())
+                );
+                if (!hasButton) return `${label}: Add at least one button with a label and URL.`;
+                break;
+            }
+            case 'message_template':
+                if (!cfg.message?.trim()) return `${label}: Enter a message.`;
+                break;
+            case 'quick_reply': {
+                if (!cfg.message?.trim()) return `${label}: Enter an opening message.`;
+                const hasReplies = (cfg.quickReplies || []).some((qr) => qr.title?.trim());
+                if (!hasReplies) return `${label}: Add at least one quick reply option.`;
+                break;
+            }
+            case 'multi_cta': {
+                const hasButton = (cfg.buttons || []).some((b) => b.label?.trim() && b.url?.trim());
+                if (!hasButton) return `${label}: Add at least one button with a label and URL.`;
+                break;
+            }
+            case 'follow_up':
+                if (!cfg.gateMessage?.trim()) return `${label}: Enter the gate message.`;
+                break;
+            default:
+                if (!cfg?.type) return `${label}: Select a DM type.`;
+        }
+        return null;
+    };
+
     const validateConfig = () => {
-        if (dmConfig.type === 'button_template') {
-            const hasButton = dmConfig.slides.some((s) =>
-                s.buttons.some((b) => b.label.trim() && b.value.trim())
-            );
-            if (!hasButton) return 'Please add at least one button with a label and URL.';
+        if (dmConfig.abEnabled) {
+            if (!dmConfig.variantA || !dmConfig.variantB) {
+                return 'Configure both Variant A and Variant B in DM Setup.';
+            }
+            const errA = validateVariant(dmConfig.variantA, 'Variant A');
+            if (errA) return errA;
+            const errB = validateVariant(dmConfig.variantB, 'Variant B');
+            if (errB) return errB;
+        } else {
+            const err = validateVariant(dmConfig, 'DM Setup');
+            if (err) return err;
+            if (dmConfig.type === 'follow_up') {
+                const hasReward = dmConfig.linkMessage?.trim() ||
+                    (dmConfig.linkDmConfig?.buttons || []).some((b) => b.label?.trim() && b.url?.trim()) ||
+                    (dmConfig.linkDmConfig?.slides || []).some((s) => s.buttonUrl?.trim());
+                if (!hasReward) return 'Add a reward link in DM Setup (Step 4).';
+            }
         }
 
-        if (dmConfig.type === 'message_template') {
-            if (!dmConfig.message.trim()) return 'Please enter a message.';
+        const triggerType = triggerConfig.type || 'keywords';
+        if (triggerType === 'keywords' && (!triggerConfig.keywords || triggerConfig.keywords.length === 0)) {
+            return 'Add at least one trigger keyword in Trigger Setup.';
         }
-
-        if (triggerConfig.keywords.length === 0) {
-            return 'Please add at least one trigger keyword in the Trigger Setup tab.';
-        }
-
         return null;
     };
 
@@ -238,41 +312,43 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('You must be logged in to save');
 
-            // 2. Upload any new images in the slides
-            const finalSlides = [...dmConfig.slides];
-
-            for (let i = 0; i < finalSlides.length; i++) {
-                const slide = finalSlides[i];
-
-                // If it's a data URL (new upload), we need to upload it to Supabase
-                if (slide.imageUrl && slide.imageUrl.startsWith('data:image')) {
-                    setSaveMessage(`Uploading image for slide ${i + 1}...`);
-
-                    // Convert base64 to Blob
-                    const response = await fetch(slide.imageUrl);
-                    const blob = await response.blob();
-
-                    // Create unique filename: user_id/post_id_slideIndex_timestamp.ext
-                    const ext = blob.type.split('/')[1] || 'jpg';
-                    const filename = `${user.id}/${postId}_${i}_${Date.now()}.${ext}`;
-
-                    // Upload to dm_images bucket
-                    const { data: uploadData, error: uploadError } = await supabase.storage
-                        .from('dm_images')
-                        .upload(filename, blob, { upsert: true });
-
-                    if (uploadError) {
-                        throw new Error(`Failed to upload slide ${i + 1} image: ${uploadError.message}`);
+            // 2. Upload any data-URL images (both main and A/B variants)
+            const uploadSlides = async (slides, prefix) => {
+                const final = [...slides];
+                for (let i = 0; i < final.length; i++) {
+                    const slide = final[i];
+                    if (slide.imageUrl && slide.imageUrl.startsWith('data:image')) {
+                        setSaveMessage(`Uploading image for ${prefix} slide ${i + 1}...`);
+                        const response = await fetch(slide.imageUrl);
+                        const blob     = await response.blob();
+                        const ext      = blob.type.split('/')[1] || 'jpg';
+                        const filename = `${user.id}/${postId}_${prefix}_${i}_${Date.now()}.${ext}`;
+                        const { error: uploadError } = await supabase.storage
+                            .from('dm_images')
+                            .upload(filename, blob, { upsert: true });
+                        if (uploadError) throw new Error(`Failed to upload ${prefix} slide ${i + 1} image: ${uploadError.message}`);
+                        const { data: { publicUrl } } = supabase.storage.from('dm_images').getPublicUrl(filename);
+                        final[i] = { ...slide, imageUrl: publicUrl };
                     }
-
-                    // Get public URL
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('dm_images')
-                        .getPublicUrl(filename);
-
-                    // Replace data URL with public Supabase URL
-                    finalSlides[i] = { ...slide, imageUrl: publicUrl };
                 }
+                return final;
+            };
+
+            let finalDmConfig = { ...dmConfig };
+
+            if (dmConfig.abEnabled) {
+                // Upload images for both variants independently
+                if (dmConfig.variantA?.slides) {
+                    const uploadedA = await uploadSlides(dmConfig.variantA.slides, 'varA');
+                    finalDmConfig = { ...finalDmConfig, variantA: { ...dmConfig.variantA, slides: uploadedA } };
+                }
+                if (dmConfig.variantB?.slides) {
+                    const uploadedB = await uploadSlides(dmConfig.variantB.slides, 'varB');
+                    finalDmConfig = { ...finalDmConfig, variantB: { ...dmConfig.variantB, slides: uploadedB } };
+                }
+            } else {
+                const finalSlides = await uploadSlides(dmConfig.slides || [], 'slide');
+                finalDmConfig = { ...finalDmConfig, slides: finalSlides };
             }
 
             setSaveMessage('Saving automation...');
@@ -283,10 +359,7 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     postId,
-                    dmConfig: {
-                        ...dmConfig,
-                        slides: finalSlides, // Use the slides with uploaded public URLs
-                    },
+                    dmConfig: finalDmConfig,
                     triggerConfig,
                     settingsConfig,
                 }),
@@ -295,11 +368,15 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
             const data = await res.json();
 
             if (res.ok) {
-                setSaveMessage('✅ Automation saved successfully!');
+                const isScheduled = data.scheduled && data.scheduledStartAt;
+                const successMsg = isScheduled
+                    ? `✅ Campaign scheduled for ${new Date(data.scheduledStartAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}!`
+                    : '✅ Automation saved successfully!';
+                setSaveMessage(successMsg);
                 setTimeout(() => {
                     onClose();
                     window.location.reload();
-                }, 1000);
+                }, 1500);
             } else {
                 setSaveMessage(`❌ ${data.error || 'Failed to save'}`);
             }
@@ -311,10 +388,10 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className={styles.overlay} onClick={onClose}>
             <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
-                <div className="modal-header">
+                <div className={styles.modalHeader}>
                     <div>
                         <h2 className={styles.modalTitle}>Configure AutoDM</h2>
                         {postCaption && (
@@ -322,16 +399,16 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                         )}
                     </div>
                     <button onClick={onClose} className={styles.closeBtn}>
-                        <X size={20} />
+                        <X size={18} />
                     </button>
                 </div>
 
                 {/* Tabs */}
-                <div className="tabs">
+                <div className={styles.tabs}>
                     {TABS.map((tab) => (
                         <button
                             key={tab.key}
-                            className={`tab ${activeTab === tab.key ? 'active' : ''}`}
+                            className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
                             onClick={() => setActiveTab(tab.key)}
                         >
                             {tab.label}
@@ -347,34 +424,45 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                     </div>
                 ) : (
                     <div className={styles.body}>
-                        <div className={styles.formPanel}>
-                            {renderTab()}
-
-                            {/* Save bar */}
+                        {/* Left column: scrollable form + always-pinned save bar */}
+                        <div className={styles.leftCol}>
+                            <div className={styles.formPanel}>
+                                {renderTab()}
+                            </div>
+                            {/* Save bar is OUTSIDE the scrollable formPanel — always visible */}
                             <div className={styles.saveBar}>
                                 {saveMessage && (
                                     <span className={styles.saveMessage}>{saveMessage}</span>
                                 )}
-                                <button
-                                    className="btn btn-primary"
-                                    onClick={handleSave}
-                                    disabled={isSaving}
-                                >
-                                    {isSaving ? (
-                                        <>
-                                            <Loader2 size={14} className={styles.spinner} />
-                                            Saving...
-                                        </>
-                                    ) : (
-                                        'Save & Activate'
-                                    )}
-                                </button>
+                                {(() => {
+                                    const isScheduled = settingsConfig.scheduledStartEnabled &&
+                                        settingsConfig.scheduledStartAt &&
+                                        new Date(settingsConfig.scheduledStartAt) > new Date();
+                                    return (
+                                        <button
+                                            className={`${styles.saveBtn} ${isScheduled ? styles.saveBtnScheduled : ''}`}
+                                            onClick={handleSave}
+                                            disabled={isSaving}
+                                        >
+                                            {isSaving ? (
+                                                <><Loader2 size={14} className={styles.spinner} /> Saving…</>
+                                            ) : isScheduled ? (
+                                                <><CalendarClock size={14} /> Schedule Campaign</>
+                                            ) : (
+                                                'Save & Activate'
+                                            )}
+                                        </button>
+                                    );
+                                })()}
                             </div>
                         </div>
+                        {/* Right column: phone preview */}
                         <div className={styles.previewPanel}>
                             <PhonePreview
                                 config={dmConfig}
                                 onImageUpload={handleImageUploadFromPreview}
+                                activeSlideIndex={activeSlideIndex}
+                                onSlideChange={setActiveSlideIndex}
                             />
                         </div>
                     </div>

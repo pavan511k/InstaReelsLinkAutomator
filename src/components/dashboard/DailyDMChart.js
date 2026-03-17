@@ -3,20 +3,20 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import styles from './DailyDMChart.module.css';
 
-const CUSTOM_TOOLTIP_STYLE = {
-    background: '#0F172A',
-    border: 'none',
-    borderRadius: '8px',
+const TOOLTIP_STYLE = {
+    background: '#12173B',
+    border: '1px solid rgba(109,80,240,.3)',
+    borderRadius: '12px',
     padding: '8px 12px',
-    boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+    boxShadow: '0 8px 24px rgba(109,80,240,.2)',
 };
 
 function CustomTooltip({ active, payload, label }) {
-    if (active && payload && payload.length) {
+    if (active && payload?.length) {
         return (
-            <div style={CUSTOM_TOOLTIP_STYLE}>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '11px', margin: 0 }}>{label}</p>
-                <p style={{ color: '#60A5FA', fontSize: '14px', fontWeight: 700, margin: '2px 0 0' }}>
+            <div style={TOOLTIP_STYLE}>
+                <p style={{ color: 'rgba(255,255,255,.55)', fontSize: '11px', margin: 0 }}>{label}</p>
+                <p style={{ color: '#A78BFA', fontSize: '14px', fontWeight: 700, margin: '2px 0 0' }}>
                     {payload[0].value} DMs
                 </p>
             </div>
@@ -47,8 +47,8 @@ export default function DailyDMChart({ data = [] }) {
                     <AreaChart data={data} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}>
                         <defs>
                             <linearGradient id="dmGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.02} />
+                                <stop offset="5%" stopColor="#6D50F0" stopOpacity={0.28} />
+                                <stop offset="95%" stopColor="#6D50F0" stopOpacity={0.02} />
                             </linearGradient>
                         </defs>
                         <XAxis
@@ -62,17 +62,18 @@ export default function DailyDMChart({ data = [] }) {
                             axisLine={false}
                             tickLine={false}
                             tick={{ fontSize: 10, fill: '#94A3B8' }}
+                            width={28}
                             allowDecimals={false}
                         />
-                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(59,130,246,0.2)', strokeWidth: 1 }} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(109,80,240,.2)', strokeWidth: 1 }} />
                         <Area
                             type="monotone"
                             dataKey="count"
-                            stroke="#3B82F6"
-                            strokeWidth={2}
+                            stroke="#6D50F0"
+                            strokeWidth={2.5}
                             fill="url(#dmGradient)"
                             dot={false}
-                            activeDot={{ r: 4, fill: '#3B82F6', stroke: '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 5, fill: '#6D50F0', stroke: '#fff', strokeWidth: 2.5 }}
                         />
                     </AreaChart>
                 </ResponsiveContainer>

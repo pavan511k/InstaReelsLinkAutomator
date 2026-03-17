@@ -25,7 +25,7 @@ export default async function PostsPage() {
             const accountIds = connectedAccounts.map((a) => a.id);
             const { data: dbPosts } = await supabase
                 .from('instagram_posts')
-                .select('*, connected_accounts!inner(platform), dm_automations(id, is_active)')
+                .select('*, connected_accounts!inner(platform), dm_automations(id, is_active, expires_at, scheduled_start_at)')
                 .in('account_id', accountIds)
                 .eq('is_story', false)
                 .order('timestamp', { ascending: false });
@@ -41,26 +41,36 @@ export default async function PostsPage() {
                 automationMap[a.post_id] = a.id;
             }
 
-            // Fetch sent counts per automation from dm_sent_log
+            // Fetch sent counts and click counts per automation
             const automationIds = Object.values(automationMap);
-            let sentCountMap = {};
+            let sentCountMap  = {};
+            let clickCountMap = {};
 
             if (automationIds.length > 0) {
+                // Sent counts
                 try {
-                    // Get counts grouped by automation_id
                     const { data: sentLogs } = await supabase
                         .from('dm_sent_log')
-                        .select('automation_id, status')
+                        .select('automation_id')
                         .in('automation_id', automationIds)
                         .eq('status', 'sent');
 
-                    // Count per automation
                     for (const log of (sentLogs || [])) {
                         sentCountMap[log.automation_id] = (sentCountMap[log.automation_id] || 0) + 1;
                     }
-                } catch {
-                    // dm_sent_log may not exist
-                }
+                } catch { /* dm_sent_log may not exist */ }
+
+                // Click counts — via click_events joined to dm_link_codes
+                try {
+                    const { data: clickRows } = await supabase
+                        .from('click_events')
+                        .select('automation_id')
+                        .in('automation_id', automationIds);
+
+                    for (const row of (clickRows || [])) {
+                        clickCountMap[row.automation_id] = (clickCountMap[row.automation_id] || 0) + 1;
+                    }
+                } catch { /* click_events may not exist yet */ }
             }
 
             posts = (dbPosts || []).map((p) => {
@@ -70,13 +80,36 @@ export default async function PostsPage() {
                     const hasData = isArray ? p.dm_automations.length > 0 : Object.keys(p.dm_automations).length > 0;
 
                     if (hasData) {
-                        const isActive = isArray ? p.dm_automations[0].is_active : p.dm_automations.is_active;
-                        currentStatus = isActive ? 'active' : 'paused';
+                        const auto = isArray ? p.dm_automations[0] : p.dm_automations;
+                        if (auto.is_active) {
+                            currentStatus = 'active';
+                        } else if (auto.scheduled_start_at && new Date(auto.scheduled_start_at) > new Date()) {
+                            currentStatus = 'scheduled';
+                        } else {
+                            currentStatus = 'paused';
+                        }
                     }
                 }
 
                 const automationId = automationMap[p.id];
-                const sentCount = automationId ? (sentCountMap[automationId] || 0) : 0;
+                const sentCount   = automationId ? (sentCountMap[automationId]  || 0) : 0;
+                const clickCount  = automationId ? (clickCountMap[automationId] || 0) : 0;
+
+                // Get expiry and scheduled start from the automation
+                let expiresAt = null;
+                let scheduledStartAt = null;
+                if (p.dm_automations) {
+                    const isArray = Array.isArray(p.dm_automations);
+                    const auto   = isArray ? p.dm_automations[0] : p.dm_automations;
+                    if (auto) {
+                        expiresAt       = auto.expires_at        || null;
+                        scheduledStartAt = auto.scheduled_start_at || null;
+                    }
+                }
+
+                const ctr = sentCount > 0
+                    ? `${Math.round((clickCount / sentCount) * 100)}%`
+                    : '-';
 
                 return {
                     id: p.id,
@@ -87,9 +120,12 @@ export default async function PostsPage() {
                     status: currentStatus,
                     sent: sentCount,
                     open: 0,
-                    clicks: 0,
-                    ctr: sentCount > 0 ? '0%' : '-',
+                    clicks: clickCount,
+                    ctr,
+                    automationId: automationId || null,
                     timestamp: formatRelativeTime(p.timestamp),
+                    expiresAt,
+                    scheduledStartAt,
                 };
             });
         }

@@ -49,6 +49,11 @@ export async function middleware(request) {
     const isAuthRoute = request.nextUrl.pathname === '/login' ||
         request.nextUrl.pathname === '/signup';
 
+    // Never redirect away from these — needed post-email-link
+    const isBypassRoute = request.nextUrl.pathname === '/reset-password' ||
+        request.nextUrl.pathname === '/verify';
+    if (isBypassRoute) return supabaseResponse;
+
     if (isAuthRoute && user) {
         const url = request.nextUrl.clone();
         url.pathname = '/dashboard';

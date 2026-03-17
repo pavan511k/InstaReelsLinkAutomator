@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* Full-viewport side-by-side shell */
+.shell {
+    display: flex;
+    min-height: 100vh;
+    background: #08070F;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Body = everything to the right of the sidebar */
+.body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/*
+  Explicit 80px side padding — always visible regardless of screen width.
+  No max-width centering trick needed; the sidebar already constrains
+  the left edge, so fixed padding gives reliable margins on both sides.
+*/
+.main {
+    flex: 1;
+    width: 100%;
+    padding: 44px 80px;
+    box-sizing: border-box;
+}
+
+@media (max-width: 1280px) {
+    .main {
+        padding: 40px 60px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .main {
+        padding: 36px 48px;
+    }
+}
+
+@media (max-width: 768px) {
+    .shell {
+        flex-direction: column;
+    }
+
+    .main {
+        padding: 24px 24px;
+    }
+}
+
+@media (max-width: 480px) {
+    .main {
+        padding: 20px 16px;
+    }
+}

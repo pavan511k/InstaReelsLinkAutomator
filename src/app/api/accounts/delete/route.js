@@ -70,6 +70,16 @@ export async function DELETE() {
                     } catch {
                         // Table may not exist
                     }
+
+                    // 4c. Delete dm_followup_queue
+                    try {
+                        await serviceClient
+                            .from('dm_followup_queue')
+                            .delete()
+                            .in('automation_id', automationIds);
+                    } catch {
+                        // Table may not exist yet
+                    }
                 }
 
                 // 5. Delete dm_automations

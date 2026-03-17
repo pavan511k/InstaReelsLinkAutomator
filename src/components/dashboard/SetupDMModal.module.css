@@ -1,163 +1,202 @@
-/* ============================================================
-   Setup DM Modal — Premium SaaS Modal Layout
-   Bigger modal (1100px), fixed body height, dark preview
-   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+/* ── Overlay ──────────────────────────────────────────────────── */
+.overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    /* overflow: hidden on overlay stops page scroll without touching body */
+    overflow: hidden;
+}
+
+/* ── Modal shell ──────────────────────────────────────────────── */
 .modal {
-    background: var(--color-white);
-    border-radius: var(--radius-xl);
-    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05);
-    width: 95%;
+    background: #13102A;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    width: 96%;
     max-width: 1100px;
-    height: 85vh;
-    max-height: 720px;
+    height: 92vh;
+    max-height: 880px;
     display: flex;
     flex-direction: column;
-    animation: modalSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes modalSlideUp {
-    from { opacity: 0; transform: translateY(20px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.modalTitle {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-gray-900);
-}
-
-.postCaption {
-    font-size: var(--font-size-sm);
-    font-style: italic;
-    color: var(--color-gray-500);
-    margin-top: var(--space-1);
-    max-width: 400px;
+    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    animation: modalUp 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    font-family: 'Inter', sans-serif;
+    position: relative;
+}
+@keyframes modalUp {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+    to   { opacity: 1; transform: none; }
 }
 
+/* Top border glow */
+.modal::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 20%; right: 20%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(167,139,250,0.6), transparent);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ── Modal header ─────────────────────────────────────────────── */
+.modalHeader {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 16px 22px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    flex-shrink: 0; gap: 12px;
+}
+.modalTitle {
+    font-size: 0.9375rem; font-weight: 700;
+    color: rgba(255,255,255,0.92);
+    letter-spacing: -0.02em; margin: 0;
+}
+.postCaption {
+    font-size: 0.8rem; font-style: italic;
+    color: rgba(255,255,255,0.35);
+    margin-top: 3px; max-width: 440px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: block;
+}
 .closeBtn {
-    color: var(--color-gray-400);
-    padding: var(--space-2);
-    border-radius: var(--radius-md);
-    transition: all var(--transition-fast);
+    width: 30px; height: 30px; border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.4); cursor: pointer;
+    transition: all 150ms; flex-shrink: 0;
 }
+.closeBtn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
 
-.closeBtn:hover {
-    color: var(--color-gray-700);
-    background: var(--color-gray-100);
+/* ── Tabs — NO overflow-x:auto, that caused the phantom scrollbar ── */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    padding: 0 8px;
+    flex-shrink: 0;
+    overflow: hidden; /* was overflow-x:auto — that rendered a scrollbar gutter on Windows */
 }
+.tab {
+    display: inline-flex; align-items: center;
+    height: 44px; padding: 0 18px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.845rem; font-weight: 500;
+    color: rgba(255,255,255,0.38);
+    background: none; border: none; border-bottom: 2px solid transparent;
+    margin-bottom: -1px; cursor: pointer; white-space: nowrap;
+    transition: color 150ms, border-color 150ms;
+}
+.tab:hover { color: rgba(255,255,255,0.65); }
+.tabActive { color: #C4B5FD; font-weight: 600; border-bottom-color: #7C3AED; }
 
-/* ── Split Body — fixed height, no jumps ──────────────────────── */
+/* ── Split body ───────────────────────────────────────────────── */
 .body {
     display: grid;
-    grid-template-columns: 1fr 340px;
+    grid-template-columns: 1fr 300px;
     flex: 1;
     overflow: hidden;
     min-height: 0;
 }
 
-.formPanel {
-    padding: var(--space-5) var(--space-6);
-    overflow-y: auto;
+/*
+ * Left column — wraps the scrollable form panel AND the always-visible save bar.
+ * The save bar must be OUTSIDE the scrollable area so it stays pinned even when
+ * the user scrolls form content up/down.
+ */
+.leftCol {
     display: flex;
     flex-direction: column;
-}
-
-.previewPanel {
-    background: #f1f5f9;
-    border-left: 1px solid var(--color-gray-200);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-4);
-    position: relative;
     overflow: hidden;
+    border-right: 1px solid rgba(255,255,255,0.06);
+    min-height: 0;
 }
 
-/* Subtle radial glow behind phone */
+/* Form panel — scrollable content only, NO save bar here */
+.formPanel {
+    padding: 18px 22px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+.formPanel::-webkit-scrollbar { width: 4px; }
+.formPanel::-webkit-scrollbar-track { background: transparent; }
+.formPanel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+/* Preview panel — scrollable, scrollbar hidden visually */
+.previewPanel {
+    background: linear-gradient(160deg, #0F0A1E 0%, #160F2E 100%);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px 10px;
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.previewPanel::-webkit-scrollbar { display: none; }
 .previewPanel::before {
     content: '';
     position: absolute;
-    width: 300px;
-    height: 300px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(37, 99, 235, 0.06) 0%, transparent 70%);
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    width: 220px; height: 220px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%);
+    top: 40%; left: 50%; transform: translate(-50%, -50%);
     pointer-events: none;
 }
 
-/* ── Save Bar ─────────────────────────────────────────────────── */
+/* ── Save bar — always pinned at bottom of left column ─────────── */
 .saveBar {
-    padding-top: var(--space-5);
-    margin-top: auto;
-    border-top: 1px solid var(--color-gray-100);
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
+    padding: 12px 22px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    display: flex; align-items: center; gap: 12px;
+    flex-shrink: 0; /* never shrinks — always visible */
+    background: #13102A; /* match modal bg so it doesn't bleed through */
 }
-
-.saveMessage {
-    font-size: var(--font-size-sm);
-    color: var(--color-gray-600);
-    flex: 1;
+.saveMessage { font-size: 12.5px; color: rgba(255,255,255,0.45); flex: 1; }
+.saveBtn {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 38px; padding: 0 20px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem; font-weight: 600; color: #fff;
+    background: #7C3AED; border: none; border-radius: 9px; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(124,58,237,0.38);
+    transition: background 150ms, opacity 150ms; flex-shrink: 0;
 }
+.saveBtn:hover:not(:disabled) { background: #6D28D9; }
+.saveBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.spinner {
-    animation: spin 1s linear infinite;
+/* Scheduled campaign variant — blue tint */
+.saveBtnScheduled {
+    background: #1D4ED8 !important;
+    box-shadow: 0 4px 14px rgba(29,78,216,0.4) !important;
 }
+.saveBtnScheduled:hover:not(:disabled) { background: #1E40AF !important; }
 
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
+.spinner { animation: spin 0.75s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Loading State ────────────────────────────────────────────── */
+/* ── Loading ──────────────────────────────────────────────────── */
 .loadingConfig {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-8);
-    flex: 1;
-    color: var(--color-gray-500);
-    gap: var(--space-3);
-    min-height: 300px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px; flex: 1; gap: 12px;
+    color: rgba(255,255,255,0.3); min-height: 260px;
 }
-
-.loadingConfig p {
-    font-size: var(--font-size-sm);
-}
+.loadingConfig p { font-size: 0.875rem; color: rgba(255,255,255,0.35); margin: 0; }
 
 /* ── Responsive ───────────────────────────────────────────────── */
-@media (max-width: 768px) {
-    .modal {
-        height: 95vh;
-        max-height: none;
-        width: 100%;
-        margin: var(--space-2);
-        border-radius: var(--radius-lg);
-    }
-
-    .body {
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr auto;
-        overflow-y: auto;
-    }
-
-    .formPanel {
-        overflow-y: visible;
-        padding: var(--space-4);
-    }
-
-    .previewPanel {
-        border-left: none;
-        border-top: 1px solid var(--color-gray-200);
-        padding: var(--space-4);
-        min-height: 480px;
-    }
+@media (max-width: 900px) {
+    .modal { height: 96vh; max-height: none; }
+    .body  { grid-template-columns: 1fr; overflow-y: auto; }
+    .leftCol { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .formPanel  { overflow-y: visible; flex: unset; }
+    .previewPanel { min-height: 400px; overflow-y: hidden; align-items: center; }
 }

@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.page {
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+    padding: 40px 20px;
+}
+
+.card {
+    width: 100%;
+    max-width: 440px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 40px 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+    animation: popIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes popIn {
+    from { opacity: 0; transform: scale(0.93) translateY(12px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.iconWrap {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 1px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.spin { animation: spin 0.75s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #FFFFFF;
+    letter-spacing: -0.03em;
+    margin: 0;
+}
+
+.sub {
+    font-size: 0.9rem;
+    color: rgba(255,255,255,0.45);
+    line-height: 1.65;
+    margin: 0;
+    max-width: 340px;
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    margin-top: 8px;
+}
+
+.btnPrimary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 44px;
+    border-radius: 11px;
+    background: #7C3AED;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 150ms;
+    box-shadow: 0 4px 16px rgba(124,58,237,0.4);
+}
+.btnPrimary:hover { background: #6D28D9; }
+
+.btnSecondary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    border-radius: 11px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.6);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 150ms;
+}
+.btnSecondary:hover { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.85); }
+
+.orderIdNote {
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.3);
+    margin: -4px 0 0;
+}
+.orderIdNote code {
+    font-family: monospace;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: rgba(255,255,255,0.45);
+}

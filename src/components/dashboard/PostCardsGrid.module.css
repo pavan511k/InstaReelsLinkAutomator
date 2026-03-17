@@ -1,64 +1,41 @@
-/* ============================================================
-   PostCardsGrid — Adapted for Right Panel
-   2-column grid to fit the narrower right content area
-   ============================================================ */
-
-.container {
-    margin-top: var(--space-4);
-}
+.container { display: flex; flex-direction: column; gap: 16px; }
 
 .grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
 .emptyState {
-    text-align: center;
-    padding: var(--space-12) var(--space-6);
-    color: var(--color-gray-400);
-    font-size: var(--font-size-sm);
+  padding: 40px 20px;
+  text-align: center;
+  border: 1px dashed rgba(255,255,255,0.1);
+  border-radius: 14px;
+}
+.emptyState p {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem; font-weight: 400;
+  color: rgba(255,255,255,0.3); margin: 0;
 }
 
-.viewAllWrapper {
-    display: flex;
-    justify-content: center;
-    margin-top: var(--space-6);
-}
+.viewAllWrapper { display: flex; justify-content: flex-end; }
 
 .viewAllBtn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-6);
-    background: var(--color-gray-900);
-    color: var(--color-white);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    text-decoration: none;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 16px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem; font-weight: 600;
+  color: #A78BFA; text-decoration: none;
+  background: rgba(124,58,237,0.12);
+  border: 1px solid rgba(167,139,250,0.2);
+  border-radius: 8px;
+  transition: all 150ms;
 }
-
 .viewAllBtn:hover {
-    background: var(--color-gray-700);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  background: rgba(124,58,237,0.2);
+  border-color: rgba(167,139,250,0.35);
 }
 
-.viewAllBtn:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
-}
-
-@media (max-width: 768px) {
-    .grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (min-width: 1200px) {
-    .grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
+@media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px)  { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px)  { .grid { grid-template-columns: 1fr; } }

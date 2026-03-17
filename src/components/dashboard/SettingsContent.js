@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
     Instagram, Facebook, LogOut, RefreshCw, Shield,
     Settings, UserCircle, Trash2, AlertTriangle, CheckCircle2,
-    Gauge, Save
+    Gauge, Save, Bell, Webhook, Mail, Send,
 } from 'lucide-react';
 import styles from './SettingsContent.module.css';
 import DisconnectModal from './DisconnectModal';
@@ -41,6 +41,16 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
     // Rate limit state (from first active account)
     const firstActiveAccount = activeAccounts[0];
     const [rateLimit, setRateLimit] = useState(firstActiveAccount?.rate_limit_per_hour || 200);
+
+    // Alert preferences state
+    const [alertEmail,     setAlertEmail]     = useState('');
+    const [webhookUrl,     setWebhookUrl]     = useState('');
+    const [thresholdPct,   setThresholdPct]   = useState(80);
+    const [savingAlerts,   setSavingAlerts]   = useState(false);
+    const [alertsMsg,      setAlertsMsg]      = useState('');
+    const [testingAlert,   setTestingAlert]   = useState(false);
+    const [alertsLoaded,   setAlertsLoaded]   = useState(false);
+    const [currentUsage,   setCurrentUsage]   = useState(null); // { count, limit }
 
     // Default config state
     const defaultCfg = firstActiveAccount?.default_config || {};
@@ -205,6 +215,59 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
         return platform;
     };
 
+    // ── Alert handlers ─────────────────────────────────────
+    const loadAlerts = async () => {
+        if (alertsLoaded) return;
+        try {
+            // Load preferences
+            const res = await fetch('/api/alerts');
+            const data = await res.json();
+            if (res.ok) {
+                setAlertEmail(data.alertEmail || '');
+                setWebhookUrl(data.webhookUrl || '');
+                setThresholdPct(data.thresholdPct ?? 80);
+            }
+            // Load current month usage
+            const usageRes = await fetch('/api/usage');
+            const usageData = await usageRes.json();
+            if (usageRes.ok) setCurrentUsage(usageData);
+        } catch { /* non-fatal */ }
+        setAlertsLoaded(true);
+    };
+
+    const handleSaveAlerts = async () => {
+        setSavingAlerts(true); setAlertsMsg('');
+        try {
+            const res = await fetch('/api/alerts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ alertEmail, webhookUrl, thresholdPct }),
+            });
+            if (res.ok) {
+                setAlertsMsg('✅ Alert preferences saved');
+            } else {
+                const d = await res.json();
+                setAlertsMsg(`❌ ${d.error || 'Failed to save'}`);
+            }
+        } catch (e) { setAlertsMsg(`❌ ${e.message}`); }
+        finally { setSavingAlerts(false); setTimeout(() => setAlertsMsg(''), 3500); }
+    };
+
+    const handleTestAlert = async () => {
+        setTestingAlert(true); setAlertsMsg('');
+        try {
+            const res = await fetch('/api/alerts', { method: 'PUT' });
+            const d   = await res.json();
+            if (res.ok) {
+                const channels = Object.entries(d.results || {}).map(([k, v]) => `${k}: ${v}`).join(' · ');
+                setAlertsMsg(`✅ Test sent${channels ? ` — ${channels}` : ''}`);
+            } else {
+                setAlertsMsg(`❌ ${d.error || 'Test failed'}`);
+            }
+        } catch (e) { setAlertsMsg(`❌ ${e.message}`); }
+        finally { setTestingAlert(false); setTimeout(() => setAlertsMsg(''), 5000); }
+    };
+
     // ─── Render Tabs ─────────────────────────────────────
 
     const renderPermissions = () => (
@@ -319,7 +382,7 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                         ))}
                     </select>
                     <button
-                        className="btn btn-primary btn-sm"
+                        className={styles.saveBtn}
                         onClick={handleSaveRateLimit}
                         disabled={savingRateLimit || !firstActiveAccount}
                     >
@@ -433,14 +496,123 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
 
                 <div className={styles.configSaveRow}>
                     <button
-                        className="btn btn-primary"
+                        className={styles.saveBtn}
                         onClick={handleSaveDefaultConfig}
                         disabled={savingConfig || !firstActiveAccount}
                     >
                         <Save size={14} />
-                        {savingConfig ? 'Saving...' : 'Save Default Configuration'}
+                        {savingConfig ? 'Saving...' : 'Save configuration'}
                     </button>
                     {configMessage && <span className={styles.saveMsg}>{configMessage}</span>}
+                </div>
+            </div>
+
+            {/* ── Alerts Section ── */}
+            <div className={styles.configSection} onClick={loadAlerts}>
+                <h2 className={styles.sectionTitle}>
+                    <Bell size={18} />
+                    Limit Alerts
+                </h2>
+                <p className={styles.sectionDesc}>
+                    Get notified by email or webhook when your monthly DM usage crosses a threshold.
+                    Prevents surprise cutoffs — you&apos;ll know before you hit the wall.
+                </p>
+
+                {/* Usage gauge */}
+                {currentUsage && (() => {
+                    const pct = Math.round((currentUsage.count / currentUsage.limit) * 100);
+                    const barColor = pct >= 90 ? '#EF4444' : pct >= 75 ? '#F59E0B' : '#10B981';
+                    return (
+                        <div className={styles.usageGauge}>
+                            <div className={styles.usageGaugeHeader}>
+                                <span className={styles.usageGaugeLabel}>This month&apos;s usage</span>
+                                <span className={styles.usageGaugePct} style={{ color: barColor }}>
+                                    {currentUsage.count.toLocaleString()} / {currentUsage.limit.toLocaleString()} DMs &nbsp;({pct}%)
+                                </span>
+                            </div>
+                            <div className={styles.usageGaugeTrack}>
+                                <div
+                                    className={styles.usageGaugeFill}
+                                    style={{ width: `${Math.min(100, pct)}%`, background: barColor }}
+                                />
+                                {/* Threshold marker */}
+                                <div
+                                    className={styles.usageGaugeMarker}
+                                    style={{ left: `${thresholdPct}%` }}
+                                    title={`Alert at ${thresholdPct}%`}
+                                />
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* Threshold picker */}
+                <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Alert threshold</label>
+                    <div className={styles.thresholdRow}>
+                        {[50, 60, 70, 80, 90, 95].map((pct) => (
+                            <button
+                                key={pct}
+                                className={`${styles.thresholdBtn} ${thresholdPct === pct ? styles.thresholdBtnActive : ''}`}
+                                onClick={() => setThresholdPct(pct)}
+                            >
+                                {pct}%
+                            </button>
+                        ))}
+                    </div>
+                    <p className={styles.fieldHint}>
+                        You&apos;ll receive an alert once per month when usage crosses this threshold.
+                    </p>
+                </div>
+
+                {/* Alert email */}
+                <div className={styles.formGroup}>
+                    <label className={styles.formLabel}><Mail size={13} /> Alert email</label>
+                    <input
+                        className={styles.formInput}
+                        type="email"
+                        placeholder="you@example.com (leave blank to use your account email)"
+                        value={alertEmail}
+                        onChange={(e) => setAlertEmail(e.target.value)}
+                    />
+                    <p className={styles.fieldHint}>Leave blank to send to your AutoDM account email.</p>
+                </div>
+
+                {/* Webhook URL */}
+                <div className={styles.formGroup}>
+                    <label className={styles.formLabel}><Webhook size={13} /> Webhook URL <span className={styles.optionalTag}>optional</span></label>
+                    <input
+                        className={styles.formInput}
+                        type="url"
+                        placeholder="https://hooks.slack.com/... or any POST endpoint"
+                        value={webhookUrl}
+                        onChange={(e) => setWebhookUrl(e.target.value)}
+                    />
+                    <p className={styles.fieldHint}>AutoDM will POST a JSON payload to this URL. Works with Slack, Discord, Zapier, and any custom endpoint.</p>
+                </div>
+
+                <div className={styles.alertsSaveRow}>
+                    <button
+                        className={styles.saveBtn}
+                        onClick={handleSaveAlerts}
+                        disabled={savingAlerts}
+                    >
+                        <Save size={14} />
+                        {savingAlerts ? 'Saving...' : 'Save alerts'}
+                    </button>
+                    <button
+                        className={styles.testAlertBtn}
+                        onClick={handleTestAlert}
+                        disabled={testingAlert || (!alertEmail && !webhookUrl)}
+                        title={(!alertEmail && !webhookUrl) ? 'Configure at least one alert channel first' : 'Send a test alert now'}
+                    >
+                        {testingAlert ? (
+                            <><RefreshCw size={13} className={styles.spinning} /> Testing…</>
+                        ) : (
+                            <><Send size={13} /> Test alert</>
+                        )}
+                    </button>
+                    {alertsMsg && <span className={styles.saveMsg}>{alertsMsg}</span>}
                 </div>
             </div>
         </div>

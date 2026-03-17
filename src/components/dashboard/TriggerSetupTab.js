@@ -7,34 +7,32 @@ import styles from './TriggerSetupTab.module.css';
 export default function TriggerSetupTab({ config, onChange }) {
     const [inputValue, setInputValue] = useState('');
 
-    const updateConfig = (updates) => {
-        onChange({ ...config, ...updates });
-    };
+    const updateConfig = (updates) => onChange({ ...config, ...updates });
 
     const addKeyword = () => {
-        const keyword = inputValue.trim();
-        if (!keyword || config.keywords.includes(keyword)) return;
-        updateConfig({ keywords: [...config.keywords, keyword] });
+        const kw = inputValue.trim();
+        if (!kw || config.keywords.includes(kw)) return;
+        updateConfig({ keywords: [...config.keywords, kw] });
         setInputValue('');
     };
 
-    const removeKeyword = (keyword) => {
-        updateConfig({ keywords: config.keywords.filter((k) => k !== keyword) });
-    };
+    const removeKeyword = (kw) => updateConfig({ keywords: config.keywords.filter((k) => k !== kw) });
 
     const handleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            addKeyword();
-        }
+        if (e.key === 'Enter') { e.preventDefault(); addKeyword(); }
     };
 
     return (
         <div className={styles.tab}>
-            {/* Trigger Type */}
-            <div className="form-group">
-                <label className="form-label">Trigger Type</label>
-                <select className="form-input" value={config.type} onChange={(e) => updateConfig({ type: e.target.value })}>
+
+            {/* Trigger type */}
+            <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Trigger Type</label>
+                <select
+                    className={styles.select}
+                    value={config.type}
+                    onChange={(e) => updateConfig({ type: e.target.value })}
+                >
                     <option value="keywords">Keywords</option>
                     <option value="all_comments">All Comments</option>
                     <option value="emojis_only">Emojis Only</option>
@@ -42,25 +40,32 @@ export default function TriggerSetupTab({ config, onChange }) {
                 </select>
             </div>
 
-            {/* Keyword Triggers — only shown when type is 'keywords' */}
+            {/* Keyword input */}
             {config.type === 'keywords' && (
-                <div className="form-group">
-                    <label className="form-label">Keyword Triggers</label>
+                <div className={styles.formGroup}>
+                    <div className={styles.keywordLabelRow}>
+                        <label className={styles.formLabel}>Keyword Triggers</label>
+                        <a href="/settings" className={styles.defaultKeywordsHint}>
+                            View default keywords →
+                        </a>
+                    </div>
                     <div className={styles.tagInput}>
-                        <div className={styles.tags}>
-                            {config.keywords.map((keyword) => (
-                                <span key={keyword} className="tag">
-                                    {keyword}
-                                    <button
-                                        className="tag-remove"
-                                        onClick={() => removeKeyword(keyword)}
-                                        aria-label={`Remove ${keyword}`}
-                                    >
-                                        <X size={12} />
-                                    </button>
-                                </span>
-                            ))}
-                        </div>
+                        {config.keywords.length > 0 && (
+                            <div className={styles.tags}>
+                                {config.keywords.map((kw) => (
+                                    <span key={kw} className={styles.tag}>
+                                        {kw}
+                                        <button
+                                            className={styles.tagRemove}
+                                            onClick={() => removeKeyword(kw)}
+                                            aria-label={`Remove ${kw}`}
+                                        >
+                                            <X size={11} />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                         <input
                             className={styles.tagField}
                             placeholder="Type a keyword and press Enter..."
@@ -70,14 +75,16 @@ export default function TriggerSetupTab({ config, onChange }) {
                         />
                     </div>
                     <p className={styles.helperText}>
-                        Save each trigger keyword by pressing the ENTER or RETURN key
+                        Press Enter to add each keyword. Your account-wide default keywords from
+                        {' '}<a href="/settings" style={{ color: '#A78BFA', textDecoration: 'none' }}>Settings → Configuration</a>{' '}
+                        are automatically merged in at runtime.
                     </p>
                 </div>
             )}
 
-            {/* Trigger Settings */}
+            {/* Settings */}
             <div className={styles.settings}>
-                <h4 className={styles.settingsTitle}>Settings</h4>
+                <p className={styles.settingsTitle}>Settings</p>
 
                 <label className={styles.checkboxLabel}>
                     <input
@@ -88,7 +95,7 @@ export default function TriggerSetupTab({ config, onChange }) {
                     />
                     <div>
                         <span className={styles.checkText}>Exclude Keywords</span>
-                        <p className={styles.checkDesc}>DM everyone except those who comment with these keywords</p>
+                        <p className={styles.checkDesc}>DM everyone except those who use these keywords</p>
                     </div>
                 </label>
 
@@ -100,7 +107,7 @@ export default function TriggerSetupTab({ config, onChange }) {
                         onChange={(e) => updateConfig({ sendOncePerUser: e.target.checked })}
                     />
                     <div>
-                        <span className={styles.checkText}>Send once per user/per post</span>
+                        <span className={styles.checkText}>Send once per user / per post</span>
                         <p className={styles.checkDesc}>Prevents duplicate DMs to the same user on the same post</p>
                     </div>
                 </label>
@@ -118,6 +125,7 @@ export default function TriggerSetupTab({ config, onChange }) {
                     </div>
                 </label>
             </div>
+
         </div>
     );
 }
