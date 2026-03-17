@@ -27,8 +27,22 @@ jobs:
       - name: Build
         run: npx next build
         env:
+          # Supabase
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Meta
           NEXT_PUBLIC_META_APP_ID: ${{ secrets.NEXT_PUBLIC_META_APP_ID }}
           META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          # App
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          WEBHOOK_VERIFY_TOKEN: ${{ secrets.WEBHOOK_VERIFY_TOKEN }}
+          # Cashfree Payments
+          CASHFREE_APP_ID: ${{ secrets.CASHFREE_APP_ID }}
+          CASHFREE_SECRET_KEY: ${{ secrets.CASHFREE_SECRET_KEY }}
+          CASHFREE_WEBHOOK_SECRET: ${{ secrets.CASHFREE_WEBHOOK_SECRET }}
+          CASHFREE_ENV: ${{ secrets.CASHFREE_ENV }}
+          NEXT_PUBLIC_CASHFREE_ENV: ${{ secrets.NEXT_PUBLIC_CASHFREE_ENV }}
+          # Resend (alerts email)
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
