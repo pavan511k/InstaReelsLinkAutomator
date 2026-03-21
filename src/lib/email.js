@@ -1,6 +1,12 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy initialisation — never called at build time, only at runtime
+// when an actual email send is triggered.
+function getResend() {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) throw new Error('RESEND_API_KEY environment variable is not set');
+    return new Resend(key);
+}
 
 const FROM = 'AutoDM <support@autodm.pro>';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://autodm.pro';
@@ -115,7 +121,7 @@ export async function sendWelcomeEmail({ to, name }) {
         </p>
     `);
 
-    return resend.emails.send({
+    return getResend().emails.send({
         from: FROM,
         to,
         subject: 'Welcome to AutoDM 🎉 — Here\'s how to get started',
@@ -186,7 +192,7 @@ export async function sendTrialStartedEmail({ to, name, igUsername, trialEndsAt 
         </p>
     `);
 
-    return resend.emails.send({
+    return getResend().emails.send({
         from: FROM,
         to,
         subject: `🎁 Your 30-day AutoDM Pro trial has started!`,
@@ -235,7 +241,7 @@ export async function sendTrialExpiringEmail({ to, name, daysLeft, trialEndsAt }
         </p>
     `);
 
-    return resend.emails.send({
+    return getResend().emails.send({
         from: FROM,
         to,
         subject: `⚠️ Your AutoDM Pro trial expires in ${daysLeft} days`,
