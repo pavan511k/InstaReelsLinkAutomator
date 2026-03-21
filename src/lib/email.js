@@ -1,6 +1,12 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy initialisation — never called at build time, only at runtime
+// when an actual email send is triggered.
+function getResend() {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) throw new Error('RESEND_API_KEY environment variable is not set');
+    return new Resend(key);
+}
 
 const FROM = 'AutoDM <support@autodm.pro>';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://autodm.pro';
