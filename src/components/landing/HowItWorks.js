@@ -19,7 +19,7 @@ const STEPS = [
   {
     num: '03',
     title: "Write your message",
-    desc: "Craft your DM with links, offers, or personalised copy. Use dynamic fields like the commenter's name.",
+    desc: "Craft your DM with links, offers, or personalised copy. Use dynamic fields like the commenter's first name.",
     color: '#10B981',
     tag: 'Personalised',
   },

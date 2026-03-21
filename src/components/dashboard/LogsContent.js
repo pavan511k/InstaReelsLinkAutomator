@@ -5,7 +5,9 @@ import {
     Search, Download, RefreshCw, CheckCircle, XCircle,
     MessageSquare, Send, AlertTriangle, FileDown, X,
 } from 'lucide-react';
-import styles from './LogsContent.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './LogsContent.module.css';
+import lightStyles from './LogsContent.light.module.css';
 
 const STATUS_FILTERS = [
     { key: 'all',    label: 'All' },
@@ -49,7 +51,7 @@ function formatTime(iso) {
     return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, styles }) {
     if (status === 'sent') {
         return (
             <span className={styles.badgeSent}>
@@ -65,6 +67,7 @@ function StatusBadge({ status }) {
 }
 
 export default function LogsContent({ automationPostMap, totalSent, totalFailed, todaySent }) {
+    const styles = useStyles(darkStyles, lightStyles);
     const [rows,        setRows]        = useState([]);
     const [total,       setTotal]       = useState(0);
     const [loading,     setLoading]     = useState(true);
@@ -462,7 +465,7 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
                                                         : <span className={styles.na}>—</span>}
                                                 </span>
                                             </td>
-                                            <td><StatusBadge status={row.status} /></td>
+                                            <td><StatusBadge status={row.status} styles={styles} /></td>
                                             <td>
                                                 <span className={styles.timeCell} title={row.sent_at ? new Date(row.sent_at).toLocaleString('en-IN') : ''}>
                                                     {formatTime(row.sent_at)}

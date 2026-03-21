@@ -1,0 +1,313 @@
+/* ================================================================
+   LIGHT THEME — StoriesContent / stories.module.css
+   White section cards with purple-tinted borders.
+   Platform gradients (Instagram, Facebook) unchanged — brand assets.
+   Status badge text darkened for legibility on white bg.
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.storiesPage {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    animation: fadeIn 0.35s ease both;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #1E1535;
+    letter-spacing: -0.035em;
+    margin: 0;
+}
+.headerRight {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+/* Sync button keeps purple brand colour */
+.syncBtn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 36px; padding: 0 16px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.845rem; font-weight: 600;
+    color: #5B21B6; background: rgba(124,58,237,0.10);
+    border: 1px solid rgba(124,58,237,0.22);
+    border-radius: 9px; cursor: pointer;
+    transition: background 150ms;
+}
+.syncBtn:hover:not(:disabled) { background: rgba(124,58,237,0.17); }
+.syncBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.syncTime {
+    font-size: 12px; font-weight: 500;
+    color: rgba(30,21,53,0.45);
+}
+
+/* ── Empty state ─────────────────────────────────────────────── */
+.emptyState {
+    display: flex; flex-direction: column;
+    align-items: center; text-align: center;
+    padding: 64px 24px;
+    background: #FFFFFF;
+    border: 1px solid rgba(124,58,237,0.08);
+    border-radius: 18px;
+    box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 14px rgba(124,58,237,0.04);
+}
+/* Instagram gradient icon — keep exactly */
+.emptyIconWrapper {
+    position: relative;
+    width: 72px; height: 72px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF);
+    border-radius: 40%;
+}
+.pulseBg {
+    position: absolute; inset: -4px;
+    border-radius: inherit; background: inherit; opacity: 0.35;
+    filter: blur(12px);
+    animation: slowPulse 3s ease-in-out infinite alternate;
+}
+@keyframes slowPulse {
+    from { transform: scale(0.95); opacity: 0.25; }
+    to   { transform: scale(1.1);  opacity: 0.55; }
+}
+.emptyIcon { color: #fff; z-index: 1; }
+.emptyTitle {
+    font-size: 1.05rem; font-weight: 700;
+    color: rgba(30,21,53,0.75); margin: 0 0 10px;
+}
+.emptyDesc {
+    font-size: 0.875rem; color: rgba(30,21,53,0.48);
+    max-width: 460px; line-height: 1.7; margin: 0 0 20px;
+}
+.emptyAction {}
+.connectBtn {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 40px; padding: 0 20px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem; font-weight: 600; color: #fff;
+    background: #7C3AED; border: none; border-radius: 10px; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(124,58,237,0.30);
+    transition: background 150ms;
+}
+.connectBtn:hover { background: #6D28D9; }
+
+/* ── Sections — white card ───────────────────────────────────── */
+.section {
+    background: #FFFFFF;
+    border: 1px solid rgba(124,58,237,0.08);
+    border-radius: 18px; padding: 24px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 14px rgba(124,58,237,0.04);
+}
+.sectionHeader {
+    display: flex; align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 18px; gap: 12px;
+}
+.sectionHeaderLeft { display: flex; align-items: center; gap: 8px; }
+.sectionTitle {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.9375rem; font-weight: 700;
+    color: #1E1535; margin: 0 0 4px;
+}
+.sectionSub {
+    font-size: 12.5px; color: rgba(30,21,53,0.45); margin: 0;
+}
+
+/* ── Search ──────────────────────────────────────────────────── */
+.searchBox { position: relative; }
+.searchIcon {
+    position: absolute; left: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: rgba(30,21,53,0.32); pointer-events: none;
+}
+.searchInput {
+    height: 34px; padding: 0 12px 0 32px; width: 180px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem; color: rgba(30,21,53,0.78);
+    background: rgba(30,21,53,0.03);
+    border: 1px solid rgba(30,21,53,0.10);
+    border-radius: 8px; outline: none;
+    transition: border-color 150ms;
+}
+.searchInput:focus { border-color: rgba(124,58,237,0.35); }
+.searchInput::placeholder { color: rgba(30,21,53,0.32); }
+
+/* ── Story grid ──────────────────────────────────────────────── */
+.storyGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+}
+.storyCard {
+    background: #FFFFFF;
+    border: 1px solid rgba(124,58,237,0.09);
+    border-radius: 14px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 2px 8px rgba(124,58,237,0.04);
+    transition: border-color 200ms, transform 200ms, box-shadow 200ms;
+}
+.storyCard:hover {
+    border-color: rgba(124,58,237,0.22);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(30,21,53,0.08), 0 8px 24px rgba(124,58,237,0.07);
+}
+.storyMedia {
+    aspect-ratio: 9/16; max-height: 260px;
+    background: rgba(124,58,237,0.05);
+    position: relative; overflow: hidden;
+}
+.storyMedia img { width: 100%; height: 100%; object-fit: cover; }
+/* Gradient placeholder stays — it's decorative */
+.storyPlaceholder {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: rgba(255,255,255,0.5);
+}
+/* Video badge sits over an image — keep dark */
+.videoIcon {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
+    color: #fff; font-size: 9px;
+    padding: 2px 7px; border-radius: 5px;
+}
+/* Platform badges — brand colours, unchanged */
+.storyPlatformBadge {
+    position: absolute; top: 8px; right: 8px;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF);
+    color: #fff; z-index: 2;
+    border: 1.5px solid rgba(255,255,255,0.3);
+}
+.storyPlatformBadgeFacebook { background: #1877F2; }
+
+.storyMeta { padding: 10px 12px 6px; }
+/* Story date in purple — readable on white */
+.storyDate {
+    font-size: 12px; font-weight: 600;
+    color: #7C3AED; display: block;
+}
+.storyExpiry {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; color: rgba(30,21,53,0.45);
+    margin-top: 4px;
+}
+
+.storyActions {
+    padding: 6px 12px 12px;
+    display: flex; align-items: center; gap: 8px;
+}
+/* Story action button — purple tinted */
+.storyActionBtn {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 30px; padding: 0 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px; font-weight: 600; color: #5B21B6;
+    background: rgba(124,58,237,0.10);
+    border: 1px solid rgba(124,58,237,0.20);
+    border-radius: 7px; cursor: pointer;
+    transition: background 150ms;
+}
+.storyActionBtn:hover { background: rgba(124,58,237,0.17); }
+.skipBtn {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 30px; padding: 0 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px; font-weight: 500;
+    color: rgba(30,21,53,0.45);
+    background: none; border: none; cursor: pointer;
+    transition: color 150ms;
+}
+.skipBtn:hover:not(:disabled) { color: rgba(30,21,53,0.72); }
+.skipBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Table rows ──────────────────────────────────────────────── */
+.storyRow {
+    display: flex; align-items: center; gap: 12px;
+}
+/* Gradient thumb — decorative, unchanged */
+.storyThumb {
+    width: 38px; height: 38px; border-radius: 8px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    flex-shrink: 0; overflow: hidden;
+}
+.storyThumb img { width: 100%; height: 100%; object-fit: cover; }
+.storyRowDate {
+    font-size: 0.82rem; font-weight: 500;
+    color: rgba(30,21,53,0.72);
+}
+.expiredBadge {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px; border-radius: 5px;
+    font-size: 11px; font-weight: 600;
+    color: rgba(30,21,53,0.40);
+    background: rgba(30,21,53,0.05);
+    border: 1px solid rgba(30,21,53,0.09);
+}
+.setupBadge {
+    display: inline-flex; align-items: center;
+    padding: 3px 9px; border-radius: 6px;
+    font-size: 11.5px; font-weight: 600;
+    color: #5B21B6;
+    background: rgba(124,58,237,0.10);
+    border: 1px solid rgba(124,58,237,0.20);
+    cursor: pointer; transition: background 150ms;
+}
+.setupBadge:hover { background: rgba(124,58,237,0.17); }
+.metricCell {
+    font-size: 0.845rem; font-weight: 500;
+    color: rgba(30,21,53,0.55); text-align: center;
+}
+.actionBtn {
+    width: 30px; height: 30px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(30,21,53,0.04);
+    border: 1px solid rgba(30,21,53,0.08);
+    color: rgba(30,21,53,0.40); cursor: pointer;
+    transition: all 150ms;
+}
+.actionBtn:hover { background: rgba(30,21,53,0.07); color: rgba(30,21,53,0.80); }
+.actionDanger:hover { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.22); color: #DC2626; }
+.actionBtns { display: flex; gap: 4px; }
+
+/* Status badges — text darkened for white bg */
+.activeBadge {
+    display: inline-flex; align-items: center;
+    padding: 3px 9px; border-radius: 6px;
+    font-size: 11.5px; font-weight: 600;
+    color: #047857;
+    background: rgba(16,185,129,0.09);
+    border: 1px solid rgba(16,185,129,0.20);
+}
+.pausedBadge {
+    display: inline-flex; align-items: center;
+    padding: 3px 9px; border-radius: 6px;
+    font-size: 11.5px; font-weight: 600;
+    color: #B45309;
+    background: rgba(245,158,11,0.09);
+    border: 1px solid rgba(245,158,11,0.20);
+}
+
+.spinning { animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+    .storyGrid { grid-template-columns: 1fr 1fr; }
+    .sectionHeader { flex-direction: column; gap: 10px; }
+}

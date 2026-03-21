@@ -1,0 +1,145 @@
+/* ================================================================
+   LIGHT THEME — CookieConsent
+   White banner with purple-tinted border.
+   Appears on both landing (always dark) and dashboard (theme-aware).
+   ================================================================ */
+
+.overlay {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    padding: 16px;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.banner {
+    background: #FFFFFF;
+    border: 1px solid rgba(124,58,237,0.14);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 560px;
+    width: 100%;
+    box-shadow: 0 -4px 32px rgba(30,21,53,0.10), 0 8px 24px rgba(124,58,237,0.07);
+    pointer-events: auto;
+    animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+.title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: #1E1535;
+}
+
+.description {
+    font-size: 0.85rem;
+    color: rgba(30,21,53,0.58);
+    line-height: 1.5;
+    margin: 0 0 16px;
+}
+
+.preferences {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(124,58,237,0.03);
+    border: 1px solid rgba(124,58,237,0.09);
+}
+
+.preferenceItem {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    cursor: pointer;
+}
+
+.checkbox {
+    margin-top: 3px;
+    accent-color: #7C3AED;
+}
+
+.prefLabel {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1E1535;
+    margin-right: 6px;
+}
+
+.prefRequired {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #7C3AED;
+    color: #fff;
+    font-weight: 500;
+    vertical-align: middle;
+}
+
+.prefOptional {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(30,21,53,0.07);
+    color: rgba(30,21,53,0.55);
+    font-weight: 500;
+    vertical-align: middle;
+}
+
+.prefDesc {
+    font-size: 0.78rem;
+    color: rgba(30,21,53,0.52);
+    line-height: 1.4;
+    margin: 4px 0 0;
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.acceptBtn,
+.essentialBtn,
+.customizeBtn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.83rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+/* Accept — purple, same both themes */
+.acceptBtn {
+    background: #7C3AED;
+    color: #fff;
+}
+.acceptBtn:hover { background: #6D28D9; }
+
+/* Essential only — light outlined */
+.essentialBtn {
+    background: transparent;
+    border: 1px solid rgba(30,21,53,0.14);
+    color: rgba(30,21,53,0.72);
+}
+.essentialBtn:hover { background: rgba(30,21,53,0.05); }
+
+/* Customize — ghost */
+.customizeBtn {
+    background: transparent;
+    color: rgba(30,21,53,0.48);
+}
+.customizeBtn:hover { color: rgba(30,21,53,0.80); }

@@ -1,0 +1,43 @@
+/* ================================================================
+   LIGHT THEME — DailyDMChart
+   White card container with purple-tinted border.
+   Chart area/stroke colours are brand purple — unchanged.
+   Title label darkened. Empty state text darkened.
+   Recharts axis tick colour and tooltip styles are handled
+   via inline style objects in JS (useIsDark).
+   ================================================================ */
+
+.container {
+  background: #FFFFFF;
+  border: 1px solid rgba(124,58,237,0.09);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 14px rgba(124,58,237,0.04);
+}
+
+.title {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 700;
+  color: rgba(30,21,53,0.45);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-bottom: 14px;
+}
+
+.chartWrapper { width: 100%; }
+
+.emptyState {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 28px 0;
+  text-align: center;
+}
+.emptyIcon { font-size: 1.5rem; opacity: 0.45; }
+.emptyState p {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.855rem; font-weight: 600;
+  color: rgba(30,21,53,0.52); margin: 0;
+}
+.emptyState span {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem; font-weight: 400;
+  color: rgba(30,21,53,0.40); line-height: 1.5;
+}

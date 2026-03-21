@@ -723,6 +723,16 @@
     margin: 4px 0 0;
 }
 
+/* A/B card label text — needs explicit color since it’s not inside a .checkboxLabel */
+.checkText {
+    font-size: 0.845rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.75);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 /* Pro badge inline */
 .proBadge {
     display: inline-flex;

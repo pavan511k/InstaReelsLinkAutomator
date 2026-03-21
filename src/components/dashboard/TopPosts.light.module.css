@@ -1,0 +1,115 @@
+/* ================================================================
+   LIGHT THEME — TopPosts
+   Dark-on-white text, purple-tinted thumb borders, bar gradient unchanged.
+   reelPip stays dark — it overlays a thumbnail image.
+   ================================================================ */
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-family: 'Inter', sans-serif;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.rank {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: rgba(30,21,53,0.30);
+    width: 20px;
+    flex-shrink: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.thumb {
+    width: 34px; height: 34px;
+    border-radius: 7px; overflow: hidden;
+    flex-shrink: 0; position: relative;
+    background: rgba(124,58,237,0.07);
+    border: 1px solid rgba(124,58,237,0.12);
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumbPlaceholder {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(124,58,237,0.35);
+}
+/* Reel pip sits over an image — keep dark overlay */
+.reelPip {
+    position: absolute; bottom: 2px; right: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+}
+
+.info {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; gap: 5px;
+}
+.caption {
+    font-size: 11.5px; font-weight: 500;
+    color: rgba(30,21,53,0.72);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: block;
+}
+
+/* Progress bar — purple gradient unchanged */
+.barTrack {
+    width: 100%; height: 3px;
+    background: rgba(30,21,53,0.08);
+    border-radius: 2px; overflow: hidden;
+}
+.barFill {
+    height: 100%;
+    background: linear-gradient(90deg, #7C3AED, #A78BFA);
+    border-radius: 2px;
+    transition: width 600ms ease;
+    min-width: 4px;
+}
+
+.count {
+    font-size: 12px; font-weight: 700;
+    color: rgba(30,21,53,0.72);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    min-width: 32px;
+    text-align: right;
+}
+
+/* Empty state */
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 20px 12px;
+    text-align: center;
+}
+.emptyIcon {
+    font-size: 1.5rem;
+    opacity: 0.45;
+    margin-bottom: 4px;
+}
+.emptyTitle {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.845rem;
+    font-weight: 600;
+    color: rgba(30,21,53,0.52);
+    margin: 0;
+}
+.emptyDesc {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.775rem;
+    font-weight: 400;
+    color: rgba(30,21,53,0.38);
+    line-height: 1.6;
+    margin: 0;
+    max-width: 200px;
+}

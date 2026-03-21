@@ -1,16 +1,20 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import { AlertTriangle, LogOut } from 'lucide-react';
-import styles from './SettingsContent.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './SettingsContent.module.css';
+import lightStyles from './SettingsContent.light.module.css';
 
 /**
- * DisconnectModal — reuses the same modal styles as the Delete Account modal
- * so the UX is consistent across destructive actions.
+ * DisconnectModal — rendered via portal so backdrop-filter blurs the
+ * entire viewport, not just the nearest stacking context ancestor.
  */
 export default function DisconnectModal({ isOpen, onClose, onConfirm, isDisconnecting }) {
+    const styles = useStyles(darkStyles, lightStyles);
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div className={styles.modalOverlay} onClick={onClose}>
             <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
                 <div className={styles.modalIcon}>
@@ -48,6 +52,7 @@ export default function DisconnectModal({ isOpen, onClose, onConfirm, isDisconne
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

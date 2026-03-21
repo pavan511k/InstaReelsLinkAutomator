@@ -1,24 +1,32 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import {
     Instagram, Facebook, LogOut, RefreshCw, Shield,
     Settings, UserCircle, Trash2, AlertTriangle, CheckCircle2,
-    Gauge, Save, Bell, Webhook, Mail, Send,
+    Gauge, Save, Bell, Webhook, Mail, Send, AtSign, Download, Users,
+    MessageSquarePlus, Globe, Plus, X, ToggleLeft, ToggleRight, Loader2,
 } from 'lucide-react';
-import styles from './SettingsContent.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './SettingsContent.module.css';
+import lightStyles from './SettingsContent.light.module.css';
 import DisconnectModal from './DisconnectModal';
 
 const TABS = [
-    { key: 'permissions', label: 'Permissions', icon: Shield },
-    { key: 'configuration', label: 'Configuration', icon: Settings },
-    { key: 'account', label: 'Account', icon: UserCircle },
+    { key: 'permissions',    label: 'Permissions',    icon: Shield            },
+    { key: 'configuration',  label: 'Configuration',  icon: Settings          },
+    { key: 'global',         label: 'Global Triggers',icon: Globe             },
+    { key: 'icebreakers',    label: 'Welcome Openers',icon: MessageSquarePlus },
+    { key: 'leads',          label: 'Email Leads',    icon: Users             },
+    { key: 'account',        label: 'Account',        icon: UserCircle        },
 ];
 
 const RATE_LIMIT_OPTIONS = [50, 100, 200, 300, 400];
 
 export default function SettingsContent({ user, connectedAccounts = [] }) {
+    const styles = useStyles(darkStyles, lightStyles);
     const router = useRouter();
     const [activeTab, setActiveTab] = useState('permissions');
     const [disconnectingId, setDisconnectingId] = useState(null);
@@ -29,6 +37,17 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
     const [deleteEmail, setDeleteEmail] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState('');
+    const [emailCopied, setEmailCopied] = useState(false);
+
+    const copyEmailToClipboard = async () => {
+        try {
+            await navigator.clipboard.writeText(user?.email || '');
+            setEmailCopied(true);
+            setTimeout(() => setEmailCopied(false), 2000);
+        } catch {
+            // Clipboard API not available
+        }
+    };
     const [savingConfig, setSavingConfig] = useState(false);
     const [configMessage, setConfigMessage] = useState('');
     const [savingRateLimit, setSavingRateLimit] = useState(false);
@@ -64,6 +83,40 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
     });
     const [keywordInput, setKeywordInput] = useState('');
     const [excludeKeywordInput, setExcludeKeywordInput] = useState('');
+
+    // Story Mention DM state
+    const mentionCfg = defaultCfg.mentionDm || {};
+    const [mentionEnabled, setMentionEnabled] = useState(mentionCfg.enabled || false);
+    const [mentionMessage, setMentionMessage] = useState(
+        mentionCfg.message || 'Hey! Thanks for mentioning us 🙌 We saw your story and wanted to reach out!'
+    );
+
+    // Email Leads state
+    const [leads, setLeads]           = useState([]);
+    const [leadsLoading, setLeadsLoading] = useState(false);
+    const [leadsLoaded, setLeadsLoaded]   = useState(false);
+
+    // Global Triggers state
+    const [globalAutomations, setGlobalAutomations] = useState([]);
+    const [globalLoaded, setGlobalLoaded]           = useState(false);
+    const [globalLoading, setGlobalLoading]         = useState(false);
+    const [showGlobalForm, setShowGlobalForm]       = useState(false);
+    const [globalSaving, setGlobalSaving]           = useState(false);
+    const [globalMsg, setGlobalMsg]                 = useState('');
+    const [globalForm, setGlobalForm] = useState({
+        name: '', triggerType: 'keywords', keywords: [], message: '',
+        sendOncePerUser: true, skipIfPostHasAutomation: true,
+    });
+    const [globalKwInput, setGlobalKwInput] = useState('');
+
+    // Ice Breakers state
+    const iceBreakerCfg = defaultCfg.iceBreakers || [];
+    const [iceBreakers, setIceBreakers] = useState(
+        iceBreakerCfg.length > 0 ? iceBreakerCfg
+        : [{ title: '', responseMessage: '' }]
+    );
+    const [ibSaving, setIbSaving]   = useState(false);
+    const [ibMsg, setIbMsg]         = useState('');
 
     // ─── Handlers ────────────────────────────────────────
 
@@ -176,6 +229,141 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
         } finally {
             setSavingConfig(false);
         }
+    };
+
+    const handleSaveMentionConfig = async () => {
+        if (!firstActiveAccount) return;
+        setSavingConfig(true);
+        setConfigMessage('');
+        try {
+            // Merge mentionDm into the existing default_config
+            const merged = { ...defaultConfig, mentionDm: { enabled: mentionEnabled, message: mentionMessage } };
+            const res = await fetch('/api/accounts/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId: firstActiveAccount.id, config: merged }),
+            });
+            if (res.ok) { setConfigMessage('\u2705 Story mention settings saved'); setTimeout(() => setConfigMessage(''), 3000); }
+            else         { setConfigMessage('\u274c Failed to save'); }
+        } catch { setConfigMessage('\u274c Failed to save'); }
+        finally { setSavingConfig(false); }
+    };
+
+    const loadLeads = async () => {
+        if (leadsLoaded) return;
+        setLeadsLoading(true);
+        try {
+            const res  = await fetch('/api/leads');
+            const data = await res.json();
+            if (res.ok) setLeads(data.leads || []);
+        } catch { /* non-fatal */ }
+        finally { setLeadsLoading(false); setLeadsLoaded(true); }
+    };
+
+    const exportLeadsCsv = () => {
+        if (!leads.length) return;
+        const header = 'email,ig_user_id,captured_at\n';
+        const rows   = leads.map((l) => `${l.email},${l.recipient_ig_id},${l.confirmed_at}`).join('\n');
+        const blob   = new Blob([header + rows], { type: 'text/csv' });
+        const url    = URL.createObjectURL(blob);
+        const a      = document.createElement('a'); a.href = url; a.download = 'autodm_email_leads.csv'; a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    // ── Global Triggers handlers ─────────────────────────────────────────
+    const loadGlobal = async () => {
+        if (globalLoaded) return;
+        setGlobalLoading(true);
+        try {
+            const res  = await fetch('/api/global-automations');
+            const data = await res.json();
+            if (res.ok) setGlobalAutomations(data.automations || []);
+        } catch { /* non-fatal */ }
+        finally { setGlobalLoading(false); setGlobalLoaded(true); }
+    };
+
+    const handleCreateGlobal = async () => {
+        if (!firstActiveAccount) return;
+        if (!globalForm.name.trim()) { setGlobalMsg('❌ Name is required'); return; }
+        if (globalForm.triggerType === 'keywords' && globalForm.keywords.length === 0) {
+            setGlobalMsg('❌ Add at least one keyword'); return;
+        }
+        if (!globalForm.message.trim()) { setGlobalMsg('❌ DM message is required'); return; }
+        setGlobalSaving(true); setGlobalMsg('');
+        try {
+            const res = await fetch('/api/global-automations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    accountId: firstActiveAccount.id,
+                    name: globalForm.name,
+                    dmType: 'message_template',
+                    dmConfig: { message: globalForm.message },
+                    triggerConfig: { type: globalForm.triggerType, keywords: globalForm.keywords },
+                    sendOncePerUser: globalForm.sendOncePerUser,
+                    skipIfPostHasAutomation: globalForm.skipIfPostHasAutomation,
+                }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setGlobalAutomations((prev) => [...prev, data.automation]);
+                setGlobalForm({ name: '', triggerType: 'keywords', keywords: [], message: '', sendOncePerUser: true, skipIfPostHasAutomation: true });
+                setShowGlobalForm(false);
+                setGlobalMsg('✅ Global trigger created');
+                setTimeout(() => setGlobalMsg(''), 3000);
+            } else {
+                setGlobalMsg(`❌ ${data.error}`);
+            }
+        } catch (e) { setGlobalMsg(`❌ ${e.message}`); }
+        finally { setGlobalSaving(false); }
+    };
+
+    const handleToggleGlobal = async (id, isActive) => {
+        await fetch('/api/global-automations', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, isActive: !isActive }),
+        });
+        setGlobalAutomations((prev) => prev.map((g) => g.id === id ? { ...g, is_active: !isActive } : g));
+    };
+
+    const handleDeleteGlobal = async (id) => {
+        if (!confirm('Delete this global trigger?')) return;
+        await fetch(`/api/global-automations?id=${id}`, { method: 'DELETE' });
+        setGlobalAutomations((prev) => prev.filter((g) => g.id !== id));
+    };
+
+    // ── Ice Breakers handlers ─────────────────────────────────────────
+    const handleSaveIceBreakers = async () => {
+        if (!firstActiveAccount) return;
+        setIbSaving(true); setIbMsg('');
+        try {
+            const filled = iceBreakers.filter((ib) => ib.title?.trim() && ib.responseMessage?.trim());
+            const res = await fetch('/api/ice-breakers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId: firstActiveAccount.id, iceBreakers: filled }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                const msg = data.metaPushSuccess
+                    ? `✅ ${data.savedCount} welcome opener${data.savedCount !== 1 ? 's' : ''} saved and pushed to Instagram`
+                    : `✅ Saved locally. Meta push failed: ${data.metaError || 'unknown error'}. Will retry automatically.`;
+                setIbMsg(msg);
+                setTimeout(() => setIbMsg(''), 5000);
+            } else {
+                setIbMsg(`❌ ${data.error}`);
+            }
+        } catch (e) { setIbMsg(`❌ ${e.message}`); }
+        finally { setIbSaving(false); }
+    };
+
+    const handleClearIceBreakers = async () => {
+        if (!firstActiveAccount || !confirm('Remove all welcome openers?')) return;
+        await fetch(`/api/ice-breakers?accountId=${firstActiveAccount.id}`, { method: 'DELETE' });
+        setIceBreakers([{ title: '', responseMessage: '' }]);
+        setIbMsg('✅ Welcome openers cleared');
+        setTimeout(() => setIbMsg(''), 3000);
     };
 
     const addKeyword = () => {
@@ -615,6 +803,60 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                     {alertsMsg && <span className={styles.saveMsg}>{alertsMsg}</span>}
                 </div>
             </div>
+
+            {/* ── Story Mention Auto-DM ── */}
+            <div className={styles.configSection}>
+                <h2 className={styles.sectionTitle}>
+                    <AtSign size={18} />
+                    Story Mention Auto-DM
+                </h2>
+                <p className={styles.sectionDesc}>
+                    Automatically send a DM to anyone who tags your Instagram account in their Story.
+                    Great for building relationships and rewarding fans who share your content.
+                </p>
+
+                <label className={styles.checkboxLabel} style={{ marginBottom: 16 }}>
+                    <input
+                        type="checkbox"
+                        className={styles.checkbox}
+                        checked={mentionEnabled}
+                        onChange={(e) => setMentionEnabled(e.target.checked)}
+                    />
+                    <div>
+                        <span className={styles.checkText}>Enable mention auto-DM</span>
+                        <p className={styles.checkDesc}>
+                            When enabled, anyone who @mentions your account in their Story will receive this DM automatically.
+                        </p>
+                    </div>
+                </label>
+
+                <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Message</label>
+                    <textarea
+                        className={styles.formInput}
+                        placeholder="Hey! Thanks for mentioning us 🙌 We saw your story and wanted to reach out!"
+                        rows={3}
+                        value={mentionMessage}
+                        onChange={(e) => setMentionMessage(e.target.value)}
+                        disabled={!mentionEnabled}
+                    />
+                    <p className={styles.fieldHint}>
+                        Supports {'{username}'} and {'{first_name}'} variables.
+                    </p>
+                </div>
+
+                <div className={styles.configSaveRow}>
+                    <button
+                        className={styles.saveBtn}
+                        onClick={handleSaveMentionConfig}
+                        disabled={savingConfig || !firstActiveAccount}
+                    >
+                        <Save size={14} />
+                        {savingConfig ? 'Saving...' : 'Save mention settings'}
+                    </button>
+                    {configMessage && <span className={styles.saveMsg}>{configMessage}</span>}
+                </div>
+            </div>
         </div>
     );
 
@@ -657,8 +899,8 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                 </button>
             </div>
 
-            {/* Delete Account Confirmation Modal */}
-            {showDeleteModal && (
+            {/* Delete Account Confirmation Modal — portalled to body so backdrop-filter covers full viewport */}
+            {showDeleteModal && createPortal(
                 <div className={styles.modalOverlay} onClick={() => setShowDeleteModal(false)}>
                     <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
                         <div className={styles.modalIcon}>
@@ -675,8 +917,31 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                             <li>Your account and login credentials</li>
                         </ul>
                         <div className={styles.formGroup}>
-                            <label className={styles.formLabel}>
-                                Type <strong>{user?.email}</strong> to confirm
+                            <label className={styles.formLabel} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span>Type your email to confirm</span>
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                                    fontFamily: 'monospace', fontSize: 12,
+                                    color: 'rgba(255,255,255,0.72)',
+                                    background: 'rgba(255,255,255,0.07)',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    borderRadius: 5, padding: '2px 8px',
+                                }}>
+                                    <strong style={{ fontFamily: 'monospace', fontWeight: 600 }}>{user?.email}</strong>
+                                    <button
+                                        onClick={copyEmailToClipboard}
+                                        title={emailCopied ? 'Copied!' : 'Copy to clipboard'}
+                                        style={{
+                                            background: 'none', border: 'none', cursor: 'pointer',
+                                            padding: '1px 3px', borderRadius: 3,
+                                            color: emailCopied ? '#10B981' : 'rgba(255,255,255,0.45)',
+                                            fontSize: 11, display: 'flex', alignItems: 'center', gap: 3,
+                                            transition: 'color 150ms',
+                                        }}
+                                    >
+                                        {emailCopied ? '✓ Copied' : '⧉ Copy'}
+                                    </button>
+                                </span>
                             </label>
                             <input
                                 className={styles.formInput}
@@ -707,16 +972,334 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
+        </div>
+    );
+
+    const renderLeads = () => {
+        if (!firstActiveAccount) return renderNoAccountBanner();
+        // Lazy-load leads when tab is first opened
+        if (!leadsLoaded && !leadsLoading) loadLeads();
+
+        return (
+            <div className={styles.tabContent}>
+                <div className={styles.configSection}>
+                    <h2 className={styles.sectionTitle}>
+                        <Users size={18} />
+                        Email Leads
+                    </h2>
+                    <p className={styles.sectionDesc}>
+                        Email addresses captured from your Instagram DM automations using the Email Collector type.
+                        Leads are saved automatically when a user replies with their email.
+                    </p>
+
+                    {leadsLoading && (
+                        <div className={styles.emptyState}>
+                            <RefreshCw size={24} className={styles.spinning} />
+                            <p>Loading leads…</p>
+                        </div>
+                    )}
+
+                    {!leadsLoading && leads.length === 0 && (
+                        <div className={styles.emptyState}>
+                            <Mail size={32} />
+                            <p>No email leads yet. Set up an <strong>Email Collector</strong> automation on any post to start capturing leads.</p>
+                        </div>
+                    )}
+
+                    {!leadsLoading && leads.length > 0 && (
+                        <>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                                <span style={{ fontSize: 13, opacity: 0.55 }}>{leads.length} lead{leads.length !== 1 ? 's' : ''} captured</span>
+                                <button className={styles.saveBtn} onClick={exportLeadsCsv} style={{ gap: 6 }}>
+                                    <Download size={13} /> Export CSV
+                                </button>
+                            </div>
+
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                <thead>
+                                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                        <th style={{ textAlign: 'left', padding: '8px 0', opacity: 0.45, fontWeight: 600 }}>Email</th>
+                                        <th style={{ textAlign: 'left', padding: '8px 0', opacity: 0.45, fontWeight: 600 }}>IG User</th>
+                                        <th style={{ textAlign: 'left', padding: '8px 0', opacity: 0.45, fontWeight: 600 }}>Captured</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {leads.map((lead) => (
+                                        <tr key={lead.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <td style={{ padding: '10px 0', fontFamily: 'monospace', opacity: 0.85 }}>{lead.email}</td>
+                                            <td style={{ padding: '10px 0', opacity: 0.55 }}>{lead.recipient_ig_id}</td>
+                                            <td style={{ padding: '10px 0', opacity: 0.45 }}>
+                                                {new Date(lead.confirmed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderGlobal = () => {
+        if (!firstActiveAccount) return renderNoAccountBanner();
+        if (!globalLoaded && !globalLoading) loadGlobal();
+        const EMPTY_FORM = { name: '', triggerType: 'keywords', keywords: [], message: '', sendOncePerUser: true, skipIfPostHasAutomation: true };
+        return (
+            <div className={styles.tabContent}>
+                <div className={styles.configSection}>
+                    <h2 className={styles.sectionTitle}><Globe size={18} /> Global Triggers</h2>
+                    <p className={styles.sectionDesc}>
+                        Fire a DM when specific keywords appear in comments on <strong>any</strong> of your posts, reels, or stories
+                        — without setting up per-post automations. Perfect for account-wide keyword campaigns.
+                    </p>
+
+                    {/* Info box */}
+                    <div style={{ padding: '12px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(99,179,237,0.2)', borderRadius: 10, fontSize: 13, marginBottom: 20, lineHeight: 1.6, color: 'rgba(147,210,255,0.9)' }}>
+                        💡 <strong>How it works:</strong> Set a keyword like &quot;info&quot; and AutoDM will reply to every comment containing that word
+                        across all your content. Enable &quot;Skip if post has own automation&quot; to avoid double DMs.
+                    </div>
+
+                    {/* Existing triggers */}
+                    {globalLoading && <div className={styles.emptyState}><Loader2 size={24} className={styles.spinning} /><p>Loading…</p></div>}
+
+                    {!globalLoading && globalAutomations.length === 0 && !showGlobalForm && (
+                        <div className={styles.emptyState}>
+                            <Globe size={32} />
+                            <p>No global triggers yet. Create your first one below.</p>
+                        </div>
+                    )}
+
+                    {!globalLoading && globalAutomations.map((ga) => (
+                        <div key={ga.id} className={styles.accountCard} style={{ marginBottom: 10 }}>
+                            <div className={styles.accountInfo}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                    <span className={styles.accountName}>{ga.name}</span>
+                                    <span className={styles.accountPlatform} style={{ gap: 6 }}>
+                                        {ga.trigger_config?.type === 'all_comments' ? 'All comments' :
+                                            (ga.trigger_config?.keywords || []).join(', ') || 'No keywords'}
+                                    </span>
+                                    <span className={styles.accountDate}>
+                                        {ga.dm_config?.message?.slice(0, 60)}{ga.dm_config?.message?.length > 60 ? '…' : ''}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className={styles.accountActions}>
+                                <button
+                                    className={styles.refreshBtn}
+                                    onClick={() => handleToggleGlobal(ga.id, ga.is_active)}
+                                >
+                                    {ga.is_active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                                    {ga.is_active ? 'Active' : 'Paused'}
+                                </button>
+                                <button className={styles.disconnectBtn} onClick={() => handleDeleteGlobal(ga.id)}>
+                                    <Trash2 size={13} /> Delete
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+
+                    {/* Create form */}
+                    {showGlobalForm && (
+                        <div className={styles.configSection} style={{ marginTop: 16 }}>
+                            <div className={styles.formGroup}>
+                                <label className={styles.formLabel}>Trigger name</label>
+                                <input className={styles.formInput} placeholder='E.g. "Info keyword campaign"'
+                                    value={globalForm.name} onChange={(e) => setGlobalForm((f) => ({ ...f, name: e.target.value }))} />
+                            </div>
+                            <div className={styles.formGroup}>
+                                <label className={styles.formLabel}>Trigger type</label>
+                                <select className={styles.formInput} value={globalForm.triggerType}
+                                    onChange={(e) => setGlobalForm((f) => ({ ...f, triggerType: e.target.value }))}>
+                                    <option value='keywords'>Keywords</option>
+                                    <option value='all_comments'>All Comments</option>
+                                </select>
+                            </div>
+                            {globalForm.triggerType === 'keywords' && (
+                                <div className={styles.formGroup}>
+                                    <label className={styles.formLabel}>Keywords</label>
+                                    <div className={styles.tagsInputWrapper}>
+                                        <div className={styles.tags}>
+                                            {globalForm.keywords.map((kw) => (
+                                                <span key={kw} className={styles.tag}>
+                                                    {kw}
+                                                    <button className={styles.tagRemove}
+                                                        onClick={() => setGlobalForm((f) => ({ ...f, keywords: f.keywords.filter((k) => k !== kw) }))}>×</button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <input className={styles.tagInput} placeholder='Type keyword and press Enter'
+                                            value={globalKwInput}
+                                            onChange={(e) => setGlobalKwInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const w = globalKwInput.trim();
+                                                    if (w && !globalForm.keywords.includes(w)) {
+                                                        setGlobalForm((f) => ({ ...f, keywords: [...f.keywords, w] }));
+                                                    }
+                                                    setGlobalKwInput('');
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            <div className={styles.formGroup}>
+                                <label className={styles.formLabel}>DM message</label>
+                                <textarea className={styles.formInput} rows={3}
+                                    placeholder="Hey {first_name}! Here's the info you asked for 👇"
+                                    value={globalForm.message}
+                                    onChange={(e) => setGlobalForm((f) => ({ ...f, message: e.target.value }))} />
+                                <p className={styles.fieldHint}>Supports {'{first_name}'} and {'{username}'}.</p>
+                            </div>
+                            <label className={styles.checkboxLabel}>
+                                <input type='checkbox' className={styles.checkbox}
+                                    checked={globalForm.sendOncePerUser}
+                                    onChange={(e) => setGlobalForm((f) => ({ ...f, sendOncePerUser: e.target.checked }))} />
+                                <div>
+                                    <span className={styles.checkText}>Send once per user</span>
+                                    <p className={styles.checkDesc}>Don&apos;t DM the same person twice across all their comments.</p>
+                                </div>
+                            </label>
+                            <label className={styles.checkboxLabel} style={{ marginTop: 8 }}>
+                                <input type='checkbox' className={styles.checkbox}
+                                    checked={globalForm.skipIfPostHasAutomation}
+                                    onChange={(e) => setGlobalForm((f) => ({ ...f, skipIfPostHasAutomation: e.target.checked }))} />
+                                <div>
+                                    <span className={styles.checkText}>Skip if post has its own automation</span>
+                                    <p className={styles.checkDesc}>Avoids double DMs when a post already has a specific automation configured.</p>
+                                </div>
+                            </label>
+                            <div className={styles.configSaveRow} style={{ marginTop: 14 }}>
+                                <button className={styles.saveBtn} onClick={handleCreateGlobal} disabled={globalSaving}>
+                                    <Save size={14} /> {globalSaving ? 'Saving…' : 'Create trigger'}
+                                </button>
+                                <button className={styles.disconnectBtn} onClick={() => { setShowGlobalForm(false); setGlobalForm(EMPTY_FORM); }}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {!showGlobalForm && (
+                        <button className={styles.saveBtn} style={{ marginTop: 16 }} onClick={() => setShowGlobalForm(true)}>
+                            <Plus size={14} /> Add global trigger
+                        </button>
+                    )}
+                    {globalMsg && <p className={styles.saveMsg} style={{ marginTop: 10 }}>{globalMsg}</p>}
+                </div>
+            </div>
+        );
+    };
+
+    const renderIceBreakers = () => {
+        if (!firstActiveAccount) return renderNoAccountBanner();
+        return (
+        <div className={styles.tabContent}>
+            <div className={styles.configSection}>
+                <h2 className={styles.sectionTitle}><MessageSquarePlus size={18} /> Welcome Openers</h2>
+                <p className={styles.sectionDesc}>
+                    Display up to <strong>4 quick-reply buttons</strong> when a user first opens your Instagram inbox.
+                    Each button sends an auto-reply DM with your configured message. Perfect for showcasing offers, links, or FAQs.
+                </p>
+
+                <div style={{ padding: '12px 16px', background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(167,139,250,0.2)', borderRadius: 10, fontSize: 13, marginBottom: 20, lineHeight: 1.6, color: 'rgba(196,181,253,0.9)' }}>
+                    💡 These buttons appear inside your DM inbox on Instagram. When a visitor taps one, AutoDM instantly
+                    replies with the message you configure here. Requires a Facebook Page connection.
+                </div>
+
+                {iceBreakers.map((ib, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <input
+                                className={styles.formInput}
+                                placeholder={`Button ${i + 1} text (e.g. "What offers are available?")`}
+                                maxLength={80}
+                                value={ib.title}
+                                onChange={(e) => {
+                                    const updated = [...iceBreakers];
+                                    updated[i] = { ...updated[i], title: e.target.value };
+                                    setIceBreakers(updated);
+                                }}
+                            />
+                            <textarea
+                                className={styles.formInput}
+                                placeholder={`Auto-reply message when tapped (e.g. "Here are our current offers!")`}
+                                rows={2}
+                                value={ib.responseMessage}
+                                onChange={(e) => {
+                                    const updated = [...iceBreakers];
+                                    updated[i] = { ...updated[i], responseMessage: e.target.value };
+                                    setIceBreakers(updated);
+                                }}
+                            />
+                        </div>
+                        {iceBreakers.length > 1 && (
+                            <button className={styles.disconnectBtn}
+                                style={{ padding: '8px 10px', marginTop: 2 }}
+                                onClick={() => setIceBreakers(iceBreakers.filter((_, j) => j !== i))}>
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+                ))}
+
+                {iceBreakers.length < 4 && (
+                    <button className={styles.refreshBtn} style={{ marginBottom: 20 }}
+                        onClick={() => setIceBreakers([...iceBreakers, { title: '', responseMessage: '' }])}>
+                        <Plus size={13} /> Add button
+                    </button>
+                )}
+
+                <div className={styles.configSaveRow}>
+                    <button className={styles.saveBtn} onClick={handleSaveIceBreakers} disabled={ibSaving || !firstActiveAccount}>
+                        <Save size={14} /> {ibSaving ? 'Saving…' : 'Save & push to Instagram'}
+                    </button>
+                    <button className={styles.disconnectBtn} onClick={handleClearIceBreakers} disabled={!firstActiveAccount}>
+                        <Trash2 size={13} /> Clear all
+                    </button>
+                </div>
+                {ibMsg && <p className={styles.saveMsg} style={{ marginTop: 10 }}>{ibMsg}</p>}
+            </div>
+        </div>
+        );
+    };
+
+    // ── No-account banner (shown on tabs that require a connected account) ──
+    const renderNoAccountBanner = () => (
+        <div className={styles.tabContent}>
+            <div className={styles.noAccountBanner}>
+                <div className={styles.noAccountIcon}>
+                    <Instagram size={28} />
+                </div>
+                <h3 className={styles.noAccountTitle}>Connect your Instagram account first</h3>
+                <p className={styles.noAccountDesc}>
+                    This feature requires a connected Instagram or Facebook account.
+                    Head to the <strong>Permissions</strong> tab to connect your account, then come back here.
+                </p>
+                <button
+                    className={styles.saveBtn}
+                    onClick={() => setActiveTab('permissions')}
+                >
+                    Go to Permissions
+                </button>
+            </div>
         </div>
     );
 
     const renderTab = () => {
         switch (activeTab) {
-            case 'permissions': return renderPermissions();
+            case 'permissions':   return renderPermissions();
             case 'configuration': return renderConfiguration();
-            case 'account': return renderAccount();
+            case 'global':        return renderGlobal();
+            case 'icebreakers':   return renderIceBreakers();
+            case 'leads':         return renderLeads();
+            case 'account':       return renderAccount();
             default: return null;
         }
     };

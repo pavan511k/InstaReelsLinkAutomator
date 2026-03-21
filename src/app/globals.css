@@ -4,7 +4,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is([data-theme="dark"] *));
 
 /* ================================================================
    AutoDM — Claymorphism Design System
@@ -195,6 +195,13 @@
   --chart-1: oklch(.49 .27 280); --chart-2: oklch(.62 .22 300);
   --chart-3: oklch(.72 .18 180); --chart-4: oklch(.65 .25 30);
   --chart-5: oklch(.80 .18 80);
+
+  /* ── Theme-responsive layout backgrounds (light default) ──
+     These respond to [data-theme] instantly via the next-themes
+     blocking script — no JS/React mount required, so no flash.
+     Components reference these vars in their CSS modules directly. */
+  --page-bg:    #F0EDFF;
+  --sidebar-bg: #FFFFFF;
 }
 
 /* ================================================================
@@ -530,7 +537,7 @@ input, textarea, select { font-family: var(--font); font-size: var(--text-base);
 /* ================================================================
    Dark mode (Shadcn)
    ================================================================ */
-.dark {
+[data-theme="dark"] {
   --background:             oklch(.12 .04 280);
   --foreground:             oklch(.96 .01 280);
   --card:                   oklch(.18 .04 280);
@@ -557,6 +564,10 @@ input, textarea, select { font-family: var(--font); font-size: var(--text-base);
   --sidebar-accent-foreground: oklch(.96 .01 280);
   --sidebar-border:         oklch(1 0 0 / .1);
   --sidebar-ring:           oklch(.65 .15 280);
+
+  /* ── Dark overrides for layout backgrounds ── */
+  --page-bg:    #08070F;
+  --sidebar-bg: #0D0A1E;
 }
 
 /* ================================================================

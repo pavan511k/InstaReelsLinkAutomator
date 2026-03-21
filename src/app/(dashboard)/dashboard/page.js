@@ -1,13 +1,7 @@
 import { createClient } from '@/lib/supabase-server';
 import ConnectAccount from '@/components/dashboard/ConnectAccount';
-import PostCardsGrid from '@/components/dashboard/PostCardsGrid';
-import AnalyticsChart from '@/components/dashboard/AnalyticsChart';
-import TopPosts from '@/components/dashboard/TopPosts';
-import UsageProgress from '@/components/dashboard/UsageProgress';
-import { Send, Zap, MessageCircle, TrendingUp, ArrowUpRight, ArrowDownRight, Clock, Minus } from 'lucide-react';
-import styles from './dashboard.module.css';
-
-const MONTHLY_DM_LIMIT = 1000;
+import DashboardView from './DashboardView';
+import { getEffectivePlan, getDmLimit, isUnlimited, trialDaysRemaining } from '@/lib/plans';
 
 export default async function DashboardPage() {
     const supabase = await createClient();
@@ -19,7 +13,7 @@ export default async function DashboardPage() {
     try {
         const { data: accounts } = await supabase
             .from('connected_accounts')
-            .select('id, platform, ig_username, ig_profile_picture_url, fb_page_name, is_active')
+            .select('id, platform, ig_username, ig_profile_picture_url, fb_page_name, is_active, plan, trial_ends_at, plan_expires_at')
             .eq('user_id', user.id)
             .eq('is_active', true);
 
@@ -182,7 +176,14 @@ export default async function DashboardPage() {
     } catch { /* tables may not exist */ }
 
     // ── Derived values ───────────────────────────────────────────
-    const dmUsagePercent = Math.min(100, Math.round((monthlySent / MONTHLY_DM_LIMIT) * 100));
+    const account         = connectedAccounts[0] || null;
+    const effectivePlan   = getEffectivePlan(account);     // 'free' | 'trial' | 'pro' | 'business'
+    const monthlyDmLimit  = getDmLimit(effectivePlan);     // null = unlimited
+    const unlimited       = isUnlimited(effectivePlan);
+    const trialDaysLeft   = trialDaysRemaining(account);   // 0 if not on trial
+    const dmUsagePercent  = unlimited || !monthlyDmLimit
+        ? 0
+        : Math.min(100, Math.round((monthlySent / monthlyDmLimit) * 100));
     const weekChange     = prevWeekSent === 0
         ? null
         : Math.round(((weekSent - prevWeekSent) / prevWeekSent) * 100);
@@ -197,11 +198,13 @@ export default async function DashboardPage() {
     const setupPosts  = allPosts.filter((p) => p.status === 'setup');
     const activePosts = allPosts.filter((p) => p.status === 'active');
 
+    // iconKey strings are used instead of React components so this
+    // server component can safely pass data to the client DashboardView.
     const STATS = [
         {
-            label:  'Total DMs sent',
-            value:  totalSent.toLocaleString(),
-            icon:   Send,
+            label:   'Total DMs sent',
+            value:   totalSent.toLocaleString(),
+            iconKey: 'send',
             color:  '#7C3AED',
             bg:     'rgba(124,58,237,0.12)',
             border: 'rgba(124,58,237,0.22)',
@@ -209,9 +212,9 @@ export default async function DashboardPage() {
             sub:    'All time',
         },
         {
-            label:  'Active automations',
-            value:  totalActivePosts.toString(),
-            icon:   Zap,
+            label:   'Active automations',
+            value:   totalActivePosts.toString(),
+            iconKey: 'zap',
             color:  '#10B981',
             bg:     'rgba(16,185,129,0.12)',
             border: 'rgba(16,185,129,0.22)',
@@ -219,19 +222,21 @@ export default async function DashboardPage() {
             sub:    `${activePosts.length} posts live`,
         },
         {
-            label:  'This month',
-            value:  monthlySent.toLocaleString(),
-            icon:   MessageCircle,
+            label:   'This month',
+            value:   monthlySent.toLocaleString(),
+            iconKey: 'messageCircle',
             color:  '#3B82F6',
             bg:     'rgba(59,130,246,0.12)',
             border: 'rgba(59,130,246,0.22)',
             trend:  null,
-            sub:    `${dmUsagePercent}% of ${MONTHLY_DM_LIMIT.toLocaleString()} limit`,
+            sub:    unlimited
+                ? effectivePlan === 'trial' ? `🎁 Trial — ${trialDaysLeft}d left` : '✨ Unlimited plan'
+                : `${dmUsagePercent}% of ${monthlyDmLimit.toLocaleString()} limit`,
         },
         {
-            label:  'This week',
-            value:  weekSent.toLocaleString(),
-            icon:   TrendingUp,
+            label:   'This week',
+            value:   weekSent.toLocaleString(),
+            iconKey: 'trendingUp',
             color:  weekChange === null ? '#F59E0B' : weekChange >= 0 ? '#10B981' : '#EF4444',
             bg:     weekChange === null ? 'rgba(245,158,11,0.12)' : weekChange >= 0 ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
             border: weekChange === null ? 'rgba(245,158,11,0.22)' : weekChange >= 0 ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)',
@@ -241,113 +246,19 @@ export default async function DashboardPage() {
     ];
 
     return (
-        <div className={styles.page}>
-
-            {/* ── Header ───────────────────────────────────── */}
-            <div className={styles.header}>
-                <div>
-                    <h1 className={styles.greeting}>
-                        {greeting}, <span className={styles.name}>{displayName}</span> 👋
-                    </h1>
-                    <p className={styles.subGreeting}>
-                        {getMotivationalQuote(totalSent)}
-                    </p>
-                </div>
-                <div className={styles.headerRight}>
-                    <div className={styles.datePill}>
-                        <Clock size={13} />
-                        {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    </div>
-                </div>
-            </div>
-
-            {/* ── KPI row ──────────────────────────────────── */}
-            <div className={styles.statsRow}>
-                {STATS.map(({ label, value, icon: Icon, color, bg, border, trend, sub }) => (
-                    <div
-                        key={label}
-                        className={styles.statCard}
-                        style={{ '--accent': color, '--accent-bg': bg, '--accent-border': border }}
-                    >
-                        <div className={styles.statTop}>
-                            <div className={styles.statIconWrap}>
-                                <Icon size={15} strokeWidth={2} />
-                            </div>
-                            {trend !== null && (
-                                <span
-                                    className={styles.statTrend}
-                                    style={{
-                                        color:      trend >= 0 ? '#10B981' : '#EF4444',
-                                        background: trend >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                                    }}
-                                >
-                                    {trend > 0  ? <ArrowUpRight size={11} />   :
-                                     trend < 0  ? <ArrowDownRight size={11} /> :
-                                                  <Minus size={11} />}
-                                    {Math.abs(trend)}%
-                                </span>
-                            )}
-                        </div>
-                        <div className={styles.statValue}>{value}</div>
-                        <div className={styles.statLabel}>{label}</div>
-                        {sub && <div className={styles.statSub}>{sub}</div>}
-                    </div>
-                ))}
-            </div>
-
-            {/* ── Analytics row: Chart + Right panel ───────── */}
-            <div className={styles.analyticsRow}>
-
-                {/* Chart — left, wider */}
-                <div className={styles.chartCard}>
-                    <AnalyticsChart data={dailyDMData} />
-                </div>
-
-                {/* Right column — usage ring + top posts */}
-                <div className={styles.rightCol}>
-
-                    {/* Monthly usage ring */}
-                    <div className={styles.innerCard}>
-                        <div className={styles.innerCardHeader}>
-                            <h3 className={styles.innerCardTitle}>Monthly usage</h3>
-                            <span className={styles.innerCardSub}>
-                                Resets in {daysUntilMonthEnd()} days
-                            </span>
-                        </div>
-                        <UsageProgress used={monthlySent} limit={MONTHLY_DM_LIMIT} />
-                    </div>
-
-                    {/* Top performing posts — always visible, grows to fill remaining height */}
-                    <div className={`${styles.innerCard} ${styles.innerCardGrow}`}>
-                        <div className={styles.innerCardHeader}>
-                            <h3 className={styles.innerCardTitle}>Top performing posts</h3>
-                            <span className={styles.innerCardSub}>By DMs sent</span>
-                        </div>
-                        <TopPosts posts={topPosts} />
-                    </div>
-
-                </div>
-            </div>
-
-            {/* ── Posts ready to automate ───────────────────── */}
-            <div className={styles.sectionCard}>
-                <div className={styles.sectionCardHeader}>
-                    <div>
-                        <h2 className={styles.sectionCardTitle}>
-                            Posts ready to automate
-                            {setupPosts.length > 0 && (
-                                <span className={styles.countBadge}>{setupPosts.length}</span>
-                            )}
-                        </h2>
-                        <p className={styles.sectionCardSub}>
-                            Select a post to configure an AutoDM reply triggered by comments.
-                        </p>
-                    </div>
-                </div>
-                <PostCardsGrid posts={setupPosts} totalCount={setupPosts.length} />
-            </div>
-
-        </div>
+        <DashboardView
+            greeting={greeting}
+            displayName={displayName}
+            motivationalQuote={getMotivationalQuote(totalSent)}
+            stats={STATS}
+            dailyDMData={dailyDMData}
+            monthlySent={monthlySent}
+            monthlyDmLimit={monthlyDmLimit}
+            topPosts={topPosts}
+            setupPosts={setupPosts}
+            effectivePlan={effectivePlan}
+            trialDaysLeft={trialDaysLeft}
+        />
     );
 }
 

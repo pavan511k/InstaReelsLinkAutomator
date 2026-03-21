@@ -1,9 +1,12 @@
 'use client';
 
 import { Instagram, Facebook, Film, Pencil, CheckCircle2, PauseCircle } from 'lucide-react';
-import styles from './PostCard.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './PostCard.module.css';
+import lightStyles from './PostCard.light.module.css';
 
 export default function PostCard({ post, onSetupDM, onSkip }) {
+    const styles = useStyles(darkStyles, lightStyles);
     const isReel = post.mediaType === 'VIDEO' || post.mediaType === 'REEL';
     const isFacebook = post.platform === 'facebook';
     const truncatedCaption = post.caption?.length > 60

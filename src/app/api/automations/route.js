@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { extractUrlsFromConfig, buildTrackingMap } from '@/lib/click-tracking';
-
-const MONTHLY_DM_LIMIT = 1000;
+import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
+import { isProOrTrial } from '@/lib/plans';
 
 /**
  * Validate a single DM variant config.
@@ -32,6 +32,9 @@ function validateDmConfig(dmConfig) {
         }
         case 'follow_up':
             if (!dmConfig.gateMessage?.trim()) return 'Follow Gate requires a gate message';
+            break;
+        case 'email_collector':
+            if (!dmConfig.emailAskMessage?.trim()) return 'Email Collector requires an ask message';
             break;
         default:
             if (!dmConfig?.type) return 'DM type is required';
@@ -75,6 +78,52 @@ export async function POST(request) {
 
     if (!dmConfig || !triggerConfig) {
         return NextResponse.json({ error: 'DM and trigger configurations are required' }, { status: 400 });
+    }
+
+    // ── Plan gates ────────────────────────────────────────────────────────
+    const effectivePlan = await getUserEffectivePlan(supabase, user.id);
+    const isPro         = isProOrTrial(effectivePlan);
+
+    // Pro-only DM types
+    const proOnlyTypes = ['follow_up', 'email_collector'];
+    const usedType = dmConfig.abEnabled
+        ? (dmConfig.variantA?.type || dmConfig.variantB?.type)
+        : dmConfig.type;
+    if (proOnlyTypes.includes(usedType) && !isPro) {
+        return NextResponse.json(
+            { error: `${usedType === 'follow_up' ? 'Follow Gate' : 'Email Collector'} requires a Pro plan.`, upgradeRequired: true },
+            { status: 403 }
+        );
+    }
+
+    // A/B testing is Pro-only
+    if (dmConfig.abEnabled && !isPro) {
+        return NextResponse.json(
+            { error: 'A/B message testing requires a Pro plan.', upgradeRequired: true },
+            { status: 403 }
+        );
+    }
+
+    // Backfill (send to previous comments) is Pro-only
+    if ((dmConfig.sendToPreviousComments || settingsConfig?.sendToPreviousComments) && !isPro) {
+        return NextResponse.json(
+            { error: 'Sending DMs to previous comments requires a Pro plan.', upgradeRequired: true },
+            { status: 403 }
+        );
+    }
+
+    // Flow steps and upsell are Pro-only
+    if (settingsConfig?.flowAutomation && settingsConfig?.flowSteps?.length > 0 && !isPro) {
+        return NextResponse.json(
+            { error: 'Flow Automation requires a Pro plan.', upgradeRequired: true },
+            { status: 403 }
+        );
+    }
+    if (settingsConfig?.upsell?.enabled && !isPro) {
+        return NextResponse.json(
+            { error: 'Upsell follow-up requires a Pro plan.', upgradeRequired: true },
+            { status: 403 }
+        );
     }
 
     // Only require keywords when trigger type is 'keywords'
@@ -161,10 +210,22 @@ export async function POST(request) {
             console.warn('[Automations] Click tracking setup failed (non-fatal):', trackErr.message);
         }
 
+        // ── Trigger backfill if sendToPreviousComments is enabled ──────────
+        // Fire-and-forget: don't block the save response
+        if (dmConfig.sendToPreviousComments || settingsConfig?.sendToPreviousComments) {
+            const backfillUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/automations/backfill`;
+            fetch(backfillUrl, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json', 'x-backfill-internal': '1' },
+                body:    JSON.stringify({ automationId: automation.id, postId }),
+            }).catch((e) => console.warn('[Automations] Backfill trigger failed (non-fatal):', e.message));
+        }
+
         return NextResponse.json({
             success: true,
             scheduled: !!scheduledStartAt,
             scheduledStartAt: scheduledStartAt || null,
+            backfilling: !!(dmConfig.sendToPreviousComments || settingsConfig?.sendToPreviousComments),
             automation: {
                 id:      automation.id,
                 postId:  automation.post_id,

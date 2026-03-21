@@ -9,7 +9,7 @@ const LINKS = {
   Product: [
     { label: 'How it works', href: '#how-it-works' },
     { label: 'Features',     href: '#features'     },
-    { label: 'Pricing',      href: '#pricing'       },
+    { label: 'Pricing',      href: 'pricing'       },
     { label: 'Dashboard',    href: '/dashboard'     },
   ],
   Account: [
@@ -18,9 +18,9 @@ const LINKS = {
     { label: 'Forgot password', href: '/forgot-password' },
   ],
   Legal: [
-    { label: 'Privacy policy', href: '/privacy' },
-    { label: 'Terms of use',   href: '/terms'   },
-    { label: 'Cookie policy',  href: '#'         },
+    { label: 'Privacy policy', href: '/privacy'                    },
+    { label: 'Terms of use',   href: '/terms'                     },
+    { label: 'Contact support', href: 'mailto:support@autodm.pro' },
   ],
 };
 

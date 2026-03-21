@@ -71,7 +71,7 @@ export async function sendQuickReplyDM(igUserId, recipientId, message, quickRepl
  * Send a Multi-CTA DM (Generic Template — no image, just title + multiple URL buttons)
  * Supports up to 3 buttons per Instagram's Generic Template spec
  */
-export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, accessToken, trackingMap = {}) {
+export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, accessToken, trackingMap = {}, plan = 'free') {
     const url = `${GRAPH_API_BASE}/${igUserId}/messages`;
 
     const validButtons = (buttons || [])
@@ -99,7 +99,7 @@ export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, ac
                         template_type: 'generic',
                         elements: [{
                             title: message || 'Check this out',
-                            subtitle: 'Sent with AutoDM',
+                            ...(plan === 'free' ? { subtitle: 'Sent with AutoDM' } : {}),
                             buttons: validButtons,
                         }],
                     },
@@ -119,13 +119,24 @@ export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, ac
 /**
  * Send a Button Template DM (Generic Template with image carousel)
  */
-export async function sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap = {}) {
+export async function sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap = {}, plan = 'free') {
     const url = `${GRAPH_API_BASE}/${igUserId}/messages`;
 
     const elements = slides.map((slide) => {
+        const userDesc = (slide.description || '').trim();
+        const isPro = plan === 'pro' || plan === 'business';
+        // Free: always append. Pro: respect slide.appendBranding (default true).
+        const shouldAppend = isPro ? (slide.appendBranding !== false) : true;
+        let subtitle;
+        if (shouldAppend) {
+            subtitle = userDesc ? `${userDesc} • Sent with AutoDM` : 'Sent with AutoDM';
+        } else {
+            subtitle = userDesc || undefined;
+        }
+
         const element = {
             title: slide.headline || 'AutoDM',
-            subtitle: 'Sent with AutoDM',
+            ...(subtitle ? { subtitle } : {}),
         };
 
         if (slide.buttonLabel && slide.buttonUrl) {
@@ -314,7 +325,7 @@ export function resolveMessageVariables(template, context) {
  * @param {string} platform
  * @param {object} trackingMap     - { originalUrl → trackedUrl } from dm_link_codes
  */
-export async function sendAutomatedDM(automation, recipientId, accessToken, igUserId, context = {}, platform = 'instagram', trackingMap = {}) {
+export async function sendAutomatedDM(automation, recipientId, accessToken, igUserId, context = {}, platform = 'instagram', trackingMap = {}, plan = 'free') {
     const { dm_type, dm_config } = automation;
 
     // Facebook only supports text via private_replies
@@ -326,7 +337,7 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
     switch (dm_type) {
         case 'button_template': {
             const slides = dm_config.slides || [];
-            return sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap);
+            return sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap, plan);
         }
 
         case 'message_template': {
@@ -341,13 +352,22 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
 
         case 'multi_cta': {
             const message = resolveMessageVariables(dm_config.message || '', context);
-            return sendMultiCtaDM(igUserId, recipientId, message, dm_config.buttons || [], accessToken, trackingMap);
+            return sendMultiCtaDM(igUserId, recipientId, message, dm_config.buttons || [], accessToken, trackingMap, plan);
         }
 
         case 'follow_up': {
             // Send the initial gate message ("follow us and reply YES")
             const message = resolveMessageVariables(dm_config.gateMessage || '', context);
             return sendFollowGateDM(igUserId, recipientId, message, accessToken);
+        }
+
+        case 'email_collector': {
+            // Send the ask message — webhook will capture the reply
+            const message = resolveMessageVariables(
+                dm_config.emailAskMessage || 'Hey! Could you share your email address? 📧',
+                context,
+            );
+            return sendTextDM(igUserId, recipientId, message, accessToken);
         }
 
         default:

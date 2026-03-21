@@ -6,7 +6,9 @@ import {
     Pause, Play, XCircle, RefreshCw, MessageSquare,
     MousePointerClick, ChevronRight, Radio,
 } from 'lucide-react';
-import styles from './BroadcastModal.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './BroadcastModal.module.css';
+import lightStyles from './BroadcastModal.light.module.css';
 
 const RATE_OPTIONS = [
     { value: 5,  label: '5 / min',  hint: 'Safest — low risk of rate limiting' },
@@ -20,7 +22,7 @@ const DM_TYPES = [
     { value: 'multi_cta',        label: 'Multi-CTA',     icon: <MousePointerClick size={14} /> },
 ];
 
-function ProgressBar({ pct, status }) {
+function ProgressBar({ pct, status, styles }) {
     const isRunning   = status === 'running';
     const isCompleted = status === 'completed';
     const isFailed    = status === 'failed';
@@ -39,6 +41,7 @@ function ProgressBar({ pct, status }) {
 }
 
 export default function BroadcastModal({ post, onClose }) {
+    const styles = useStyles(darkStyles, lightStyles);
     // Phase: 'configure' | 'confirm' | 'running'
     const [phase, setPhase] = useState('configure');
 

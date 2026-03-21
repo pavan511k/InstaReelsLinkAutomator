@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { X, MousePointerClick, Users, ExternalLink, RefreshCw, TrendingUp, Link2, FlaskConical, Trophy } from 'lucide-react';
-import styles from './ClickStatsModal.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './ClickStatsModal.module.css';
+import lightStyles from './ClickStatsModal.light.module.css';
 
 /** Tiny sparkline SVG — 30 bars, height proportional to max */
-function Sparkline({ data }) {
+function Sparkline({ data, styles }) {
     if (!data || data.length === 0) return null;
     const max    = Math.max(...data.map((d) => d.clicks), 1);
     const W      = 560;
@@ -46,6 +48,7 @@ function truncateUrl(url, max = 48) {
 }
 
 export default function ClickStatsModal({ automationId, postCaption, onClose }) {
+    const styles = useStyles(darkStyles, lightStyles);
     const [data,    setData]    = useState(null);
     const [loading, setLoading] = useState(true);
     const [error,   setError]   = useState('');
@@ -147,7 +150,7 @@ export default function ClickStatsModal({ automationId, postCaption, onClose }) 
                                 <div className={styles.chartHeader}>
                                     <span className={styles.chartTitle}>Clicks per day — last 30 days</span>
                                 </div>
-                                <Sparkline data={data.byDay} />
+                                <Sparkline data={data.byDay} styles={styles} />
                                 <div className={styles.chartAxis}>
                                     <span>{data.byDay[0]?.label}</span>
                                     <span>{data.byDay[data.byDay.length - 1]?.label}</span>

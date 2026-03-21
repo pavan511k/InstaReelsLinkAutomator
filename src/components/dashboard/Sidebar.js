@@ -7,9 +7,13 @@ import Image from 'next/image';
 import {
     LayoutDashboard, Grid3X3, BookOpen, Settings,
     LogOut, Lock, Menu, X, Zap, ChevronRight, CreditCard, ScrollText,
+    Sun, Moon,
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { createClient } from '@/lib/supabase-client';
-import styles from './Sidebar.module.css';
+import { useStyles, useIsDark } from '@/lib/useStyles';
+import darkStyles from './Sidebar.module.css';
+import lightStyles from './Sidebar.light.module.css';
 
 const NAV = [
     { href: '/dashboard', label: 'Dashboard',    icon: LayoutDashboard, locked: false },
@@ -20,11 +24,55 @@ const NAV = [
     { href: '/pricing',   label: 'Pricing',       icon: CreditCard,      locked: false },
 ];
 
-export default function Sidebar({ user, isConnected = false, profilePicUrl = null }) {
+// ─── Plan Badge ─────────────────────────────────────────────────────────────
+// Separate component so it can access Link and conditional logic cleanly.
+function PlanBadge({ effectivePlan, trialDaysLeft, isConnected, styles, onNavigate }) {
+    if (effectivePlan === 'pro' || effectivePlan === 'business') {
+        return (
+            <Link href="/pricing" className={styles.planBadgePro} onClick={onNavigate}>
+                <span className={styles.planBadgeDot} />
+                ✨ Pro plan
+            </Link>
+        );
+    }
+
+    if (effectivePlan === 'trial') {
+        // Urgency: critical (0d) / urgent (1-2d) / warning (3-7d) / info (8+d)
+        const urgency = trialDaysLeft <= 0 ? 'critical'
+            : trialDaysLeft <= 2 ? 'urgent'
+            : trialDaysLeft <= 7 ? 'warning'
+            : 'info';
+        const label = trialDaysLeft <= 0
+            ? 'Trial ends today'
+            : `Trial · ${trialDaysLeft}d`;
+        return (
+            <Link
+                href="/pricing"
+                className={`${styles.planBadgeTrial} ${styles[`planBadgeTrial_${urgency}`]}`}
+                onClick={onNavigate}
+            >
+                <span className={styles.planBadgeDot} />
+                🎁 {label}
+            </Link>
+        );
+    }
+
+    // Free plan
+    return (
+        <Link href="/pricing" className={styles.planBadgeFree} onClick={onNavigate}>
+            Free plan · Upgrade
+        </Link>
+    );
+}
+
+export default function Sidebar({ user, isConnected = false, profilePicUrl = null, effectivePlan = 'free', trialDaysLeft = 0 }) {
     const pathname  = usePathname();
     const router    = useRouter();
     const supabase  = createClient();
     const [open, setOpen] = useState(false);
+    const styles = useStyles(darkStyles, lightStyles);
+    const { setTheme } = useTheme();
+    const isDark = useIsDark(); // mount-guarded — safe from hydration mismatch
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -113,10 +161,21 @@ export default function Sidebar({ user, isConnected = false, profilePicUrl = nul
                 </div>
                 <div className={styles.userInfo}>
                     <span className={styles.userEmail}>{email}</span>
-                    <Link href="/pricing" className={styles.userRole} onClick={() => setOpen(false)} style={{ textDecoration: 'none', cursor: 'pointer' }}>
-                        Free plan · Upgrade
-                    </Link>
+                    <PlanBadge
+                        effectivePlan={effectivePlan}
+                        trialDaysLeft={trialDaysLeft}
+                        isConnected={isConnected}
+                        styles={styles}
+                        onNavigate={() => setOpen(false)}
+                    />
                 </div>
+                <button
+                    className={styles.themeBtn}
+                    onClick={() => setTheme(isDark ? 'light' : 'dark')}
+                    title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                >
+                    {isDark ? <Sun size={14} strokeWidth={2} /> : <Moon size={14} strokeWidth={2} />}
+                </button>
                 <button className={styles.logoutBtn} onClick={handleLogout} title="Sign out">
                     <LogOut size={15} strokeWidth={2} />
                 </button>

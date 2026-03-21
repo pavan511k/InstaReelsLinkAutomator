@@ -9,7 +9,9 @@ import SetupDMModal from './SetupDMModal';
 import DuplicateModal from './DuplicateModal';
 import ClickStatsModal from './ClickStatsModal';
 import BroadcastModal from './BroadcastModal';
-import styles from './PostsTable.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './PostsTable.module.css';
+import lightStyles from './PostsTable.light.module.css';
 import settingsStyles from './SettingsContent.module.css';
 
 const STATUS_FILTERS = [
@@ -49,7 +51,9 @@ function formatExpiry(isoString) {
     return           { label: `Expires in ${mins}m`,          urgent: true,  expired: false };
 }
 
-export default function PostsTable({ posts = [], onSetupDM, isConnected = false, connectedAccounts = [] }) {
+export default function PostsTable({ posts = [], onSetupDM, isConnected = false, connectedAccounts = [], userPlan = 'free' }) {
+    const isPro = userPlan === 'pro' || userPlan === 'trial' || userPlan === 'business';
+    const styles = useStyles(darkStyles, lightStyles);
     const router = useRouter();
     const [activeStatusFilter, setActiveStatusFilter] = useState('all');
     const [activePlatformFilter, setActivePlatformFilter] = useState('all');
@@ -412,21 +416,51 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                                             <td className={styles.metricCell}>{post.open || '—'}</td>
                                             <td className={styles.metricCell}>
                                                 {post.automationId ? (
-                                                    <button
-                                                        className={`${styles.clicksCell} ${post.clicks > 0 ? styles.clicksCellActive : ''}`}
-                                                        onClick={() => setClickStatsPost(post)}
-                                                        title="View click breakdown"
-                                                    >
-                                                        {post.clicks > 0 && <MousePointerClick size={11} strokeWidth={2.5} />}
-                                                        {post.clicks}
-                                                    </button>
+                                                    isPro ? (
+                                                        // Pro: clickable button that opens the full analytics modal
+                                                        <button
+                                                            className={`${styles.clicksCell} ${post.clicks > 0 ? styles.clicksCellActive : ''}`}
+                                                            onClick={() => setClickStatsPost(post)}
+                                                            title="View click breakdown"
+                                                        >
+                                                            {post.clicks > 0 && <MousePointerClick size={11} strokeWidth={2.5} />}
+                                                            {post.clicks}
+                                                        </button>
+                                                    ) : (
+                                                        // Free: show the count, hint that detail is Pro
+                                                        <span className={styles.clicksCellFree} title="Upgrade to Pro for the full click breakdown">
+                                                            {post.clicks > 0 && <MousePointerClick size={11} strokeWidth={2.5} />}
+                                                            {post.clicks}
+                                                            {post.clicks > 0 && (
+                                                                <a href="/pricing" className={styles.clicksDetailLock} title="See click breakdown — Pro">
+                                                                    🔒
+                                                                </a>
+                                                            )}
+                                                        </span>
+                                                    )
                                                 ) : (
                                                     <span className={styles.metricCell}>—</span>
                                                 )}
                                             </td>
                                             <td className={styles.metricCell}>
+                                                {/* CTR is shown to everyone — it’s just arithmetic */}
                                                 {post.ctr !== '-' ? (
-                                                    <span className={styles.ctrCell}>{post.ctr}</span>
+                                                    isPro ? (
+                                                        // Pro: clickable, opens modal
+                                                        <button
+                                                            className={styles.ctrCell}
+                                                            onClick={() => setClickStatsPost(post)}
+                                                            title="View CTR breakdown"
+                                                        >
+                                                            {post.ctr}
+                                                        </button>
+                                                    ) : (
+                                                        // Free: just the number, hint at upgrade
+                                                        <span className={styles.ctrCellFree} title="Upgrade to Pro for the full CTR analytics">
+                                                            {post.ctr}
+                                                            <a href="/pricing" className={styles.clicksDetailLock} title="Full analytics — Pro">🔒</a>
+                                                        </span>
+                                                    )
                                                 ) : '—'}
                                             </td>
                                             <td>

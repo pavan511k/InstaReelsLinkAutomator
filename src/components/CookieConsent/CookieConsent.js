@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import styles from './CookieConsent.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './CookieConsent.module.css';
+import lightStyles from './CookieConsent.light.module.css';
 
 const COOKIE_CONSENT_KEY = 'autodm_cookie_consent';
 
 export default function CookieConsent() {
+    const styles = useStyles(darkStyles, lightStyles);
     const [isVisible, setIsVisible] = useState(false);
     const [showPreferences, setShowPreferences] = useState(false);
     const [preferences, setPreferences] = useState({

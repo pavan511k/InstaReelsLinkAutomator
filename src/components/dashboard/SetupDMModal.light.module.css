@@ -1,0 +1,364 @@
+/* ================================================================
+   LIGHT THEME — SetupDMModal
+   White modal shell, purple-tinted borders.
+   Preview panel stays dark — it frames the phone mockup.
+   Save bar bg matches modal bg so it doesn't bleed.
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── Overlay — lighter scrim on lavender page ────────────────── */
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(30, 21, 53, 0.35);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: hidden;
+}
+
+/* ── Modal shell — white ─────────────────────────────────────── */
+.modal {
+    background: #FFFFFF;
+    border: 1px solid rgba(124, 58, 237, 0.12);
+    border-radius: 20px;
+    width: 96%;
+    max-width: 1100px;
+    height: 92vh;
+    max-height: 880px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 32px 80px rgba(30, 21, 53, 0.18), 0 8px 24px rgba(124, 58, 237, 0.10);
+    overflow: hidden;
+    animation: modalUp 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    font-family: 'Inter', sans-serif;
+    position: relative;
+}
+
+@keyframes modalUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* Top border glow — purple, same brand */
+.modal::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20%;
+    right: 20%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.45), transparent);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ── Modal header ─────────────────────────────────────────────── */
+.modalHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 16px 22px;
+    border-bottom: 1px solid rgba(124, 58, 237, 0.09);
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.modalTitle {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #1E1535;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+
+.postCaption {
+    font-size: 0.8rem;
+    font-style: italic;
+    color: rgba(30, 21, 53, 0.45);
+    margin-top: 3px;
+    max-width: 440px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+}
+
+.closeBtn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: rgba(30, 21, 53, 0.04);
+    border: 1px solid rgba(30, 21, 53, 0.09);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(30, 21, 53, 0.45);
+    cursor: pointer;
+    transition: all 150ms;
+    flex-shrink: 0;
+}
+
+.closeBtn:hover {
+    background: rgba(30, 21, 53, 0.08);
+    color: rgba(30, 21, 53, 0.82);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────── */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(124, 58, 237, 0.09);
+    padding: 0 8px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.tab {
+    display: inline-flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 18px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.845rem;
+    font-weight: 500;
+    color: rgba(30, 21, 53, 0.45);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 150ms, border-color 150ms;
+}
+
+.tab:hover {
+    color: rgba(30, 21, 53, 0.75);
+}
+
+.tabActive {
+    color: #5B21B6;
+    font-weight: 600;
+    border-bottom-color: #7C3AED;
+}
+
+/* ── Split body ───────────────────────────────────────────────── */
+.body {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.leftCol {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid rgba(124, 58, 237, 0.08);
+    min-height: 0;
+}
+
+/* Scrollable form panel */
+.formPanel {
+    padding: 18px 22px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(124, 58, 237, 0.15) transparent;
+}
+
+.formPanel::-webkit-scrollbar {
+    width: 4px;
+}
+
+.formPanel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.formPanel::-webkit-scrollbar-thumb {
+    background: rgba(124, 58, 237, 0.15);
+    border-radius: 2px;
+}
+
+/* Preview panel — light lavender/purple gradient in light mode.
+   The phone mockup sits on a soft tinted background that complements
+   the white modal shell without the harsh dark-on-light contrast. */
+.previewPanel {
+    background: linear-gradient(160deg, #F3EFFE 0%, #EDE5FD 40%, #E8DDFB 100%);
+    border-left: 1px solid rgba(124, 58, 237, 0.14);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 10px 20px;
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.previewPanel::-webkit-scrollbar {
+    display: none;
+}
+
+/* Soft radial glow behind the phone */
+.previewPanel::before {
+    content: '';
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(124, 58, 237, 0.13) 0%, transparent 70%);
+    top: 44%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* "Live Preview" label at the top */
+.previewPanel::after {
+    content: 'Live Preview';
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 10px 0 14px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(109, 40, 217, 0.5);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+}
+
+/* ── Save bar — pinned at bottom of left column ─────────────── */
+.saveBar {
+    padding: 12px 22px;
+    border-top: 1px solid rgba(124, 58, 237, 0.09);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    background: #FFFFFF;
+    /* match modal bg */
+}
+
+.saveMessage {
+    font-size: 12.5px;
+    color: rgba(30, 21, 53, 0.55);
+    flex: 1;
+}
+
+/* Save button — purple, same both themes */
+.saveBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 38px;
+    padding: 0 20px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+    background: #7C3AED;
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+    transition: background 150ms, opacity 150ms;
+    flex-shrink: 0;
+}
+
+.saveBtn:hover:not(:disabled) {
+    background: #6D28D9;
+}
+
+.saveBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Scheduled variant — blue */
+.saveBtnScheduled {
+    background: #1D4ED8 !important;
+    box-shadow: 0 4px 14px rgba(29, 78, 216, 0.30) !important;
+}
+
+.saveBtnScheduled:hover:not(:disabled) {
+    background: #1E40AF !important;
+}
+
+.spinner {
+    animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── Loading state ───────────────────────────────────────────── */
+.loadingConfig {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    flex: 1;
+    gap: 12px;
+    color: rgba(30, 21, 53, 0.40);
+    min-height: 260px;
+}
+
+.loadingConfig p {
+    font-size: 0.875rem;
+    color: rgba(30, 21, 53, 0.45);
+    margin: 0;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 900px) {
+    .modal {
+        height: 96vh;
+        max-height: none;
+    }
+
+    .body {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+    }
+
+    .leftCol {
+        border-right: none;
+        border-bottom: 1px solid rgba(124, 58, 237, 0.08);
+    }
+
+    .formPanel {
+        overflow-y: visible;
+        flex: unset;
+    }
+
+    .previewPanel {
+        min-height: 400px;
+        overflow-y: hidden;
+        align-items: center;
+    }
+}

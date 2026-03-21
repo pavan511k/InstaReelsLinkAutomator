@@ -12,7 +12,7 @@ const TESTIMONIALS = [
     color: '#7C3AED',
   },
   {
-    quote: "Set it up in literally 4 minutes. Now every comment on my product posts auto-sends the checkout link. It's the best ROI tool I've added to my business this year.",
+    quote: "Set it up in literally 4 minutes. Now every comment on my product posts auto-sends the checkout link. It's the best ROI tool I've added to my business this year. I loved this product so much",
     name: 'James T.',
     role: 'E-commerce brand · 95K followers',
     stars: 5,

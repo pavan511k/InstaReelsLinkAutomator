@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader2, CalendarClock } from 'lucide-react';
 import DMSetupTab from './DMSetupTab';
 import TriggerSetupTab from './TriggerSetupTab';
 import SettingsTab from './SettingsTab';
 import PhonePreview from './PhonePreview';
-import styles from './SetupDMModal.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './SetupDMModal.module.css';
+import lightStyles from './SetupDMModal.light.module.css';
 
 const TABS = [
     { key: 'dm-setup', label: 'DM Setup' },
@@ -15,6 +18,7 @@ const TABS = [
 ];
 
 export default function SetupDMModal({ onClose, postId, postCaption }) {
+    const styles = useStyles(darkStyles, lightStyles);
     const [activeTab, setActiveTab] = useState('dm-setup');
     const [isSaving, setIsSaving] = useState(false);
     const [isLoadingConfig, setIsLoadingConfig] = useState(true);
@@ -124,20 +128,14 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                 // Templates table may not exist yet
             }
 
-            // Fetch user plan from connected_accounts
+            // Fetch user plan from user_plans (single source of truth)
+            // Uses /api/usage which already returns the effective plan string
             try {
-                const { createClient: createClientPlan } = await import('@/lib/supabase-client');
-                const supabasePlan = createClientPlan();
-                const { data: { user: planUser } } = await supabasePlan.auth.getUser();
-                if (planUser) {
-                    const { data: planAccounts } = await supabasePlan
-                        .from('connected_accounts')
-                        .select('plan')
-                        .eq('user_id', planUser.id)
-                        .eq('is_active', true)
-                        .limit(1);
-                    const plan = planAccounts?.[0]?.plan || 'free';
-                    setUserPlan(plan);
+                const planRes = await fetch('/api/usage');
+                if (planRes.ok) {
+                    const planData = await planRes.json();
+                    // plan is the effectivePlan string: 'free' | 'trial' | 'pro' | 'business'
+                    setUserPlan(planData.plan || 'free');
                 }
             } catch {
                 // Plan fetch failed — default to free
@@ -150,9 +148,17 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
     }, [postId]);
 
     const handleImageUploadFromPreview = (slideIndex, dataUrl) => {
-        const newSlides = [...dmConfig.slides];
-        newSlides[slideIndex] = { ...newSlides[slideIndex], imageUrl: dataUrl };
-        setDmConfig({ ...dmConfig, slides: newSlides });
+        if (dmConfig.abEnabled) {
+            const key = activeAbVariant === 'A' ? 'variantA' : 'variantB';
+            const variantConfig = dmConfig[key] || {};
+            const newSlides = [...(variantConfig.slides || [])];
+            newSlides[slideIndex] = { ...newSlides[slideIndex], imageUrl: dataUrl };
+            setDmConfig({ ...dmConfig, [key]: { ...variantConfig, slides: newSlides } });
+        } else {
+            const newSlides = [...(dmConfig.slides || [])];
+            newSlides[slideIndex] = { ...newSlides[slideIndex], imageUrl: dataUrl };
+            setDmConfig({ ...dmConfig, slides: newSlides });
+        }
     };
 
     const handleSaveTemplate = async (name) => {
@@ -227,7 +233,7 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
             case 'trigger-setup':
                 return <TriggerSetupTab config={triggerConfig} onChange={setTriggerConfig} />;
             case 'settings':
-                return <SettingsTab config={settingsConfig} onChange={setSettingsConfig} />;
+                return <SettingsTab config={settingsConfig} onChange={setSettingsConfig} userPlan={userPlan} />;
             default:
                 return null;
         }
@@ -387,8 +393,8 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
         }
     };
 
-    return (
-        <div className={styles.overlay} onClick={onClose}>
+    return createPortal(
+      <div className={styles.overlay} onClick={onClose}>
             <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className={styles.modalHeader}>
@@ -458,16 +464,23 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                         </div>
                         {/* Right column: phone preview */}
                         <div className={styles.previewPanel}>
-                            <PhonePreview
-                                config={dmConfig}
-                                onImageUpload={handleImageUploadFromPreview}
-                                activeSlideIndex={activeSlideIndex}
-                                onSlideChange={setActiveSlideIndex}
-                            />
+                            <div style={{ position: 'relative', zIndex: 1 }}>
+                                <PhonePreview
+                                    config={dmConfig.abEnabled
+                                        ? ((activeAbVariant === 'A' ? dmConfig.variantA : dmConfig.variantB) || {})
+                                        : dmConfig
+                                    }
+                                    onImageUpload={handleImageUploadFromPreview}
+                                    activeSlideIndex={activeSlideIndex}
+                                    onSlideChange={setActiveSlideIndex}
+                                    userPlan={userPlan}
+                                />
+                            </div>
                         </div>
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+      document.body
     );
 }
