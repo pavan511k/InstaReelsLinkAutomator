@@ -1,0 +1,94 @@
+/* ================================================================
+   LIGHT THEME — ConnectedAccountBanner
+   Subtle purple-tinted card on the white sidebar.
+   Keep Instagram/Facebook gradient avatars — they're brand assets.
+   Green status slightly darker for white bg contrast.
+   ================================================================ */
+
+.container { display: flex; flex-direction: column; gap: 10px; }
+
+.banner {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px;
+  background: rgba(124, 58, 237, 0.03);
+  border: 1px solid rgba(124, 58, 237, 0.09);
+  border-radius: 12px;
+  transition: border-color 150ms;
+}
+.banner:hover { border-color: rgba(124, 58, 237, 0.18); }
+
+.accountInfo { display: flex; align-items: center; gap: 11px; }
+
+.accountAvatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; overflow: hidden; color: #fff;
+  font-size: 0.75rem; font-weight: 700;
+  border: 1.5px solid rgba(124, 58, 237, 0.15);
+}
+.accountAvatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+/* Platform gradients stay — they're brand-specific, not theme-specific */
+.avatar_instagram { background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF); }
+.avatar_facebook  { background: #1877F2; }
+.avatar_both      { background: linear-gradient(135deg, #1E293B, #334155); }
+
+.accountDetails { display: flex; flex-direction: column; gap: 2px; }
+.accountName {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.855rem; font-weight: 700;
+  color: #1E1535;
+}
+/* Slightly darker green for legibility against white */
+.accountStatus {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 500;
+  color: #059669;
+  display: flex; align-items: center; gap: 5px;
+}
+.accountStatus::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: #10B981; flex-shrink: 0;
+}
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.disconnectBtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.78rem; font-weight: 500;
+  color: rgba(30, 21, 53, 0.48);
+  background: rgba(30, 21, 53, 0.04);
+  border: 1px solid rgba(30, 21, 53, 0.09);
+  border-radius: 8px; cursor: pointer;
+  transition: all 150ms;
+}
+.disconnectBtn:hover:not(:disabled) {
+  color: #DC2626; background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.20);
+}
+.disconnectBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Sync button keeps the purple brand — same as dark mode */
+.syncBtn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px;
+    background: rgba(124,58,237,0.10);
+    border: 1px solid rgba(124,58,237,0.20);
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12.5px; font-weight: 600;
+    color: #5B21B6;
+    cursor: pointer;
+    transition: background 150ms;
+}
+.syncBtn:hover:not(:disabled) { background: rgba(124,58,237,0.17); }
+.syncBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.spinning { animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.syncResult {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; color: rgba(30, 21, 53, 0.52);
+  padding: 0 2px;
+}

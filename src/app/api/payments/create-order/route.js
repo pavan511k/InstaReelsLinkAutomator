@@ -6,7 +6,7 @@ const CASHFREE_BASE = process.env.CASHFREE_ENV === 'production'
     : 'https://sandbox.cashfree.com/pg';
 
 const PLANS = {
-    pro: { name: 'AutoDM Pro', amount: 30, currency: 'INR' },
+    pro: { name: 'AutoDM Pro', amount: 299, currency: 'INR' },
 };
 
 /**

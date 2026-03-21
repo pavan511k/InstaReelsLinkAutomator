@@ -1,0 +1,335 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ================================================================
+   LIGHT THEME — Dashboard page
+   Philosophy:
+   - Cards → white with soft purple-tinted shadows (not dark transparent)
+   - Greeting gradient → stays purple (looks great on light bg)
+   - Status colors (green/red/amber on trend badges) → unchanged
+   - Section cards → white, elevated with subtle shadows
+   - Count badge → purple tint, works on light bg
+   - KPI icon backgrounds use the same inline CSS vars (--accent-bg etc.)
+     so per-card colors (violet, green, blue, amber) still apply
+   ================================================================ */
+
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    animation: fadeIn 0.35s ease both;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* ── Header ──────────────────────────────────────────────────── */
+.header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 4px;
+}
+.greeting {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #1E1535;
+    letter-spacing: -0.04em;
+    line-height: 1.2;
+    margin: 0 0 7px;
+}
+/* Purple gradient name stays — it's the brand accent, works beautifully on light */
+.name {
+    background: linear-gradient(120deg, #7C3AED, #9333EA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.subGreeting {
+    font-size: 0.855rem;
+    color: rgba(30, 21, 53, 0.48);
+    margin: 0;
+    font-weight: 400;
+}
+.headerRight { display: flex; align-items: center; gap: 10px; }
+.datePill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px;
+    background: rgba(124, 58, 237, 0.06);
+    border: 1px solid rgba(124, 58, 237, 0.10);
+    border-radius: 100px;
+    font-size: 12px; font-weight: 500;
+    color: rgba(30, 21, 53, 0.50);
+}
+
+/* ── KPI cards ───────────────────────────────────────────────── */
+.statsRow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+/* White floating card — shadows replace dark transparency */
+.statCard {
+    padding: 18px 20px;
+    background: #FFFFFF;
+    border: 1px solid var(--accent-border, rgba(124, 58, 237, 0.09));
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 180ms, transform 180ms;
+    box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 14px rgba(124,58,237,0.05);
+}
+.statCard:hover {
+    box-shadow: 0 4px 12px rgba(30,21,53,0.08), 0 8px 28px rgba(124,58,237,0.08);
+    transform: translateY(-2px);
+}
+/* Subtle corner glow — same concept, lighter on white bg */
+.statCard::after {
+    content: '';
+    position: absolute;
+    top: -32px; right: -32px;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: var(--accent-bg, rgba(124, 58, 237, 0.05));
+    filter: blur(20px);
+    pointer-events: none;
+}
+
+.statTop {
+    display: flex; align-items: center; justify-content: space-between;
+}
+/* Icon wrap — uses per-card CSS vars so each card keeps its unique color */
+.statIconWrap {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--accent-bg, rgba(124, 58, 237, 0.09));
+    border: 1px solid var(--accent-border, rgba(124, 58, 237, 0.14));
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent, #7C3AED);
+    flex-shrink: 0;
+}
+.statTrend {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; font-weight: 600;
+    padding: 2px 7px; border-radius: 100px;
+}
+.statValue {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #1E1535;
+    letter-spacing: -0.05em;
+    line-height: 1;
+}
+.statLabel {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(30, 21, 53, 0.50);
+}
+.statSub {
+    font-size: 11px;
+    color: rgba(30, 21, 53, 0.35);
+    font-weight: 400;
+}
+
+/* ── Analytics row ───────────────────────────────────────────── */
+.analyticsRow {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 14px;
+    align-items: stretch;
+}
+
+/* White chart card with soft shadow */
+.chartCard {
+    background: #FFFFFF;
+    border: 1px solid rgba(124, 58, 237, 0.08);
+    border-radius: 16px;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    min-height: 520px;
+    box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 14px rgba(124,58,237,0.04);
+}
+
+.rightCol {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.innerCard {
+    background: #FFFFFF;
+    border: 1px solid rgba(124, 58, 237, 0.08);
+    border-radius: 16px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 3px rgba(30,21,53,0.04), 0 4px 12px rgba(124,58,237,0.04);
+}
+
+.innerCardGrow {
+    flex: 1;
+    overflow: hidden;
+}
+.innerCardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+.innerCardTitle {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #1E1535;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+.innerCardSub {
+    font-size: 11.5px;
+    color: rgba(30, 21, 53, 0.40);
+    font-weight: 400;
+}
+
+/* ── Section cards ────────────────────────────────────────────── */
+.sectionCard {
+    background: #FFFFFF;
+    border: 1px solid rgba(124, 58, 237, 0.08);
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 14px rgba(124,58,237,0.04);
+}
+.sectionCardHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    gap: 12px;
+}
+.sectionCardTitle {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.9375rem; font-weight: 700;
+    color: #1E1535;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px;
+}
+.sectionCardSub {
+    font-size: 12.5px;
+    color: rgba(30, 21, 53, 0.42);
+    font-weight: 400;
+    display: block;
+    margin: 0;
+}
+
+/* Count badge — purple tint on white bg */
+.countBadge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 20px; height: 20px; padding: 0 6px;
+    border-radius: 100px;
+    background: rgba(124, 58, 237, 0.10);
+    border: 1px solid rgba(124, 58, 237, 0.18);
+    color: #5B21B6;
+    font-size: 11px; font-weight: 700;
+}
+
+/* ── Trial Banner (light) ────────────────────────────────────── */
+.trialBanner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, rgba(124,58,237,0.08) 0%, rgba(167,139,250,0.06) 100%);
+    border: 1px solid rgba(124,58,237,0.20);
+    border-radius: 14px;
+    flex-wrap: wrap;
+    box-shadow: 0 1px 4px rgba(124,58,237,0.08);
+}
+.trialBannerUrgent {
+    background: linear-gradient(135deg, rgba(245,158,11,0.10) 0%, rgba(239,68,68,0.07) 100%);
+    border-color: rgba(245,158,11,0.30);
+    box-shadow: 0 1px 4px rgba(245,158,11,0.10);
+}
+.trialBannerLeft {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+.trialBannerIcon {
+    color: #7C3AED;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+.trialBannerUrgent .trialBannerIcon { color: #D97706; }
+.trialBannerTitle {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #4C1D95;
+    letter-spacing: -0.01em;
+    margin-bottom: 2px;
+}
+.trialBannerUrgent .trialBannerTitle { color: #92400E; }
+.trialBannerSub {
+    display: block;
+    font-size: 12px;
+    color: rgba(30,21,53,0.50);
+    font-weight: 400;
+}
+.trialBannerCta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #7C3AED;
+    color: #fff;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 150ms;
+    box-shadow: 0 4px 14px rgba(124,58,237,0.28);
+}
+.trialBannerCta:hover { background: #6D28D9; }
+.trialBannerUrgent .trialBannerCta {
+    background: #D97706;
+    box-shadow: 0 4px 14px rgba(217,119,6,0.28);
+}
+.trialBannerUrgent .trialBannerCta:hover { background: #B45309; }
+
+/* ── Pro badge in header (light) ─────────────────────────────── */
+.proBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    background: linear-gradient(135deg, rgba(124,58,237,0.12), rgba(167,139,250,0.08));
+    border: 1px solid rgba(124,58,237,0.22);
+    border-radius: 100px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #5B21B6;
+    letter-spacing: 0.02em;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+    .statsRow     { grid-template-columns: repeat(2, 1fr); }
+    .analyticsRow { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+    .statsRow { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .greeting { font-size: 1.3rem; }
+    .trialBanner { flex-direction: column; align-items: flex-start; }
+    .trialBannerCta { width: 100%; justify-content: center; }
+}
+@media (max-width: 420px) {
+    .statsRow { grid-template-columns: 1fr; }
+}

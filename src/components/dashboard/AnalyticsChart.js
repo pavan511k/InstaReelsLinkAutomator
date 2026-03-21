@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import styles from './AnalyticsChart.module.css';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { useStyles, useIsDark } from '@/lib/useStyles';
+import darkStyles from './AnalyticsChart.module.css';
+import lightStyles from './AnalyticsChart.light.module.css';
 
 const PERIODS = [
     { key: 7,  label: '7d'  },
@@ -10,7 +12,7 @@ const PERIODS = [
     { key: 30, label: '30d' },
 ];
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, styles }) {
     if (!active || !payload?.length) return null;
     return (
         <div className={styles.tooltip}>
@@ -21,18 +23,24 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function AnalyticsChart({ data = [] }) {
+    const styles = useStyles(darkStyles, lightStyles);
+    const isDark = useIsDark();
     const [period, setPeriod] = useState(14);
+
+    // Theme-aware inline colours for Recharts (can't be set via CSS modules)
+    const tickColor  = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(30,21,53,0.40)';
+    const gridColor  = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(30,21,53,0.06)';
+    const cursorColor = isDark ? 'rgba(167,139,250,0.2)' : 'rgba(124,58,237,0.15)';
+    const dotStroke  = isDark ? '#1a0e35' : '#F0EDFF';
 
     const sliced = useMemo(() => {
         if (!data.length) return [];
         return data.slice(-period);
     }, [data, period]);
 
-    const total   = useMemo(() => sliced.reduce((s, d) => s + d.count, 0), [sliced]);
-    const maxVal  = useMemo(() => Math.max(...sliced.map((d) => d.count), 0), [sliced]);
+    const total     = useMemo(() => sliced.reduce((s, d) => s + d.count, 0), [sliced]);
     const avgPerDay = sliced.length ? Math.round(total / sliced.length) : 0;
 
-    // Find the peak day
     const peakDay = useMemo(() => {
         if (!sliced.length) return null;
         return sliced.reduce((max, d) => d.count > max.count ? d : max, sliced[0]);
@@ -44,7 +52,6 @@ export default function AnalyticsChart({ data = [] }) {
                 <div className={styles.headerRow}>
                     <div>
                         <h3 className={styles.title}>DM Activity</h3>
-                        <p className={styles.subtitle}>No data yet</p>
                     </div>
                 </div>
                 <div className={styles.empty}>
@@ -98,33 +105,33 @@ export default function AnalyticsChart({ data = [] }) {
                     <AreaChart data={sliced} margin={{ top: 6, right: 4, left: -22, bottom: 0 }}>
                         <defs>
                             <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%"   stopColor="#7C3AED" stopOpacity={0.35} />
+                                <stop offset="0%"   stopColor="#7C3AED" stopOpacity={isDark ? 0.35 : 0.20} />
                                 <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.02} />
                             </linearGradient>
                         </defs>
                         <CartesianGrid
                             strokeDasharray="3 3"
-                            stroke="rgba(255,255,255,0.05)"
+                            stroke={gridColor}
                             vertical={false}
                         />
                         <XAxis
                             dataKey="date"
                             axisLine={false}
                             tickLine={false}
-                            tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.28)', fontFamily: 'Inter, sans-serif' }}
+                            tick={{ fontSize: 10, fill: tickColor, fontFamily: 'Inter, sans-serif' }}
                             interval={period === 7 ? 0 : period === 14 ? 1 : 4}
                             dy={6}
                         />
                         <YAxis
                             axisLine={false}
                             tickLine={false}
-                            tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.28)', fontFamily: 'Inter, sans-serif' }}
+                            tick={{ fontSize: 10, fill: tickColor, fontFamily: 'Inter, sans-serif' }}
                             width={30}
                             allowDecimals={false}
                         />
                         <Tooltip
-                            content={<CustomTooltip />}
-                            cursor={{ stroke: 'rgba(167,139,250,0.2)', strokeWidth: 1, strokeDasharray: '4 2' }}
+                            content={<CustomTooltip styles={styles} />}
+                            cursor={{ stroke: cursorColor, strokeWidth: 1, strokeDasharray: '4 2' }}
                         />
                         <Area
                             type="monotone"
@@ -133,7 +140,7 @@ export default function AnalyticsChart({ data = [] }) {
                             strokeWidth={2}
                             fill="url(#areaGrad)"
                             dot={false}
-                            activeDot={{ r: 4, fill: '#A78BFA', stroke: '#1a0e35', strokeWidth: 2 }}
+                            activeDot={{ r: 4, fill: '#A78BFA', stroke: dotStroke, strokeWidth: 2 }}
                         />
                     </AreaChart>
                 </ResponsiveContainer>

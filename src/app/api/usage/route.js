@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
-
-const MONTHLY_DM_LIMIT = 1000;
+import { getEffectivePlan, getDmLimit } from '@/lib/plans';
 
 /**
  * GET /api/usage
  * Returns the current user's DM usage for the current calendar month.
- * Used by the alerts gauge in Settings and potentially the dashboard.
  */
 export async function GET() {
     const supabase = await createClient();
@@ -14,6 +12,16 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     try {
+        // Plan comes from user_plans — the single source of truth
+        const { data: userPlan } = await supabase
+            .from('user_plans')
+            .select('plan, plan_expires_at, trial_ends_at')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        const effectivePlan = getEffectivePlan(userPlan);
+        const dmLimit       = getDmLimit(effectivePlan);
+
         // All automation IDs for this user
         const { data: userAutomations } = await supabase
             .from('dm_automations')
@@ -23,7 +31,6 @@ export async function GET() {
         const allIds = (userAutomations || []).map((a) => a.id);
 
         let count = 0;
-
         if (allIds.length > 0) {
             const startOfMonth = new Date();
             startOfMonth.setDate(1);
@@ -39,15 +46,18 @@ export async function GET() {
             count = monthlyCount || 0;
         }
 
-        const pct      = Math.round((count / MONTHLY_DM_LIMIT) * 100);
-        const remaining = Math.max(0, MONTHLY_DM_LIMIT - count);
+        const unlimited = dmLimit === null;
+        const pct       = unlimited ? 0 : Math.round((count / dmLimit) * 100);
+        const remaining  = unlimited ? null : Math.max(0, dmLimit - count);
 
         return NextResponse.json({
             count,
-            limit:     MONTHLY_DM_LIMIT,
+            limit:     dmLimit,
+            unlimited,
             remaining,
             pct,
-            month:     new Date().toISOString().slice(0, 7), // 'YYYY-MM'
+            plan:      effectivePlan,
+            month:     new Date().toISOString().slice(0, 7),
         });
     } catch (err) {
         return NextResponse.json({ error: err.message }, { status: 500 });

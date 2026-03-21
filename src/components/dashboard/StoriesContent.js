@@ -4,9 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { RefreshCw, Instagram, Facebook, Clock, Search, Edit3, Pause, Play, Trash2 } from 'lucide-react';
 import SetupDMModal from '@/components/dashboard/SetupDMModal';
-import styles from '../../app/(dashboard)/stories/stories.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from '../../app/(dashboard)/stories/stories.module.css';
+import lightStyles from '../../app/(dashboard)/stories/stories.light.module.css';
 
 export default function StoriesContent({ stories = [], isConnected = false, platform = 'instagram' }) {
+    const styles = useStyles(darkStyles, lightStyles);
     const router = useRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedStoryId, setSelectedStoryId] = useState(null);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
 
 const MAX_TEMPLATES_PER_USER = 20;
 
@@ -35,7 +36,7 @@ export async function GET() {
 
 /**
  * POST /api/templates
- * Save a new DM automation template
+ * Save a new DM automation template — Pro/Trial only
  */
 export async function POST(request) {
     const supabase = await createClient();
@@ -44,6 +45,10 @@ export async function POST(request) {
     if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+
+    const plan = await getUserEffectivePlan(supabase, user.id);
+    const gate = requirePro(plan, 'Saving templates requires a Pro plan.');
+    if (gate) return gate;
 
     const body = await request.json();
     const { name, dmConfig, triggerConfig, settingsConfig } = body;

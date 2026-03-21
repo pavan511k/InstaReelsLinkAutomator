@@ -11,14 +11,42 @@ function createSupabase() {
 }
 
 /**
+ * Activates a plan for a user.
+ * Writes ONLY to user_plans — the single source of truth for plan data.
+ * connected_accounts is not touched.
+ *
+ * @param {object} supabase  - service-role client
+ * @param {string} userId    - auth.users UUID
+ * @param {string} planId    - 'pro' | 'business'
+ * @param {Date}   expiresAt - when this plan period ends
+ */
+async function activatePlan(supabase, userId, planId, expiresAt) {
+    const { error } = await supabase
+        .from('user_plans')
+        .upsert(
+            {
+                user_id:         userId,
+                plan:            planId,
+                plan_expires_at: expiresAt.toISOString(),
+                updated_at:      new Date().toISOString(),
+            },
+            { onConflict: 'user_id' },
+        );
+
+    if (error) throw new Error(`user_plans upsert failed: ${error.message}`);
+
+    console.log(`[activatePlan] Plan '${planId}' activated for user ${userId}, expires ${expiresAt.toISOString()}`);
+}
+
+/**
  * POST /api/payments/webhook
  * Cashfree payment webhook — called server-to-server on payment events.
  * Verifies signature, then upgrades user plan on PAYMENT_SUCCESS.
  */
 export async function POST(request) {
-    const rawBody = await request.text();
+    const rawBody   = await request.text();
     const signature = request.headers.get('x-webhook-signature');
-    const timestamp  = request.headers.get('x-webhook-timestamp');
+    const timestamp = request.headers.get('x-webhook-timestamp');
 
     // ── Verify Cashfree signature ──────────────────────────────
     if (signature && timestamp && process.env.CASHFREE_WEBHOOK_SECRET) {
@@ -40,47 +68,49 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
     }
 
-    const eventType = event.type; // PAYMENT_SUCCESS | PAYMENT_FAILED | PAYMENT_USER_DROPPED
+    const eventType = event.type;
 
     console.log(`[Webhook/Payments] Event: ${eventType}`, {
         orderId: event.data?.order?.order_id,
     });
 
     if (eventType === 'PAYMENT_SUCCESS') {
-        const orderId   = event.data?.order?.order_id;
-        const customerId = event.data?.customer_details?.customer_id; // this is user.id with dashes removed
-
-        if (!orderId) {
-            return NextResponse.json({ received: true });
-        }
+        const orderId = event.data?.order?.order_id;
+        if (!orderId) return NextResponse.json({ received: true });
 
         const supabase = createSupabase();
 
-        // Look up the order to find user_id and plan_id
         const { data: order } = await supabase
             .from('payment_orders')
-            .select('user_id, plan_id')
+            .select('user_id, plan_id, status')
             .eq('order_id', orderId)
             .maybeSingle();
 
-        if (order) {
-            // Activate plan
-            await supabase
-                .from('connected_accounts')
-                .update({ plan: order.plan_id, updated_at: new Date().toISOString() })
-                .eq('user_id', order.user_id)
-                .eq('is_active', true);
-
-            // Mark order paid
-            await supabase
-                .from('payment_orders')
-                .update({ status: 'paid', paid_at: new Date().toISOString() })
-                .eq('order_id', orderId);
-
-            console.log(`[Webhook/Payments] Activated ${order.plan_id} plan for user ${order.user_id}`);
-        } else {
-            console.warn(`[Webhook/Payments] Order ${orderId} not found in DB — cannot activate plan`);
+        if (!order) {
+            console.warn(`[Webhook/Payments] Order ${orderId} not found — cannot activate plan`);
+            return NextResponse.json({ received: true });
         }
+
+        // Idempotency — skip if already processed
+        if (order.status === 'paid') {
+            console.log(`[Webhook/Payments] Order ${orderId} already paid — skipping`);
+            return NextResponse.json({ received: true });
+        }
+
+        const planExpiresAt = new Date();
+        planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
+
+        try {
+            await activatePlan(supabase, order.user_id, order.plan_id, planExpiresAt);
+        } catch (err) {
+            console.error('[Webhook/Payments] activatePlan failed:', err.message);
+            return NextResponse.json({ error: 'Plan activation failed' }, { status: 500 });
+        }
+
+        await supabase
+            .from('payment_orders')
+            .update({ status: 'paid', paid_at: new Date().toISOString() })
+            .eq('order_id', orderId);
     }
 
     if (eventType === 'PAYMENT_FAILED' || eventType === 'PAYMENT_USER_DROPPED') {

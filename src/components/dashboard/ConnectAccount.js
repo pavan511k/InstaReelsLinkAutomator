@@ -3,7 +3,9 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Instagram, Check, ChevronRight, Shield } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import styles from './ConnectAccount.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './ConnectAccount.module.css';
+import lightStyles from './ConnectAccount.light.module.css';
 
 const CONNECTION_OPTIONS = [
     {
@@ -55,6 +57,7 @@ const ERROR_MESSAGES = {
 };
 
 export default function ConnectAccount() {
+    const styles = useStyles(darkStyles, lightStyles);
     const router = useRouter();
     const searchParams = useSearchParams();
     const [errorMessage, setErrorMessage] = useState('');

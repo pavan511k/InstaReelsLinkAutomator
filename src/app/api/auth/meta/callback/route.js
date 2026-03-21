@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { sendTrialStartedEmail } from '@/lib/email';
 import {
     exchangeCodeForInstagramToken,
     getInstagramLongLivedToken,
@@ -67,12 +68,13 @@ export async function GET(request) {
             .maybeSingle();
 
         if (existingAccount) {
-            // Reactivate if inactive, or update if active
+            // Reactivate / refresh credentials on existing account.
+            // No plan columns — plan lives in user_plans.
             const { error: updateError } = await supabase
                 .from('connected_accounts')
                 .update({
                     ...accountData,
-                    is_active: true,
+                    is_active:  true,
                     updated_at: new Date().toISOString(),
                 })
                 .eq('id', existingAccount.id);
@@ -82,7 +84,8 @@ export async function GET(request) {
                 return NextResponse.redirect(`${appUrl}/dashboard?error=save_failed`);
             }
         } else {
-            // Seed default global config for brand-new accounts
+            // ── Brand-new connection ──────────────────────────────────────────
+            // Seed default trigger keywords.
             const DEFAULT_KEYWORDS = [
                 'link', 'links', 'price', 'details', 'dm', 'pp',
                 'interested', 'info', 'how', 'where', 'send', 'share',
@@ -96,7 +99,7 @@ export async function GET(request) {
                 utmTag:            '',
             };
 
-            // Insert new account row (allows FB + IG simultaneously)
+            // Insert account — credentials + config only, no plan columns.
             const { error: insertError } = await supabase
                 .from('connected_accounts')
                 .insert({ ...accountData, is_active: true, default_config: defaultConfig });
@@ -104,6 +107,39 @@ export async function GET(request) {
             if (insertError) {
                 console.error('Failed to save account:', insertError);
                 return NextResponse.redirect(`${appUrl}/dashboard?error=save_failed`);
+            }
+
+            // ── Upsert trial into user_plans (only if no plan row exists yet) ──
+            // If the user already paid before connecting, their user_plans row is
+            // already set to 'pro' by the payment webhook — don't overwrite it.
+            const trialEndsAt = new Date();
+            trialEndsAt.setDate(trialEndsAt.getDate() + 30);
+
+            try {
+                // ignoreDuplicates: true means: insert if no row exists, skip if one already does.
+                // This preserves a pre-existing paid plan row.
+                await supabase.from('user_plans').upsert(
+                    { user_id: userId, plan: 'free', trial_ends_at: trialEndsAt.toISOString() },
+                    { onConflict: 'user_id', ignoreDuplicates: true },
+                );
+            } catch { /* non-fatal — layout falls back to 'free' */ }
+
+            // Send trial-started email to the new user (non-critical)
+            try {
+                const supabaseForEmail = await createClient();
+                const { data: { user: newUser } } = await supabaseForEmail.auth.getUser();
+                const userEmail = newUser?.email;
+                const userName  = newUser?.user_metadata?.full_name || '';
+                if (userEmail) {
+                    sendTrialStartedEmail({
+                        to:          userEmail,
+                        name:        userName,
+                        igUsername:  accountData.ig_username || '',
+                        trialEndsAt: trialEndsAt.toISOString(),
+                    }).catch((e) => console.warn('[Email] Trial started email failed:', e.message));
+                }
+            } catch (emailErr) {
+                console.warn('[Email] Could not send trial email:', emailErr.message);
             }
         }
         // Auto-sync posts after successful connection (#14)

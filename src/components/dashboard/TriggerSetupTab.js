@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import styles from './TriggerSetupTab.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './TriggerSetupTab.module.css';
+import lightStyles from './TriggerSetupTab.light.module.css';
 
 export default function TriggerSetupTab({ config, onChange }) {
+    const styles = useStyles(darkStyles, lightStyles);
     const [inputValue, setInputValue] = useState('');
 
     const updateConfig = (updates) => onChange({ ...config, ...updates });

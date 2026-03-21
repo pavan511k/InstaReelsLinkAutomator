@@ -1,7 +1,13 @@
+'use client';
+
 import { Instagram, Film } from 'lucide-react';
-import styles from './TopPosts.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './TopPosts.module.css';
+import lightStyles from './TopPosts.light.module.css';
 
 export default function TopPosts({ posts = [] }) {
+    const styles = useStyles(darkStyles, lightStyles);
+
     if (!posts.length) {
         return (
             <div className={styles.empty}>

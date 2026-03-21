@@ -23,19 +23,19 @@ export default function Hero() {
           </div>
 
           <h1 className={styles.headline}>
-            Turn every comment into a{' '}
-            <span className={styles.highlight}>paying customer</span>
+            Convert your Instagram audience into{' '}
+            <span className={styles.highlight}>loyal customers</span>
           </h1>
 
           <p className={styles.subtitle}>
-            AutoDM automatically sends a personalised DM the moment someone comments on your Reels, posts, or stories. Zero manual work. Zero missed leads.
+            Engage your followers by automatically replying to comments with personalised DMs. Save time, increase sales, and stay connected — all on autopilot.
           </p>
 
           <ul className={styles.perks}>
             {[
               'Works on Reels, Posts & Stories',
               'Keyword triggers or reply to all',
-              '1,000 free DMs every month',
+              '3,000 free DMs every month',
             ].map((p) => (
               <li key={p} className={styles.perk}>
                 <div className={styles.perkCheck}><Check size={11} strokeWidth={3} /></div>

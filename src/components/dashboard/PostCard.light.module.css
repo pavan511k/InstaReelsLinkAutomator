@@ -1,0 +1,123 @@
+/* ================================================================
+   LIGHT THEME — PostCard
+   White card, purple-tinted border on hover.
+   Platform badges (Instagram gradient, Facebook blue) unchanged.
+   Status button colors adjusted for white bg contrast.
+   ================================================================ */
+
+.card {
+  display: flex; flex-direction: column;
+  background: #FFFFFF;
+  border: 1px solid rgba(124,58,237,0.09);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 2px 8px rgba(124,58,237,0.04);
+  transition: border-color 200ms, transform 200ms, box-shadow 200ms;
+}
+.card:hover {
+  border-color: rgba(124,58,237,0.22);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(30,21,53,0.08), 0 8px 24px rgba(124,58,237,0.08);
+}
+
+.thumbnailWrapper {
+  position: relative;
+  aspect-ratio: 1;
+  background: rgba(124,58,237,0.05);
+  overflow: hidden;
+}
+.thumbnail {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 300ms;
+}
+.card:hover .thumbnail { transform: scale(1.04); }
+
+.thumbnailPlaceholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(124,58,237,0.30);
+}
+
+/* Reel badge sits over an image — keep dark */
+.reelBadge {
+  position: absolute; top: 8px; left: 8px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+}
+
+/* Platform badges are brand colours — kept exactly */
+.platformBadge {
+  position: absolute; bottom: 8px; right: 8px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,0.3);
+}
+.platformBadgeFacebook { background: #1877F2; }
+
+.cardBody {
+  padding: 12px 14px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+  flex: 1;
+}
+.caption {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem; font-weight: 400;
+  color: rgba(30,21,53,0.65);
+  line-height: 1.5; margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.timestamp {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 400;
+  color: rgba(30,21,53,0.38);
+}
+
+.cardActions { padding: 0 14px 14px; }
+
+.setupBtn {
+  width: 100%; height: 34px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem; font-weight: 600;
+  color: rgba(30,21,53,0.60);
+  background: rgba(30,21,53,0.04);
+  border: 1px solid rgba(30,21,53,0.10);
+  border-radius: 8px; cursor: pointer;
+  transition: all 150ms;
+}
+.setupBtn:hover {
+  background: rgba(124,58,237,0.10);
+  border-color: rgba(124,58,237,0.22);
+  color: #5B21B6;
+}
+
+/* Active — green, darker text for white bg */
+.activeBtn {
+  color: #047857;
+  background: rgba(16,185,129,0.08);
+  border-color: rgba(16,185,129,0.20);
+}
+.activeBtn:hover {
+  background: rgba(16,185,129,0.14);
+  border-color: rgba(16,185,129,0.30);
+  color: #047857;
+}
+
+/* Paused — amber, darker text for white bg */
+.pausedBtn {
+  color: #B45309;
+  background: rgba(245,158,11,0.08);
+  border-color: rgba(245,158,11,0.20);
+}
+.pausedBtn:hover {
+  background: rgba(245,158,11,0.14);
+  border-color: rgba(245,158,11,0.30);
+  color: #B45309;
+}

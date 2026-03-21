@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { X, Search, Copy, CheckCircle, Loader2, Instagram, Facebook } from 'lucide-react';
-import styles from './DuplicateModal.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './DuplicateModal.module.css';
+import lightStyles from './DuplicateModal.light.module.css';
 
 export default function DuplicateModal({ sourcePost, allPosts, onClose, onSuccess }) {
+    const styles = useStyles(darkStyles, lightStyles);
     const [search,     setSearch]     = useState('');
     const [selected,   setSelected]   = useState(null);
     const [loading,    setLoading]    = useState(false);

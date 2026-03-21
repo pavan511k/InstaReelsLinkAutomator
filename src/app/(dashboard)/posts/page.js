@@ -1,10 +1,22 @@
 import { createClient } from '@/lib/supabase-server';
 import PostsTable from '@/components/dashboard/PostsTable';
 import styles from './posts.module.css';
+import { getEffectivePlan } from '@/lib/plans';
 
 export default async function PostsPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+
+    // Resolve plan for UI gating
+    let userPlan = 'free';
+    try {
+        const { data: planRow } = await supabase
+            .from('user_plans')
+            .select('plan, plan_expires_at, trial_ends_at')
+            .eq('user_id', user.id)
+            .maybeSingle();
+        userPlan = getEffectivePlan(planRow);
+    } catch { /* fallback to free */ }
 
     // Check connection & fetch posts from all active accounts
     let connectedAccounts = [];
@@ -139,6 +151,7 @@ export default async function PostsPage() {
                 posts={posts}
                 isConnected={isConnected}
                 connectedAccounts={connectedAccounts}
+                userPlan={userPlan}
             />
         </div>
     );

@@ -1,0 +1,412 @@
+/* ================================================================
+   LIGHT THEME — PostsTable
+   White cards with purple-tinted shadows and borders.
+   Status badge text colors darkened for legibility on white bg.
+   Platform badges (Instagram gradient, Facebook blue) unchanged.
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 28px 64px;
+  font-family: 'Inter', -apple-system, sans-serif;
+  animation: fadeIn 0.35s ease both;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Header */
+.header {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 16px;
+  margin-bottom: 24px; flex-wrap: wrap;
+}
+.headerLeft {}
+.headerRight { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.title {
+  font-size: 1.6rem; font-weight: 800;
+  color: #1E1535; letter-spacing: -0.035em; margin: 0;
+}
+.syncTime {
+  font-size: 12px; font-weight: 500;
+  color: rgba(30,21,53,0.45);
+}
+
+/* Platform tabs */
+.platformTabs {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 20px; flex-wrap: wrap;
+}
+.platformTab {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem; font-weight: 500;
+  color: rgba(30,21,53,0.50);
+  background: rgba(30,21,53,0.04);
+  border: 1px solid rgba(30,21,53,0.09);
+  border-radius: 8px; cursor: pointer;
+  transition: all 150ms;
+}
+.platformTab:hover { color: rgba(30,21,53,0.80); border-color: rgba(30,21,53,0.16); }
+.platformTabActive {
+  color: #5B21B6; background: rgba(124,58,237,0.10);
+  border-color: rgba(124,58,237,0.22); font-weight: 600;
+}
+.platformCount {
+  font-size: 10px; padding: 1px 5px;
+  background: rgba(30,21,53,0.08);
+  border-radius: 100px; color: rgba(30,21,53,0.50);
+}
+
+/* Empty state */
+.emptyState {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 64px 24px; text-align: center;
+  background: #FFFFFF;
+  border: 1px solid rgba(124,58,237,0.08);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 14px rgba(124,58,237,0.04);
+}
+.emptyIcon { color: rgba(124,58,237,0.25); }
+.emptyTitle {
+  font-size: 1.05rem; font-weight: 700;
+  color: rgba(30,21,53,0.65); margin: 0;
+}
+.emptyDesc {
+  font-size: 0.875rem; color: rgba(30,21,53,0.45);
+  max-width: 400px; line-height: 1.6; margin: 0;
+}
+
+/* Cards section — white card */
+.cardsSection {
+  background: #FFFFFF;
+  border: 1px solid rgba(124,58,237,0.08);
+  border-radius: 16px; padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 14px rgba(124,58,237,0.04);
+}
+.cardsSectionHeader { margin-bottom: 16px; }
+.cardsSectionTitle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.95rem; font-weight: 700;
+  color: #1E1535; margin: 0 0 5px;
+}
+.cardsSectionSub {
+  font-size: 0.82rem; color: rgba(30,21,53,0.45); margin: 0;
+}
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.loadMoreWrapper { display: flex; justify-content: center; margin-top: 16px; }
+.loadMoreBtn {
+  height: 36px; padding: 0 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.845rem; font-weight: 600;
+  color: #5B21B6; background: rgba(124,58,237,0.08);
+  border: 1px solid rgba(124,58,237,0.18);
+  border-radius: 8px; cursor: pointer;
+  transition: all 150ms;
+}
+.loadMoreBtn:hover { background: rgba(124,58,237,0.14); }
+.loadMoreBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Table section — white card */
+.tableSection {
+  background: #FFFFFF;
+  border: 1px solid rgba(124,58,237,0.08);
+  border-radius: 16px; padding: 24px;
+  box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 14px rgba(124,58,237,0.04);
+  margin-bottom: 20px;
+}
+.tableSectionHeader {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.tableSectionTitle {
+  font-size: 0.95rem; font-weight: 700;
+  color: #1E1535; margin: 0;
+}
+.filterPills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.filterPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 100px;
+  border: 1px solid rgba(30,21,53,0.10);
+  color: rgba(30,21,53,0.52);
+  background: rgba(30,21,53,0.03);
+  cursor: pointer;
+  transition: all 150ms;
+  white-space: nowrap;
+}
+.filterPill:hover {
+  color: rgba(30,21,53,0.80);
+  border-color: rgba(124,58,237,0.20);
+  background: rgba(124,58,237,0.05);
+}
+/* Active pill keeps the purple gradient — it works on both themes */
+.filterPillActive {
+  background: linear-gradient(135deg, #7C3AED, #5B21B6);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(124,58,237,0.25);
+}
+.filterPillActive:hover {
+  background: linear-gradient(135deg, #6D28D9, #4C1D95);
+}
+.filterCount {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 100px; font-size: 10px; font-weight: 700;
+  background: rgba(30,21,53,0.08);
+  color: rgba(30,21,53,0.55);
+}
+.filterPillActive .filterCount {
+  background: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.95);
+}
+
+/* Row */
+.postRow:hover td { background: rgba(124,58,237,0.025); }
+.postCell { display: flex; align-items: center; gap: 12px; }
+.postThumb {
+  width: 44px; height: 44px; border-radius: 8px;
+  overflow: hidden; flex-shrink: 0; position: relative;
+  background: rgba(124,58,237,0.06);
+}
+.postThumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumbPlatform {
+  position: absolute; bottom: 2px; right: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; background: #E1306C; color: #fff;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+.thumbPlatform_facebook { background: #1877F2; }
+
+.postInfo { display: flex; flex-direction: column; gap: 2px; }
+.postCaption {
+  font-size: 0.82rem; font-weight: 500;
+  color: rgba(30,21,53,0.75);
+  max-width: 260px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+  margin: 0;
+}
+.postTime { font-size: 11px; color: rgba(30,21,53,0.38); }
+
+.metricCell { font-size: 0.845rem; color: rgba(30,21,53,0.55); }
+
+/* Setup badge — purple tinted, darker text */
+.setupBadge {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11.5px; font-weight: 600;
+  color: #5B21B6; background: rgba(124,58,237,0.10);
+  border: 1px solid rgba(124,58,237,0.20);
+  border-radius: 6px; cursor: pointer;
+  transition: all 150ms;
+}
+.setupBadge:hover { background: rgba(124,58,237,0.18); }
+
+.pulseDot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #7C3AED; animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.4); }
+  50%      { box-shadow: 0 0 0 4px rgba(124,58,237,0); }
+}
+
+/* Action buttons */
+.actions { display: flex; gap: 4px; }
+.actionBtn {
+  width: 30px; height: 30px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(30,21,53,0.04);
+  border: 1px solid rgba(30,21,53,0.08);
+  color: rgba(30,21,53,0.40); cursor: pointer;
+  transition: all 150ms;
+}
+.actionBtn:hover { background: rgba(30,21,53,0.07); color: rgba(30,21,53,0.80); }
+.actionDanger:hover { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.22); color: #DC2626; }
+.actionBroadcast:hover { background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.20); color: #DC2626; }
+
+/* Import section */
+.importSection {
+  display: flex; align-items: center; gap: 16px;
+  padding: 18px 22px;
+  background: #FFFFFF;
+  border: 1px solid rgba(124,58,237,0.08);
+  border-radius: 14px; flex-wrap: wrap;
+  box-shadow: 0 1px 3px rgba(30,21,53,0.04), 0 4px 12px rgba(124,58,237,0.03);
+}
+.importIcon { color: rgba(30,21,53,0.28); flex-shrink: 0; }
+.importTitle {
+  font-size: 0.875rem; font-weight: 600;
+  color: rgba(30,21,53,0.78); margin: 0 0 3px;
+}
+.importDesc {
+  font-size: 0.82rem; color: rgba(30,21,53,0.45); margin: 0;
+}
+
+.spinning { animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Clicks cell */
+.clicksCell {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.845rem;
+    font-weight: 500;
+    color: rgba(30,21,53,0.48);
+    background: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 150ms;
+    margin: -3px -8px;
+}
+.clicksCell:hover {
+    background: rgba(30,21,53,0.05);
+    border-color: rgba(30,21,53,0.10);
+    color: rgba(30,21,53,0.78);
+}
+.clicksCellActive {
+    color: #5B21B6 !important;
+}
+.clicksCellActive:hover {
+    background: rgba(124,58,237,0.08) !important;
+    border-color: rgba(124,58,237,0.18) !important;
+}
+
+/* CTR — green, same */
+.ctrCell {
+    font-size: 0.845rem;
+    font-weight: 600;
+    color: #059669;
+}
+
+/* Pro lock icon — shown inline next to a count when detail is Pro-only */
+.clicksProLock {
+    font-size: 12px;
+    opacity: 0.35;
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity 150ms;
+}
+.clicksProLock:hover { opacity: 0.7; }
+
+/* Free-plan click count cell — same look as the active Pro cell but not clickable */
+.clicksCellFree {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.845rem;
+    font-weight: 600;
+    color: rgba(30,21,53,0.45);
+    cursor: default;
+}
+
+/* Small lock link shown after click/CTR count on free plan */
+.clicksDetailLock {
+    font-size: 10px;
+    opacity: 0.35;
+    text-decoration: none;
+    cursor: pointer;
+    margin-left: 2px;
+    transition: opacity 150ms;
+    line-height: 1;
+}
+.clicksDetailLock:hover { opacity: 0.75; }
+
+/* Free CTR cell — plain span, not a button */
+.ctrCellFree {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.845rem;
+    font-weight: 600;
+    color: rgba(5,150,105,0.65);
+    cursor: default;
+}
+
+/* Make the existing ctrCell work as a button too (for Pro users) */
+button.ctrCell {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+}
+button.ctrCell:hover { opacity: 0.75; }
+
+/* ── Status / expiry badges — text darkened for white bg ── */
+.expiryBadge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 7px; border-radius: 100px;
+    font-size: 10.5px; font-weight: 600; white-space: nowrap;
+    background: rgba(124,58,237,0.08);
+    border: 1px solid rgba(124,58,237,0.18);
+    color: #5B21B6;
+}
+.expiryBadgeUrgent {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 7px; border-radius: 100px;
+    font-size: 10.5px; font-weight: 600; white-space: nowrap;
+    background: rgba(245,158,11,0.10);
+    border: 1px solid rgba(245,158,11,0.22);
+    color: #B45309;
+}
+.expiryBadgeExpired {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 7px; border-radius: 100px;
+    font-size: 10.5px; font-weight: 600; white-space: nowrap;
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.18);
+    color: #DC2626;
+}
+.scheduledBadge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 100px;
+    font-size: 11.5px; font-weight: 600; white-space: nowrap;
+    background: rgba(59,130,246,0.08);
+    border: 1px solid rgba(59,130,246,0.20);
+    color: #1D4ED8;
+}
+.scheduledCountdownBadge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 7px; border-radius: 100px;
+    font-size: 10.5px; font-weight: 600; white-space: nowrap;
+    background: rgba(59,130,246,0.07);
+    border: 1px solid rgba(59,130,246,0.16);
+    color: #2563EB;
+}
+
+@media (max-width: 900px) {
+  .cardsGrid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .container { padding: 20px 16px 48px; }
+  .cardsGrid { grid-template-columns: 1fr; }
+}

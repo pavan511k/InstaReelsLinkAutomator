@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Upload, Camera } from 'lucide-react';
 import styles from './PhonePreview.module.css';
 
-export default function PhonePreview({ config, onImageUpload, activeSlideIndex = 0, onSlideChange }) {
+export default function PhonePreview({ config, onImageUpload, activeSlideIndex = 0, onSlideChange, userPlan = 'free' }) {
+    const isPro = userPlan === 'pro' || userPlan === 'business';
     // Internal fallback state — only used if no external activeSlideIndex is provided
     const [_localSlide, _setLocalSlide] = useState(0);
     const activeSlide    = onSlideChange ? activeSlideIndex : _localSlide;
@@ -86,6 +87,14 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
     const headline = currentSlide.headline || '';
     const buttonLabel = currentSlide.buttonLabel || currentSlide.buttons?.[0]?.label || '';
 
+    // Compute subtitle for a slide respecting plan + appendBranding toggle
+    const getSubtitle = (slide) => {
+        const desc = (slide?.description || '').trim();
+        const shouldAppend = isPro ? (slide?.appendBranding !== false) : true;
+        if (shouldAppend) return desc ? `${desc} • Sent with AutoDM` : 'Sent with AutoDM';
+        return desc || null;
+    };
+
     const renderButtonTemplate = () => (
         <div className={styles.buttonPreview}>
             {/* Hidden file input */}
@@ -154,10 +163,8 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
 
                 {/* Card Info — below image */}
                 <div className={styles.cardInfo}>
-                    {headline && (
-                        <p className={styles.cardTitle}>{headline}</p>
-                    )}
-                    <span className={styles.cardSubtitle}>Sent with AutoDM</span>
+                    {headline && <p className={styles.cardTitle}>{headline}</p>}
+                    {getSubtitle(currentSlide) && <span className={styles.cardSubtitle}>{getSubtitle(currentSlide)}</span>}
                 </div>
 
                 {/* Single Button */}
@@ -215,7 +222,7 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
             <div className={styles.cardContainer}>
                 <div className={styles.cardInfo} style={{ paddingBottom: 0 }}>
                     <p className={styles.cardTitle}>{config.message || 'Your message here...'}</p>
-                    <span className={styles.cardSubtitle}>Sent with AutoDM</span>
+                    {!isPro && <span className={styles.cardSubtitle}>Sent with AutoDM</span>}
                 </div>
                 <div className={styles.ctaButtons}>
                     {(config.buttons || [{ label: 'Button 1', url: '' }])
@@ -252,22 +259,33 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
                 </div>
                 {/* Reward preview (faded) */}
                 <div style={{ opacity: 0.55 }}>
-                    {config.linkDmType === 'button_template' ? (
-                        <div className={styles.buttonPreview}>
-                            <div className={styles.cardContainer}>
-                                <div className={styles.cardInfo}>
-                                    <p className={styles.cardTitle}>{config.linkDmConfig?.slides?.[0]?.headline || "Here's your link!"}</p>
-                                    <span className={styles.cardSubtitle}>Sent with AutoDM</span>
+                    {config.linkDmType === 'button_template' ? (() => {
+                        const rSlides = config.linkDmConfig?.slides || [{}];
+                        const rSlide  = rSlides[0] || {};
+                        const rSubtitle = getSubtitle(rSlide);
+                        return (
+                            <div className={styles.buttonPreview}>
+                                <div className={styles.cardContainer}>
+                                    {rSlide.imageUrl && <div style={{ width: '100%', height: 80, overflow: 'hidden', borderRadius: '6px 6px 0 0' }}><img src={rSlide.imageUrl} alt="reward" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>}
+                                    <div className={styles.cardInfo}>
+                                        <p className={styles.cardTitle}>{rSlide.headline || "Here's your link!"}</p>
+                                        {rSubtitle && <span className={styles.cardSubtitle}>{rSubtitle}</span>}
+                                    </div>
+                                    <div className={styles.cardButton}>{rSlide.buttonLabel || 'Get the link'}</div>
+                                    {rSlides.length > 1 && (
+                                        <div style={{ display: 'flex', justifyContent: 'center', gap: 4, padding: '4px 0' }}>
+                                            {rSlides.map((_, i) => <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i === 0 ? '#7C3AED' : 'rgba(255,255,255,0.3)' }} />)}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className={styles.cardButton}>{config.linkDmConfig?.slides?.[0]?.buttonLabel || 'Get the link'}</div>
                             </div>
-                        </div>
-                    ) : config.linkDmType === 'multi_cta' ? (
+                        );
+                    })() : config.linkDmType === 'multi_cta' ? (
                         <div className={styles.buttonPreview}>
                             <div className={styles.cardContainer}>
                                 <div className={styles.cardInfo}>
-                                    <p className={styles.cardTitle}>{config.linkMessage || '🎉 Thanks for following!'}</p>
-                                    <span className={styles.cardSubtitle}>Sent with AutoDM</span>
+                                    <p className={styles.cardTitle}>{config.linkDmConfig?.message || config.linkMessage || '🎉 Thanks for following!'}</p>
+                                    {!isPro && <span className={styles.cardSubtitle}>Sent with AutoDM</span>}
                                 </div>
                                 <div className={styles.ctaButtons}>
                                     {(config.linkDmConfig?.buttons || [{ label: 'Get the link' }]).filter(b => b.label).slice(0, 3).map((b, i) => (

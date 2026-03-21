@@ -1,0 +1,233 @@
+/* ================================================================
+   LIGHT THEME — ConnectAccount
+   White cards, lavender page bg, purple-tinted accents.
+   Platform icons (Instagram gradient, Facebook blue) unchanged — brand.
+   Hero connector keeps the pink-blue brand gradient.
+   Trust footer badge bg lightened.
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+  font-family: 'Inter', -apple-system, sans-serif;
+  animation: fadeIn 0.35s ease both;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Hero ──────────────────────────────────────────────────── */
+.hero {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.heroIconGroup {
+  display: flex; align-items: center; justify-content: center; gap: 0;
+  margin-bottom: 24px;
+}
+
+.heroIcon {
+  width: 56px; height: 56px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  /* Brand platform gradients — unchanged */
+  border: 2px solid rgba(124,58,237,0.15);
+  box-shadow: 0 8px 24px rgba(30,21,53,0.12);
+}
+.heroIconInstagram { background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF); }
+.heroIconFacebook  { background: #1877F2; }
+
+/* Connector keeps the pink-blue brand gradient */
+.heroConnector {
+  width: 32px; height: 2px;
+  background: linear-gradient(90deg, #DD2A7B, #1877F2);
+  opacity: 0.45;
+}
+
+.header { text-align: center; }
+
+.title {
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  font-weight: 800;
+  color: #1E1535;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  margin: 0 0 10px;
+}
+
+.subtitle {
+  font-size: 0.925rem;
+  color: rgba(30,21,53,0.52);
+  font-weight: 400;
+  line-height: 1.7;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* ── Steps indicator ───────────────────────────────────────── */
+.steps {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.step {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; font-weight: 500;
+  color: rgba(30,21,53,0.40);
+}
+
+.stepNumber {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  background: rgba(30,21,53,0.05);
+  border: 1px solid rgba(30,21,53,0.12);
+  color: rgba(30,21,53,0.40);
+}
+
+.activeStep {
+  color: rgba(30,21,53,0.85);
+  font-weight: 600;
+}
+.activeStep .stepNumber {
+  background: rgba(124,58,237,0.12);
+  border-color: rgba(124,58,237,0.28);
+  color: #5B21B6;
+}
+
+.stepArrow { color: rgba(30,21,53,0.22); }
+
+/* ── Error banner ──────────────────────────────────────────── */
+.errorBanner {
+  padding: 12px 16px;
+  background: rgba(239,68,68,0.07);
+  border: 1px solid rgba(239,68,68,0.22);
+  border-radius: 10px;
+  font-size: 0.855rem;
+  color: #DC2626;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+.errorBanner p { margin: 0; }
+
+/* ── Platform cards ────────────────────────────────────────── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 40px;
+}
+
+.card {
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 24px;
+  background: #FFFFFF;
+  border: 1px solid rgba(124,58,237,0.09);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 16px rgba(124,58,237,0.05);
+  transition: border-color 200ms, transform 200ms, box-shadow 200ms;
+}
+.card:hover {
+  border-color: rgba(124,58,237,0.22);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(30,21,53,0.08), 0 8px 28px rgba(124,58,237,0.08);
+}
+
+.cardHeader { display: flex; align-items: center; gap: 12px; }
+
+.cardIcon {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  /* Brand platform background set via inline style — unchanged */
+  box-shadow: 0 4px 12px rgba(30,21,53,0.15);
+}
+.fbIcon {
+  color: white; font-weight: 800; font-size: 1.2rem;
+  font-family: Arial, sans-serif;
+}
+
+.cardTitle {
+  font-size: 0.95rem; font-weight: 700;
+  color: #1E1535;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.cardDesc {
+  font-size: 0.845rem; font-weight: 400;
+  color: rgba(30,21,53,0.55);
+  line-height: 1.65; margin: 0;
+}
+
+.featureList {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+  flex: 1;
+}
+.featureItem {
+  display: flex; align-items: flex-start; gap: 9px;
+  font-size: 0.82rem; color: rgba(30,21,53,0.65);
+  font-weight: 400; line-height: 1.5;
+}
+/* Green check icon — works on both themes */
+.featureCheckIcon { color: #059669; flex-shrink: 0; margin-top: 2px; }
+
+/* Connect buttons use inline style background (brand platform colors) — unchanged */
+.connectBtn {
+  width: 100%; height: 42px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem; font-weight: 600;
+  color: #fff; border: none; border-radius: 10px;
+  cursor: pointer;
+  transition: opacity 150ms, transform 120ms;
+  box-shadow: 0 4px 14px rgba(30,21,53,0.18);
+}
+.connectBtn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+.connectBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Trust footer ──────────────────────────────────────────── */
+.footer {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  padding-top: 32px;
+  border-top: 1px solid rgba(124,58,237,0.09);
+  text-align: center;
+}
+
+.partnerText {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+  color: rgba(30,21,53,0.45);
+}
+
+.footerBadges { display: flex; gap: 10px; }
+
+.badge {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 14px;
+  background: rgba(124,58,237,0.04);
+  border: 1px solid rgba(124,58,237,0.10);
+  border-radius: 10px;
+}
+.metaLogo { font-size: 1.1rem; opacity: 0.45; }
+.badgeTitle {
+  font-size: 11.5px; font-weight: 700;
+  color: rgba(30,21,53,0.62);
+  display: block;
+}
+.badgeSub {
+  font-size: 10px; font-weight: 400;
+  color: rgba(30,21,53,0.42);
+  display: block;
+}
+
+@media (max-width: 720px) {
+  .cards { grid-template-columns: 1fr; }
+  .footerBadges { flex-direction: column; }
+}

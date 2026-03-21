@@ -1,22 +1,24 @@
 'use client';
 
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import styles from './DailyDMChart.module.css';
+import { useStyles } from '@/lib/useStyles';
+import { useIsDark } from '@/lib/useStyles';
+import darkStyles from './DailyDMChart.module.css';
+import lightStyles from './DailyDMChart.light.module.css';
 
-const TOOLTIP_STYLE = {
-    background: '#12173B',
-    border: '1px solid rgba(109,80,240,.3)',
-    borderRadius: '12px',
-    padding: '8px 12px',
-    boxShadow: '0 8px 24px rgba(109,80,240,.2)',
-};
-
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, isDark }) {
     if (active && payload?.length) {
+        const tooltipStyle = {
+            background: isDark ? '#12173B' : '#FFFFFF',
+            border: '1px solid rgba(109,80,240,.3)',
+            borderRadius: '12px',
+            padding: '8px 12px',
+            boxShadow: isDark ? '0 8px 24px rgba(109,80,240,.2)' : '0 4px 16px rgba(30,21,53,0.10)',
+        };
         return (
-            <div style={TOOLTIP_STYLE}>
-                <p style={{ color: 'rgba(255,255,255,.55)', fontSize: '11px', margin: 0 }}>{label}</p>
-                <p style={{ color: '#A78BFA', fontSize: '14px', fontWeight: 700, margin: '2px 0 0' }}>
+            <div style={tooltipStyle}>
+                <p style={{ color: isDark ? 'rgba(255,255,255,.55)' : 'rgba(30,21,53,0.55)', fontSize: '11px', margin: 0 }}>{label}</p>
+                <p style={{ color: isDark ? '#A78BFA' : '#7C3AED', fontSize: '14px', fontWeight: 700, margin: '2px 0 0' }}>
                     {payload[0].value} DMs
                 </p>
             </div>
@@ -26,6 +28,9 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function DailyDMChart({ data = [] }) {
+    const styles = useStyles(darkStyles, lightStyles);
+    const isDark  = useIsDark();
+
     if (!data || data.length === 0) {
         return (
             <div className={styles.container}>
@@ -65,7 +70,7 @@ export default function DailyDMChart({ data = [] }) {
                             width={28}
                             allowDecimals={false}
                         />
-                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(109,80,240,.2)', strokeWidth: 1 }} />
+                        <Tooltip content={<CustomTooltip isDark={isDark} />} cursor={{ stroke: 'rgba(109,80,240,.2)', strokeWidth: 1 }} />
                         <Area
                             type="monotone"
                             dataKey="count"

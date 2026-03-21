@@ -3,11 +3,14 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Instagram, Facebook, LogOut, RefreshCw } from 'lucide-react';
-import styles from './ConnectedAccountBanner.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './ConnectedAccountBanner.module.css';
+import lightStyles from './ConnectedAccountBanner.light.module.css';
 import DisconnectModal from './DisconnectModal';
 
 export default function ConnectedAccountBanner({ accounts = [], connectedPlatforms = [] }) {
     const router = useRouter();
+    const styles = useStyles(darkStyles, lightStyles);
     const [syncingId, setSyncingId] = useState(null);
     const [disconnectingId, setDisconnectingId] = useState(null);
     const [syncResults, setSyncResults] = useState({});

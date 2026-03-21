@@ -2,10 +2,10 @@
 
 /* ── Desktop sidebar ─────────────────────────────────────────── */
 .sidebar {
-    width: 240px;
+    width: 260px;
     flex-shrink: 0;
     min-height: 100vh;
-    background: #0D0A1E;
+    background: var(--sidebar-bg);
     border-right: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     flex-direction: column;
@@ -201,7 +201,7 @@
 .user {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     padding: 12px 10px;
     margin-top: 8px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -238,6 +238,21 @@ a.userRole:hover {
     color: #A78BFA;
     text-decoration: none;
 }
+.themeBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.35);
+    padding: 5px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 150ms, color 150ms;
+    flex-shrink: 0;
+}
+.themeBtn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.75);
+}
 .logoutBtn {
     background: none;
     border: none;
@@ -252,6 +267,112 @@ a.userRole:hover {
 .logoutBtn:hover {
     background: rgba(255, 255, 255, 0.07);
     color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Plan badges ────────────────────────────────────────────── */
+/* Shared base */
+.planBadgePro,
+.planBadgeTrial,
+.planBadgeFree {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 3px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-decoration: none;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: opacity 150ms;
+    border: 1px solid;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+.planBadgePro:hover,
+.planBadgeTrial:hover { opacity: 0.82; }
+
+/* Dot inside badge */
+.planBadgeDot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Pro — gold */
+.planBadgePro {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.28);
+    color: #FCD34D;
+}
+.planBadgePro .planBadgeDot {
+    background: #F59E0B;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+    animation: planPulse 2s ease-in-out infinite;
+}
+
+/* Trial base (info, 8+ days) — purple */
+.planBadgeTrial {
+    background: rgba(124, 58, 237, 0.14);
+    border-color: rgba(167, 139, 250, 0.25);
+    color: #C4B5FD;
+}
+.planBadgeTrial .planBadgeDot { background: #A78BFA; }
+
+/* Trial warning (3-7 days) — amber */
+.planBadgeTrial_warning {
+    background: rgba(245, 158, 11, 0.10) !important;
+    border-color: rgba(245, 158, 11, 0.22) !important;
+    color: #FCD34D !important;
+}
+.planBadgeTrial_warning .planBadgeDot {
+    background: #F59E0B !important;
+    animation: planPulse 2s ease-in-out infinite;
+}
+
+/* Trial urgent (1-2 days) — orange */
+.planBadgeTrial_urgent {
+    background: rgba(234, 88, 12, 0.12) !important;
+    border-color: rgba(234, 88, 12, 0.28) !important;
+    color: #FDBA74 !important;
+}
+.planBadgeTrial_urgent .planBadgeDot {
+    background: #EA580C !important;
+    animation: planPulse 1.2s ease-in-out infinite;
+}
+
+/* Trial critical (last day) — red */
+.planBadgeTrial_critical {
+    background: rgba(239, 68, 68, 0.12) !important;
+    border-color: rgba(239, 68, 68, 0.28) !important;
+    color: #FCA5A5 !important;
+}
+.planBadgeTrial_critical .planBadgeDot {
+    background: #EF4444 !important;
+    animation: planPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes planPulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.45; }
+}
+
+/* Free — plain dim link */
+.planBadgeFree {
+    background: transparent;
+    border-color: transparent;
+    color: rgba(255, 255, 255, 0.28);
+    padding-left: 0;
+    padding-right: 0;
+    font-weight: 500;
+}
+.planBadgeFree:hover {
+    color: #A78BFA;
+    opacity: 1;
 }
 
 /* ── Mobile top bar (hidden on desktop) ─────────────────────── */
@@ -283,7 +404,7 @@ a.userRole:hover {
         justify-content: space-between;
         padding: 0 16px;
         height: 56px;
-        background: #0D0A1E;
+        background: var(--sidebar-bg);
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         position: sticky;
         top: 0;
@@ -295,7 +416,7 @@ a.userRole:hover {
         flex-direction: column;
         position: fixed;
         top: 56px; left: 0; right: 0; bottom: 0;
-        background: #0D0A1E;
+        background: var(--sidebar-bg);
         z-index: 49;
         padding: 20px 16px;
         overflow-y: auto;

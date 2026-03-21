@@ -1,0 +1,237 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ================================================================
+   LIGHT THEME — DashboardNav
+   Frosted white glass top bar — classic elevated nav feel.
+   Purple accent on active items, dark violet-charcoal text.
+   Mobile menu opens as a white panel.
+   ================================================================ */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: rgba(255, 255, 255, 0.90);
+  border-bottom: 1px solid rgba(124, 58, 237, 0.09);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.05);
+}
+
+.inner {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.logoMark {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #7C3AED, #5B21B6);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.30);
+}
+.logoText {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #1E1535;
+  letter-spacing: -0.03em;
+}
+.logoDM { color: #7C3AED; }
+
+/* Nav */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 0.855rem;
+  font-weight: 500;
+  color: rgba(30, 21, 53, 0.52);
+  text-decoration: none;
+  transition: color 150ms, background 150ms;
+  white-space: nowrap;
+}
+.navLink:hover {
+  color: rgba(30, 21, 53, 0.88);
+  background: rgba(124, 58, 237, 0.06);
+}
+.navLink.active {
+  color: #5B21B6;
+  background: rgba(124, 58, 237, 0.10);
+  font-weight: 600;
+}
+.navLink.locked {
+  color: rgba(30, 21, 53, 0.22);
+  cursor: not-allowed;
+}
+.navLink.locked:hover {
+  background: transparent;
+  color: rgba(30, 21, 53, 0.22);
+}
+.lockIcon { opacity: 0.5; }
+
+/* Right */
+.right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.connectBtn {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 16px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+  background: #7C3AED;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.30);
+  transition: background 150ms, box-shadow 150ms;
+}
+.connectBtn:hover {
+  background: #6D28D9;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.42);
+}
+
+/* User */
+.userWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7C3AED, #E11D7A);
+  border: 1.5px solid rgba(124, 58, 237, 0.20);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; flex-shrink: 0;
+  font-size: 12px; font-weight: 700; color: #fff;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.22);
+}
+.avatarImg { width: 100%; height: 100%; object-fit: cover; }
+.userEmail {
+  font-size: 0.8rem;
+  color: rgba(30, 21, 53, 0.50);
+  max-width: 160px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.logoutBtn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: none; border: none; cursor: pointer;
+  color: rgba(30, 21, 53, 0.32);
+  transition: color 150ms, background 150ms;
+}
+.logoutBtn:hover {
+  color: rgba(30, 21, 53, 0.75);
+  background: rgba(124, 58, 237, 0.06);
+}
+
+/* Mobile toggle */
+.toggle {
+  display: none;
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  background: none; border: none; cursor: pointer;
+  color: rgba(30, 21, 53, 0.55);
+  align-items: center; justify-content: center;
+  transition: background 150ms;
+}
+.toggle:hover { background: rgba(124, 58, 237, 0.06); }
+
+/* Mobile menu — white panel */
+.mobileMenu {
+  position: fixed;
+  top: 64px; left: 0; right: 0;
+  background: #FFFFFF;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.09);
+  padding: 12px 20px 24px;
+  display: flex; flex-direction: column; gap: 2px;
+  z-index: 99;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.08);
+}
+.mobileLink {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem; font-weight: 500;
+  color: rgba(30, 21, 53, 0.58);
+  text-decoration: none;
+  transition: background 150ms, color 150ms;
+}
+.mobileLink:hover {
+  background: rgba(124, 58, 237, 0.06);
+  color: rgba(30, 21, 53, 0.88);
+}
+.mobileLink.active {
+  background: rgba(124, 58, 237, 0.10);
+  color: #5B21B6;
+  font-weight: 600;
+}
+.mobileLink.locked {
+  color: rgba(30, 21, 53, 0.22);
+  cursor: not-allowed;
+}
+.mobileDivider {
+  height: 1px;
+  background: rgba(124, 58, 237, 0.08);
+  margin: 12px 0;
+}
+.mobileUser {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px 8px;
+}
+.mobileLogout {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem; font-weight: 500;
+  color: rgba(30, 21, 53, 0.48);
+  background: none; border: none; cursor: pointer;
+  transition: background 150ms, color 150ms;
+  font-family: 'Inter', sans-serif;
+}
+.mobileLogout:hover {
+  background: rgba(124, 58, 237, 0.05);
+  color: rgba(30, 21, 53, 0.78);
+}
+
+@media (max-width: 900px) {
+  .nav, .userWrap, .connectBtn { display: none; }
+  .toggle { display: flex; }
+}
+@media (max-width: 480px) {
+  .inner { padding: 0 16px; gap: 16px; }
+}

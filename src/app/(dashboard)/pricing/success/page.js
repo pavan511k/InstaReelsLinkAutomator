@@ -4,10 +4,13 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import styles from './success.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './success.module.css';
+import lightStyles from './success.light.module.css';
 
 // Inner component that uses useSearchParams — must be inside <Suspense>
 function PaymentResult() {
+    const styles = useStyles(darkStyles, lightStyles);
     const searchParams = useSearchParams();
     const orderId      = searchParams.get('order_id');
     const planId       = searchParams.get('plan') || 'pro';
@@ -82,7 +85,7 @@ function PaymentResult() {
                         <Link href="/pricing" className={styles.btnPrimary}>
                             Try again
                         </Link>
-                        <a href="mailto:support@autodm.app" className={styles.btnSecondary}>
+                        <a href="mailto:support@autodm.pro" className={styles.btnSecondary}>
                             Contact support
                         </a>
                     </div>

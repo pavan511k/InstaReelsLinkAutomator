@@ -5,11 +5,14 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import PostCard from './PostCard';
 import SetupDMModal from './SetupDMModal';
-import styles from './PostCardsGrid.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './PostCardsGrid.module.css';
+import lightStyles from './PostCardsGrid.light.module.css';
 
 const MAX_VISIBLE_CARDS = 4;
 
 export default function PostCardsGrid({ posts = [], totalCount = 0 }) {
+    const styles = useStyles(darkStyles, lightStyles);
     const [showSetupModal, setShowSetupModal] = useState(false);
     const [selectedPost, setSelectedPost] = useState(null);
 

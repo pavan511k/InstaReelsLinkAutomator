@@ -1,6 +1,6 @@
 /* ============================================================
-   Phone Preview — Instagram Dark DM Theme (Improved)
-   Larger phone frame (280px), proper card layout, dark chat
+   Phone Preview — Instagram DM Theme
+   Dark by default; light-mode overrides via [data-theme="light"]
    ============================================================ */
 
 .phone {
@@ -353,4 +353,140 @@
     justify-content: center;
     color: #fff;
     flex-shrink: 0;
+}
+
+/* ============================================================
+   LIGHT MODE OVERRIDES
+   Applied when <html data-theme="light"> is set by DashboardThemeProvider
+   The phone bezel stays dark (it's a physical device frame),
+   but the screen content shifts to Instagram's light chat palette.
+   ============================================================ */
+
+[data-theme="light"] .phoneBezel {
+    background: #2a2a2a;
+    box-shadow:
+        0 0 0 2.5px rgba(0, 0, 0, 0.25),
+        0 28px 56px rgba(0, 0, 0, 0.28),
+        0 8px 20px rgba(124, 58, 237, 0.12),
+        inset 0 2px 4px rgba(255, 255, 255, 0.12),
+        inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Screen background — Instagram light mode is pure white */
+[data-theme="light"] .screen {
+    background: #ffffff;
+}
+
+/* Chat header — white with a subtle bottom border */
+[data-theme="light"] .chatHeader {
+    background: #ffffff;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .chatName {
+    color: #000000;
+}
+
+[data-theme="light"] .chatOnline {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+/* Chat body — light grey background like real Instagram light DMs */
+[data-theme="light"] .chatBody {
+    background: #f5f5f5;
+}
+
+/* Message bubbles — light grey bubble, dark text */
+[data-theme="light"] .messageBubble {
+    background: #e8e8e8;
+    border-radius: 18px 18px 18px 6px;
+}
+
+[data-theme="light"] .messageBubble p {
+    color: #1a1a1a;
+}
+
+[data-theme="light"] .branding {
+    color: rgba(0, 0, 0, 0.35);
+}
+
+/* Card container — white card with a shadow */
+[data-theme="light"] .cardContainer {
+    background: #ffffff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(0, 0, 0, 0.06);
+    border-radius: 18px;
+}
+
+/* Image placeholder — light grey */
+[data-theme="light"] .imagePlaceholder {
+    background: #efefef;
+    color: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .imagePlaceholder:hover {
+    background: #e4e4e4;
+    color: rgba(0, 0, 0, 0.5);
+}
+
+/* Card title & subtitle */
+[data-theme="light"] .cardTitle {
+    color: #0f0f0f;
+}
+
+[data-theme="light"] .cardSubtitle {
+    color: rgba(0, 0, 0, 0.42);
+}
+
+/* Card button — Instagram-blue text, light separator */
+[data-theme="light"] .cardButton {
+    color: #0095f6;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Carousel nav arrows — dark on light */
+[data-theme="light"] .carouselNav {
+    background: rgba(255, 255, 255, 0.85);
+    color: #1a1a1a;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+[data-theme="light"] .carouselNav:hover {
+    background: rgba(255, 255, 255, 1);
+}
+
+/* Dots */
+[data-theme="light"] .dot {
+    background: rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="light"] .dotActive {
+    background: #0095f6;
+}
+
+/* Quick reply chips */
+[data-theme="light"] .quickReplyChip {
+    border-color: #0095f6;
+    color: #0095f6;
+}
+
+/* Multi-CTA buttons */
+[data-theme="light"] .ctaButton {
+    color: #0095f6;
+    border-top-color: rgba(0, 0, 0, 0.07);
+}
+
+/* Chat bar */
+[data-theme="light"] .chatBar {
+    background: #ffffff;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
+    color: rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .chatBarCamera {
+    background: linear-gradient(135deg, #0095f6, #833ab4);
+}
+
+/* Upload overlay stays dark for contrast on top of images */
+[data-theme="light"] .uploadOverlay {
+    background: rgba(0, 0, 0, 0.4);
 }

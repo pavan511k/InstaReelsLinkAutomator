@@ -5,11 +5,14 @@ import {
     Plus, Trash2, Image as ImageIcon, BookmarkPlus, FileDown, Loader2,
     Link2, ExternalLink, MessageSquare, MousePointerClick, Zap, FlaskConical,
 } from 'lucide-react';
-import styles from './DMSetupTab.module.css';
-import settingsStyles from './SettingsContent.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './DMSetupTab.module.css';
+import lightStyles from './DMSetupTab.light.module.css';
+import darkSettingsStyles from './SettingsContent.module.css';
+import lightSettingsStyles from './SettingsContent.light.module.css';
 
 const EMPTY_SLIDE = {
-    imageUrl: '', headline: '', buttonLabel: '',
+    imageUrl: '', headline: '', description: '', appendBranding: true, buttonLabel: '',
     buttonUrl: '', buttons: [{ type: 'url', label: '', value: '' }],
 };
 
@@ -22,11 +25,12 @@ const DEFAULT_VARIANT_CONFIG = {
 };
 
 const DM_TYPES = [
-    { value: 'button_template',  label: 'Button Template', icon: '🖼️', desc: 'Image card with a CTA button',       pro: false },
-    { value: 'message_template', label: 'Message',         icon: '💬', desc: 'Plain text DM with variables',       pro: false },
-    { value: 'quick_reply',      label: 'Quick Reply',     icon: '⚡', desc: 'Message with tappable reply chips',  pro: false },
-    { value: 'multi_cta',        label: 'Multi-CTA',       icon: '🔗', desc: 'Text + up to 3 URL buttons',        pro: false },
-    { value: 'follow_up',        label: 'Follow Gate',     icon: '🔒', desc: 'Send link only after they follow',   pro: true  },
+    { value: 'button_template',  label: 'Button Template', icon: '🖼️', desc: 'Image card with a CTA button',           pro: false },
+    { value: 'message_template', label: 'Message',         icon: '💬', desc: 'Plain text DM with variables',           pro: false },
+    { value: 'quick_reply',      label: 'Quick Reply',     icon: '⚡', desc: 'Message with tappable reply chips',      pro: false },
+    { value: 'multi_cta',        label: 'Multi-CTA',       icon: '🔗', desc: 'Text + up to 3 URL buttons',            pro: false },
+    { value: 'follow_up',        label: 'Follow Gate',     icon: '🔒', desc: 'Send link only after they follow',       pro: true  },
+    { value: 'email_collector',  label: 'Email Collector', icon: '📧', desc: 'Ask for their email and save as a lead', pro: true  },
 ];
 
 export default function DMSetupTab({
@@ -36,10 +40,14 @@ export default function DMSetupTab({
     activeSlideIndex = 0, onSlideChange,
     activeAbVariant = 'A', onAbVariantChange,
 }) {
-    const isPro = userPlan === 'pro' || userPlan === 'business';
-    const fileInputRefs = useRef({});
+    const styles = useStyles(darkStyles, lightStyles);
+    const settingsStyles = useStyles(darkSettingsStyles, lightSettingsStyles);
+    const isPro = userPlan === 'pro' || userPlan === 'business' || userPlan === 'trial';
+    const fileInputRefs    = useRef({});
+    const rewardImageRef   = useRef(null);
     const [_localSlide, _setLocalSlide] = useState(0);
     const setActiveSlideIndex = onSlideChange || _setLocalSlide;
+    const [rewardSlideIndex, setRewardSlideIndex]   = useState(0);
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [templateName, setTemplateName]           = useState('');
     const [isFetchingUrl, setIsFetchingUrl]         = useState(false);
@@ -48,14 +56,12 @@ export default function DMSetupTab({
     // ─── A/B routing ─────────────────────────────────────────────
     const isAB = !!config.abEnabled;
 
-    // The "effective config" for the form — either the active variant or the whole config
     const formConfig = useMemo(() => {
         if (!isAB) return config;
         const key = activeAbVariant === 'A' ? 'variantA' : 'variantB';
         return config[key] || { ...DEFAULT_VARIANT_CONFIG };
     }, [isAB, activeAbVariant, config]);
 
-    // The "effective onChange" — updates the right slot
     const updateFormConfig = useCallback((updates) => {
         if (!isAB) {
             onChange({ ...config, ...updates });
@@ -65,10 +71,8 @@ export default function DMSetupTab({
         onChange({ ...config, [key]: { ...(config[key] || {}), ...updates } });
     }, [isAB, activeAbVariant, config, onChange]);
 
-    // Toggle A/B on/off
     const handleToggleAB = () => {
         if (!isAB) {
-            // Turn on: snapshot current config into variantA, start blank variantB
             onChange({
                 ...config,
                 abEnabled: true,
@@ -84,7 +88,6 @@ export default function DMSetupTab({
             });
             if (onAbVariantChange) onAbVariantChange('A');
         } else {
-            // Turn off: restore variantA as main config
             const vA = config.variantA || {};
             onChange({
                 ...config,
@@ -101,7 +104,11 @@ export default function DMSetupTab({
     };
 
     // ─── Slide management ────────────────────────────────────────
+    const FREE_SLIDE_LIMIT = 3;
+    const atSlideLimit = !isPro && (formConfig.slides || []).length >= FREE_SLIDE_LIMIT;
+
     const addSlide = () => {
+        if (atSlideLimit) return;
         const newSlides = [...(formConfig.slides || []), { ...EMPTY_SLIDE }];
         updateFormConfig({ slides: newSlides });
         setActiveSlideIndex(newSlides.length - 1);
@@ -156,8 +163,9 @@ export default function DMSetupTab({
             const data = await res.json();
             if (res.ok) {
                 const updates = {};
-                if (data.title && !currentSlide.headline) updates.headline = data.title;
-                if (data.image && !currentSlide.imageUrl) updates.imageUrl = data.image;
+                if (data.title && !currentSlide.headline)      updates.headline    = data.title;
+                if (data.image && !currentSlide.imageUrl)      updates.imageUrl    = data.image;
+                if (data.description && !currentSlide.description) updates.description = data.description;
                 if (Object.keys(updates).length) updateCurrentSlide(updates);
             } else setFetchError(data.error || 'Could not fetch URL info');
         } catch (err) { setFetchError(`Fetch failed: ${err.message}`); }
@@ -185,6 +193,62 @@ export default function DMSetupTab({
     };
 
     const addVariable = (v) => updateFormConfig({ message: (formConfig.message || '') + ` {${v}}` });
+
+    // ─── Follow Gate reward helpers ───────────────────────────────
+    const rewardConfig  = formConfig.linkDmConfig || {};
+    const rewardSlides  = rewardConfig.slides?.length ? rewardConfig.slides : [{ ...EMPTY_SLIDE }];
+    const safeRewardIdx = Math.min(rewardSlideIndex, rewardSlides.length - 1);
+    const rewardSlide   = rewardSlides[safeRewardIdx] || rewardSlides[0] || {};
+    const updateRewardSlide = (updates) => {
+        const newSlides = [...rewardSlides];
+        newSlides[safeRewardIdx] = { ...newSlides[safeRewardIdx], ...updates };
+        updateFormConfig({ linkDmConfig: { ...rewardConfig, slides: newSlides } });
+    };
+    const addRewardSlide = () => {
+        const newSlides = [...rewardSlides, { ...EMPTY_SLIDE }];
+        updateFormConfig({ linkDmConfig: { ...rewardConfig, slides: newSlides } });
+        setRewardSlideIndex(newSlides.length - 1);
+    };
+    const removeRewardSlide = (idx) => {
+        if (rewardSlides.length <= 1) return;
+        const newSlides = rewardSlides.filter((_, i) => i !== idx);
+        updateFormConfig({ linkDmConfig: { ...rewardConfig, slides: newSlides } });
+        setRewardSlideIndex(Math.min(safeRewardIdx, newSlides.length - 1));
+    };
+    const rewardButtons = rewardConfig.buttons || [{ id: '1', label: '', url: '' }];
+    const updateRewardButtons = (b) => updateFormConfig({ linkDmConfig: { ...rewardConfig, buttons: b } });
+    const addRewardButton    = () => { if (rewardButtons.length < 3) updateRewardButtons([...rewardButtons, { id: Date.now().toString(), label: '', url: '' }]); };
+    const removeRewardButton = (id) => updateRewardButtons(rewardButtons.filter((b) => b.id !== id));
+    const updateRewardButton = (id, field, value) => updateRewardButtons(rewardButtons.map((b) => b.id === id ? { ...b, [field]: value } : b));
+    const handleRewardFileSelect = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type)) { alert('Please select JPEG, PNG, WebP or GIF'); return; }
+        if (file.size > 5 * 1024 * 1024) { alert('Image must be < 5 MB'); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => updateRewardSlide({ imageUrl: ev.target.result });
+        reader.readAsDataURL(file);
+    };
+
+    // ─── Branding checkbox helper ─────────────────────────────────
+    const BrandingCheckbox = ({ slide, onUpdate }) => (
+        <label
+            className={styles.checkboxLabel}
+            style={{ marginTop: 5, cursor: isPro ? 'pointer' : 'not-allowed', opacity: isPro ? 1 : 0.65 }}
+        >
+            <input
+                type="checkbox"
+                className={styles.checkbox}
+                checked={isPro ? (slide.appendBranding !== false) : true}
+                disabled={!isPro}
+                onChange={(e) => isPro && onUpdate({ appendBranding: e.target.checked })}
+            />
+            <span style={{ fontSize: 12 }}>
+                Append &ldquo;Sent with AutoDM&rdquo; branding
+                {!isPro && <a href="/pricing" className={styles.typeHintLink}> &mdash; upgrade to remove</a>}
+            </span>
+        </label>
+    );
 
     const winnerVariant = config.abWinner;
 
@@ -273,7 +337,7 @@ export default function DMSetupTab({
                     )}
                 </div>
 
-                {/* Variant A/B pills — shown when A/B is on */}
+                {/* Variant A/B pills */}
                 {isAB && (
                     <div className={styles.variantPills}>
                         {(['A', 'B']).map((v) => (
@@ -287,9 +351,7 @@ export default function DMSetupTab({
                                 {winnerVariant === v && <span className={styles.winnerBadge}>Winner</span>}
                             </button>
                         ))}
-                        <span className={styles.variantHint}>
-                            Editing Variant {activeAbVariant}
-                        </span>
+                        <span className={styles.variantHint}>Editing Variant {activeAbVariant}</span>
                     </div>
                 )}
             </div>
@@ -337,7 +399,14 @@ export default function DMSetupTab({
                             {slides.map((_, i) => (
                                 <button key={i} className={`${styles.pill} ${i === activeSlideIndex ? styles.pillActive : ''}`} onClick={() => setActiveSlideIndex(i)}>{i + 1}</button>
                             ))}
-                            <button className={styles.pillAdd} onClick={addSlide} title="Add slide"><Plus size={14} /></button>
+                            {atSlideLimit ? (
+                                <a href="/pricing" className={styles.pillAdd} title="Upgrade to Pro for unlimited slides" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, textDecoration: 'none', opacity: 0.7 }}>
+                                    <Plus size={14} />
+                                    <span style={{ fontSize: 10, fontWeight: 600 }}>Pro</span>
+                                </a>
+                            ) : (
+                                <button className={styles.pillAdd} onClick={addSlide} title="Add slide"><Plus size={14} /></button>
+                            )}
                             {slides.length > 1 && <button className={styles.pillDelete} onClick={() => removeSlide(activeSlideIndex)} title="Remove slide"><Trash2 size={13} /></button>}
                         </div>
                     </div>
@@ -372,8 +441,16 @@ export default function DMSetupTab({
                             )}
                         </div>
                         <div className={styles.formField}>
-                            <label className={styles.fieldLabel}>Description</label>
-                            <div className={styles.lockedField}><span>Sent with AutoDM</span><ExternalLink size={12} /></div>
+                            <label className={styles.fieldLabel}>Description <span className={styles.limitNote}>(max 80 chars)</span></label>
+                            <textarea
+                                className={`${styles.input} ${styles.messageArea}`}
+                                placeholder="Optional description shown below the headline..."
+                                rows={2}
+                                maxLength={80}
+                                value={currentSlide.description || ''}
+                                onChange={(e) => updateCurrentSlide({ description: e.target.value })}
+                            />
+                            <BrandingCheckbox slide={currentSlide} onUpdate={updateCurrentSlide} />
                         </div>
                     </div>
                 </div>
@@ -463,6 +540,56 @@ export default function DMSetupTab({
                 </div>
             )}
 
+            {/* ══════════ Email Collector ══════════ */}
+            {formConfig.type === 'email_collector' && (
+                <div className={styles.section}>
+                    <div className={styles.infoBox} style={{ background: 'rgba(59,130,246,0.08)', borderColor: 'rgba(99,179,237,0.25)', color: 'rgba(147,210,255,0.9)' }}>
+                        <span style={{ fontSize: 14 }}>📧</span>
+                        <span>When someone comments, we DM them asking for their email. Their reply is saved to your lead list automatically.</span>
+                    </div>
+
+                    <div className={styles.stepHeader}>
+                        <span className={styles.stepBadge}>1</span>
+                        <span className={styles.stepTitle}>Ask Message</span>
+                        <span className={styles.stepDesc}>Sent immediately when someone comments</span>
+                    </div>
+                    <div className={styles.formGroup}>
+                        <textarea
+                            className={`${styles.input} ${styles.messageArea}`}
+                            placeholder={`Hey {first_name}! 👋 Could you share your email address? I’ll send you the details directly 📧`}
+                            rows={3}
+                            value={formConfig.emailAskMessage || ''}
+                            onChange={(e) => updateFormConfig({ emailAskMessage: e.target.value })}
+                        />
+                    </div>
+                    <div className={styles.variableBar}>
+                        <span className={styles.varLabel}>Add variable:</span>
+                        <button className={styles.varBtn} onClick={() => updateFormConfig({ emailAskMessage: (formConfig.emailAskMessage || '') + ' {first_name}' })}>{'{first_name}'}</button>
+                        <button className={styles.varBtn} onClick={() => updateFormConfig({ emailAskMessage: (formConfig.emailAskMessage || '') + ' {username}' })}>{'{username}'}</button>
+                    </div>
+
+                    <div className={styles.stepHeader}>
+                        <span className={styles.stepBadge}>2</span>
+                        <span className={styles.stepTitle}>Confirmation Message</span>
+                        <span className={styles.stepDesc}>Sent after we capture their email</span>
+                    </div>
+                    <div className={styles.formGroup}>
+                        <textarea
+                            className={`${styles.input} ${styles.messageArea}`}
+                            placeholder={`Thanks! 🎉 We’ve got your email and will be in touch soon.`}
+                            rows={2}
+                            value={formConfig.emailConfirmMessage || ''}
+                            onChange={(e) => updateFormConfig({ emailConfirmMessage: e.target.value })}
+                        />
+                    </div>
+
+                    <div className={styles.infoBox} style={{ marginTop: 8 }}>
+                        <span style={{ fontSize: 13 }}>💡</span>
+                        <span>Collected emails appear in your <strong>Email Leads</strong> section in Settings. You can export them as CSV anytime.</span>
+                    </div>
+                </div>
+            )}
+
             {/* ══════════ Follow Gate ══════════ */}
             {formConfig.type === 'follow_up' && (
                 <div className={styles.section}>
@@ -518,9 +645,82 @@ export default function DMSetupTab({
                             <option value="multi_cta">Multi-CTA (text + buttons)</option>
                         </select>
                     </div>
+
+                    {/* Reward: Text message */}
                     {(!formConfig.linkDmType || formConfig.linkDmType === 'message_template') && (
                         <div className={styles.formGroup}>
                             <textarea className={`${styles.input} ${styles.messageArea}`} placeholder="🎉 Thanks for following! Here's your link: https://..." rows={3} value={formConfig.linkMessage || ''} onChange={(e) => updateFormConfig({ linkMessage: e.target.value, linkDmConfig: { message: e.target.value } })} />
+                        </div>
+                    )}
+
+                    {/* Reward: Button card (multi-slide) */}
+                    {formConfig.linkDmType === 'button_template' && (
+                        <div className={styles.section} style={{ paddingTop: 0 }}>
+                            <div className={styles.carouselPills}>
+                                <span className={styles.carouselLabel}>Reward Slides</span>
+                                <div className={styles.pillRow}>
+                                    {rewardSlides.map((_, i) => (
+                                        <button key={i} className={`${styles.pill} ${i === safeRewardIdx ? styles.pillActive : ''}`} onClick={() => setRewardSlideIndex(i)}>{i + 1}</button>
+                                    ))}
+                                    <button className={styles.pillAdd} onClick={addRewardSlide} title="Add reward slide"><Plus size={14} /></button>
+                                    {rewardSlides.length > 1 && <button className={styles.pillDelete} onClick={() => removeRewardSlide(safeRewardIdx)} title="Remove slide"><Trash2 size={13} /></button>}
+                                </div>
+                            </div>
+                            <div className={styles.slideForm}>
+                                <div className={styles.formField}>
+                                    <label className={styles.fieldLabel}><Link2 size={13} /> Button Destination</label>
+                                    <input className={`${styles.input} ${styles.urlInput}`} placeholder="https://..." value={rewardSlide.buttonUrl || ''} onChange={(e) => updateRewardSlide({ buttonUrl: e.target.value })} />
+                                </div>
+                                <div className={styles.formField}>
+                                    <label className={styles.fieldLabel}>Button Name</label>
+                                    <input className={styles.input} placeholder="Claim Your Reward" value={rewardSlide.buttonLabel || ''} onChange={(e) => updateRewardSlide({ buttonLabel: e.target.value })} />
+                                </div>
+                                <div className={styles.formField}>
+                                    <label className={styles.fieldLabel}>Headline</label>
+                                    <input className={styles.input} placeholder="Here's your exclusive link 🎉" value={rewardSlide.headline || ''} onChange={(e) => updateRewardSlide({ headline: e.target.value })} />
+                                </div>
+                                <div className={styles.formField}>
+                                    <label className={styles.fieldLabel}>Image</label>
+                                    <input type="file" accept="image/*" ref={rewardImageRef} onChange={handleRewardFileSelect} className={styles.hiddenFileInput} />
+                                    {rewardSlide.imageUrl ? (
+                                        <div className={styles.uploadedImage} onClick={() => rewardImageRef.current?.click()}>
+                                            <img src={rewardSlide.imageUrl} alt="Reward" />
+                                            <div className={styles.imageOverlay}><ImageIcon size={18} /><span>Change image</span></div>
+                                        </div>
+                                    ) : (
+                                        <button className={styles.uploadBtn} onClick={() => rewardImageRef.current?.click()}><ImageIcon size={15} /> Upload Image</button>
+                                    )}
+                                </div>
+                                <div className={styles.formField}>
+                                    <label className={styles.fieldLabel}>Description <span className={styles.limitNote}>(max 80 chars)</span></label>
+                                    <textarea className={`${styles.input} ${styles.messageArea}`} rows={2} maxLength={80} placeholder="Optional description..." value={rewardSlide.description || ''} onChange={(e) => updateRewardSlide({ description: e.target.value })} />
+                                    <BrandingCheckbox slide={rewardSlide} onUpdate={updateRewardSlide} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Reward: Multi-CTA */}
+                    {formConfig.linkDmType === 'multi_cta' && (
+                        <div className={styles.section} style={{ paddingTop: 0 }}>
+                            <div className={styles.formGroup}>
+                                <label className={styles.formLabel}>Message</label>
+                                <textarea className={`${styles.input} ${styles.messageArea}`} placeholder="🎉 Thanks for following! Here are your links:" rows={3} value={rewardConfig.message || ''} onChange={(e) => updateFormConfig({ linkDmConfig: { ...rewardConfig, message: e.target.value } })} />
+                            </div>
+                            <div className={styles.formGroup}>
+                                <label className={styles.formLabel}>CTA Buttons <span className={styles.limitNote}>(max 3)</span></label>
+                                <div className={styles.ctaList}>
+                                    {rewardButtons.map((btn, idx) => (
+                                        <div key={btn.id} className={styles.ctaRow}>
+                                            <span className={styles.ctaNum}>{idx + 1}</span>
+                                            <input className={styles.input} placeholder="Button label" value={btn.label} maxLength={20} style={{ flex: '0 0 140px' }} onChange={(e) => updateRewardButton(btn.id, 'label', e.target.value)} />
+                                            <input className={`${styles.input} ${styles.ctaUrl}`} placeholder="https://..." value={btn.url} onChange={(e) => updateRewardButton(btn.id, 'url', e.target.value)} />
+                                            {rewardButtons.length > 1 && <button className={styles.removeChipBtn} onClick={() => removeRewardButton(btn.id)}><Trash2 size={12} /></button>}
+                                        </div>
+                                    ))}
+                                    {rewardButtons.length < 3 && <button className={styles.addChipBtn} onClick={addRewardButton}><Plus size={13} /> Add button</button>}
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -530,10 +730,20 @@ export default function DMSetupTab({
             <div className={styles.commonControls}>
                 <div className={styles.comingSoonRow}>
                     <div className={styles.comingSoonLeft}>
-                        <input type="checkbox" className={styles.checkbox} disabled style={{ cursor: 'not-allowed' }} />
+                        <input
+                            type="checkbox"
+                            className={styles.checkbox}
+                            disabled={!isPro}
+                            checked={isPro && !!config.sendToPreviousComments}
+                            onChange={(e) => isPro && onChange({ ...config, sendToPreviousComments: e.target.checked })}
+                            style={{ cursor: isPro ? 'pointer' : 'not-allowed' }}
+                        />
                         <div>
-                            <span className={styles.comingSoonLabel}>Send DMs to previous comments<span className={styles.proBadge}>Pro</span></span>
-                            <p className={styles.comingSoonDesc}>Automatically DM everyone who already commented on this post. Coming soon.</p>
+                            <span className={styles.comingSoonLabel}>
+                                Send DMs to previous comments
+                                {!isPro && <span className={styles.proBadge}>Pro</span>}
+                            </span>
+                            <p className={styles.comingSoonDesc}>When you save this automation, AutoDM will fetch existing comments on this post and DM anyone who matches the trigger. Processed via your queue.</p>
                         </div>
                     </div>
                 </div>

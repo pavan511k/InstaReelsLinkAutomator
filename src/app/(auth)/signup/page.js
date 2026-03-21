@@ -27,7 +27,7 @@ function getPasswordStrength(pw) {
 const FEATURES = [
     { icon: Zap,         text: 'Auto-DM when someone comments on your Reels' },
     { icon: Shield,      text: 'Official Meta Business Partner — 100% safe'  },
-    { icon: TrendingUp,  text: '1,000 free DMs every month, no card needed'  },
+    { icon: TrendingUp,  text: '3,000 free DMs every month, no card needed'  },
     { icon: Star,        text: 'Works with stories, posts, and live replies'  },
 ];
 
@@ -66,8 +66,18 @@ export default function SignupPage() {
                     emailRedirectTo: `${window.location.origin}/auth/callback`,
                 },
             });
-            if (authError) setError(authError.message);
-            else           router.push('/verify');
+            if (authError) {
+                setError(authError.message);
+            } else {
+                // Fire welcome email in background — don't block redirect
+                fetch('/api/email/welcome', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, name: fullName }),
+                }).catch(() => {/* non-critical */});
+
+                router.push('/verify');
+            }
         } catch {
             setError('Something went wrong. Please try again.');
         } finally {

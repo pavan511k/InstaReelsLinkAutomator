@@ -1,9 +1,30 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 
 const CASHFREE_BASE = process.env.CASHFREE_ENV === 'production'
     ? 'https://api.cashfree.com/pg'
     : 'https://sandbox.cashfree.com/pg';
+
+/**
+ * Activates a plan for a user.
+ * Writes ONLY to user_plans — the single source of truth for plan data.
+ */
+async function activatePlan(supabase, userId, planId, expiresAt) {
+    const { error } = await supabase
+        .from('user_plans')
+        .upsert(
+            {
+                user_id:         userId,
+                plan:            planId,
+                plan_expires_at: expiresAt.toISOString(),
+                updated_at:      new Date().toISOString(),
+            },
+            { onConflict: 'user_id' },
+        );
+
+    if (error) throw new Error(`user_plans upsert failed: ${error.message}`);
+}
 
 /**
  * GET /api/payments/verify?order_id=xxx&plan=pro
@@ -19,11 +40,10 @@ export async function GET(request) {
     }
 
     try {
-        // Fetch order status directly from Cashfree
         const res = await fetch(`${CASHFREE_BASE}/orders/${orderId}`, {
             method: 'GET',
             headers: {
-                'x-api-version': '2023-08-01',
+                'x-api-version':   '2023-08-01',
                 'x-client-id':     process.env.CASHFREE_APP_ID,
                 'x-client-secret': process.env.CASHFREE_SECRET_KEY,
             },
@@ -35,23 +55,25 @@ export async function GET(request) {
             return NextResponse.json({ status: 'error', message: data.message }, { status: 500 });
         }
 
-        const orderStatus = data.order_status; // PAID | ACTIVE | EXPIRED | CANCELLED
+        const orderStatus = data.order_status;
 
         if (orderStatus === 'PAID') {
-            // Activate plan in Supabase
-            const supabase = await createClient();
-            const { data: { user } } = await supabase.auth.getUser();
+            // Service-role client for writes (bypasses RLS on user_plans)
+            const serviceSupabase = createServiceClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL,
+                process.env.SUPABASE_SERVICE_ROLE_KEY,
+            );
+
+            const authSupabase = await createClient();
+            const { data: { user } } = await authSupabase.auth.getUser();
 
             if (user) {
-                // Update connected_accounts plan
-                await supabase
-                    .from('connected_accounts')
-                    .update({ plan: planId, updated_at: new Date().toISOString() })
-                    .eq('user_id', user.id)
-                    .eq('is_active', true);
+                const planExpiresAt = new Date();
+                planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
 
-                // Update payment_orders record
-                await supabase
+                await activatePlan(serviceSupabase, user.id, planId, planExpiresAt);
+
+                await serviceSupabase
                     .from('payment_orders')
                     .update({ status: 'paid', paid_at: new Date().toISOString() })
                     .eq('order_id', orderId)

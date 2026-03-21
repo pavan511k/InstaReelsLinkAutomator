@@ -298,6 +298,60 @@
     color: rgba(16,185,129,0.9);
 }
 
+/* Pro lock icon — shown inline next to a count when detail is Pro-only */
+.clicksProLock {
+    font-size: 12px;
+    opacity: 0.45;
+    text-decoration: none;
+    cursor: pointer;
+    transition: opacity 150ms;
+}
+.clicksProLock:hover { opacity: 0.8; }
+
+/* Free-plan click count cell — same look as the active Pro cell but not clickable */
+.clicksCellFree {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.845rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.55);
+    cursor: default;
+}
+
+/* Small lock link shown after click/CTR count on free plan */
+.clicksDetailLock {
+    font-size: 10px;
+    opacity: 0.4;
+    text-decoration: none;
+    cursor: pointer;
+    margin-left: 2px;
+    transition: opacity 150ms;
+    line-height: 1;
+}
+.clicksDetailLock:hover { opacity: 0.85; }
+
+/* Free CTR cell — plain span, not a button */
+.ctrCellFree {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.845rem;
+    font-weight: 600;
+    color: rgba(16,185,129,0.7);
+    cursor: default;
+}
+
+/* Make the existing ctrCell work as a button too (for Pro users) */
+button.ctrCell {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+}
+button.ctrCell:hover { opacity: 0.75; }
+
 /* Expiry countdown badges — shown under status in the table row */
 .expiryBadge {
     display: inline-flex;

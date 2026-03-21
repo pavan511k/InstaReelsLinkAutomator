@@ -217,6 +217,88 @@
     font-size: 11px; font-weight: 700;
 }
 
+/* ── Trial Banner ────────────────────────────────────────────── */
+.trialBanner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(167,139,250,0.10) 100%);
+    border: 1px solid rgba(167,139,250,0.28);
+    border-radius: 14px;
+    flex-wrap: wrap;
+}
+.trialBannerUrgent {
+    background: linear-gradient(135deg, rgba(245,158,11,0.14) 0%, rgba(239,68,68,0.10) 100%);
+    border-color: rgba(245,158,11,0.35);
+}
+.trialBannerLeft {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+.trialBannerIcon {
+    color: #A78BFA;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+.trialBannerUrgent .trialBannerIcon { color: #F59E0B; }
+.trialBannerTitle {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #E9D5FF;
+    letter-spacing: -0.01em;
+    margin-bottom: 2px;
+}
+.trialBannerUrgent .trialBannerTitle { color: #FDE68A; }
+.trialBannerSub {
+    display: block;
+    font-size: 12px;
+    color: rgba(255,255,255,0.42);
+    font-weight: 400;
+}
+.trialBannerCta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #7C3AED;
+    color: #fff;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 150ms;
+    box-shadow: 0 4px 14px rgba(124,58,237,0.35);
+}
+.trialBannerCta:hover { background: #6D28D9; }
+.trialBannerUrgent .trialBannerCta {
+    background: #D97706;
+    box-shadow: 0 4px 14px rgba(217,119,6,0.35);
+}
+.trialBannerUrgent .trialBannerCta:hover { background: #B45309; }
+
+/* ── Pro badge in header ─────────────────────────────────────── */
+.proBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 11px;
+    background: linear-gradient(135deg, rgba(124,58,237,0.25), rgba(167,139,250,0.15));
+    border: 1px solid rgba(167,139,250,0.30);
+    border-radius: 100px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #C4B5FD;
+    letter-spacing: 0.02em;
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 1100px) {
     .statsRow     { grid-template-columns: repeat(2, 1fr); }
@@ -225,6 +307,8 @@
 @media (max-width: 640px) {
     .statsRow { grid-template-columns: 1fr 1fr; gap: 10px; }
     .greeting { font-size: 1.3rem; }
+    .trialBanner { flex-direction: column; align-items: flex-start; }
+    .trialBannerCta { width: 100%; justify-content: center; }
 }
 @media (max-width: 420px) {
     .statsRow { grid-template-columns: 1fr; }

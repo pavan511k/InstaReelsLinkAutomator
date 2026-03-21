@@ -67,7 +67,7 @@ export default function VerifyPage() {
                     <div className={styles.tipBox}>
                         <p className={styles.tipTitle}>Can&apos;t find the email?</p>
                         <p className={styles.tipText}>
-                            Check your <strong>spam or junk folder</strong>. The email comes from <strong>noreply@autodm.app</strong>.
+                            Check your <strong>spam or junk folder</strong>. The email comes from <strong>support@autodm.pro</strong>.
                         </p>
                     </div>
 

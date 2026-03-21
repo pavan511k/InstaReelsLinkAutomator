@@ -15,12 +15,12 @@ export default function CtaBanner() {
             Start automating your Instagram DMs today
           </h2>
           <p className={styles.subtitle}>
-            Your first 1,000 DMs every month are completely free. Upgrade when you&apos;re ready to scale.
+            Your first 3,000 DMs every month are completely free. Upgrade when you&apos;re ready to scale.
           </p>
 
           <ul className={styles.perks}>
             {[
-              '1,000 free DMs per month',
+              '3,000 free DMs per month',
               'All features included on free plan',
               'Official Meta API — 100% account safe',
               'Set up in under 5 minutes',

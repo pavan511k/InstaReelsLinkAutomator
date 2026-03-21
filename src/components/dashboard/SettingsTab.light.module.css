@@ -1,0 +1,233 @@
+/* ================================================================
+   LIGHT THEME — SettingsTab
+   White/light schedule & expiry cards, purple toggle active,
+   date inputs light bg with color-scheme: light,
+   countdown pills adapted for white bg.
+   ================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.tab {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: 'Inter', sans-serif;
+}
+
+.settingGroup {
+    display: flex; flex-direction: column; gap: 2px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(124,58,237,0.08);
+}
+.settingGroup:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.groupTitle {
+    font-size: 10.5px; font-weight: 700;
+    color: rgba(30,21,53,0.40);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 10px 10px 6px;
+}
+
+.checkboxLabel {
+    display: flex; align-items: flex-start; gap: 12px;
+    cursor: pointer; padding: 10px;
+    border-radius: 10px; transition: background 150ms;
+}
+.checkboxLabel:hover { background: rgba(124,58,237,0.05); }
+
+.proFeature { opacity: 0.5; cursor: not-allowed; }
+.proFeature:hover { background: transparent !important; }
+
+.checkboxGroup { display: flex; flex-direction: column; }
+
+.checkbox {
+    width: 16px; height: 16px;
+    accent-color: #7C3AED;
+    margin-top: 3px; flex-shrink: 0; cursor: pointer;
+}
+
+.checkText {
+    font-size: 0.845rem; font-weight: 600;
+    color: rgba(30,21,53,0.82);
+    display: flex; align-items: center; margin-bottom: 3px;
+}
+.checkDesc {
+    font-size: 11.5px; color: rgba(30,21,53,0.48); line-height: 1.55;
+}
+
+.nestedInput { padding: 0 10px 10px 44px; }
+
+/* Textarea */
+.textarea {
+    width: 100%; padding: 9px 13px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.845rem;
+    color: rgba(30,21,53,0.85);
+    background: #FFFFFF;
+    border: 1px solid rgba(30,21,53,0.12);
+    border-radius: 9px; outline: none;
+    resize: vertical; min-height: 64px; line-height: 1.6;
+    transition: border-color 150ms;
+    box-sizing: border-box;
+}
+.textarea:focus { border-color: rgba(124,58,237,0.40); }
+.textarea::placeholder { color: rgba(30,21,53,0.32); }
+
+/* ── Schedule start card ──────────────────────────────────────── */
+.scheduleCard {
+    padding: 10px 12px;
+    background: rgba(124,58,237,0.03);
+    border: 1px solid rgba(124,58,237,0.09);
+    border-radius: 11px;
+    display: flex; flex-direction: column; gap: 0;
+    margin: 2px 0;
+}
+
+/* Blue-tinted icon for schedule-start */
+.scheduleIcon {
+    background: rgba(59,130,246,0.10) !important;
+    border-color: rgba(96,165,250,0.20) !important;
+    color: #2563EB !important;
+}
+
+/* Scheduled countdown pill — blue on white */
+.countdownScheduled {
+    background: rgba(59,130,246,0.08);
+    border: 1px solid rgba(59,130,246,0.20);
+    color: #1D4ED8;
+}
+
+/* Range summary row */
+.rangeRow {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: rgba(124,58,237,0.03);
+    border: 1px solid rgba(124,58,237,0.09);
+    border-radius: 9px; flex-wrap: wrap;
+}
+.rangeLabel {
+    font-size: 12px; font-weight: 600;
+    color: rgba(30,21,53,0.62);
+}
+.rangeArrow { color: rgba(30,21,53,0.28); flex-shrink: 0; }
+.rangeDuration {
+    margin-left: auto;
+    font-size: 11px; font-weight: 500;
+    color: rgba(30,21,53,0.45);
+    background: rgba(30,21,53,0.05);
+    border-radius: 100px; padding: 2px 8px;
+}
+
+/* ── Expiry card ──────────────────────────────────────────────── */
+.expiryCard {
+    padding: 10px 12px;
+    background: rgba(124,58,237,0.03);
+    border: 1px solid rgba(124,58,237,0.09);
+    border-radius: 11px;
+    display: flex; flex-direction: column; gap: 0;
+    margin: 2px 0;
+}
+
+.expiryToggleRow {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; cursor: pointer; padding: 2px 0;
+}
+.expiryToggleLeft { display: flex; align-items: flex-start; gap: 10px; flex: 1; }
+/* Expiry icon — purple tinted */
+.expiryIcon {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: rgba(124,58,237,0.10);
+    border: 1px solid rgba(124,58,237,0.20);
+    display: flex; align-items: center; justify-content: center;
+    color: #5B21B6; flex-shrink: 0; margin-top: 1px;
+}
+
+/* Toggle switch */
+.toggle {
+    width: 36px; height: 20px; border-radius: 100px;
+    background: rgba(30,21,53,0.12);
+    border: 1px solid rgba(30,21,53,0.16);
+    position: relative; cursor: pointer; flex-shrink: 0;
+    transition: background 200ms, border-color 200ms;
+    margin-top: 2px;
+}
+.toggleOn { background: #7C3AED; border-color: #7C3AED; }
+.toggleThumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: rgba(255,255,255,0.85);
+    transition: transform 200ms, background 200ms;
+}
+.toggleOn .toggleThumb { transform: translateX(16px); background: #fff; }
+
+/* Date picker */
+.expiryPickerWrap {
+    margin-top: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+    padding-left: 38px;
+}
+.expiryPickerRow { display: flex; align-items: center; gap: 8px; }
+.expiryPickerIcon { color: rgba(30,21,53,0.38); flex-shrink: 0; }
+
+.expiryInput {
+    flex: 1; padding: 8px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.845rem;
+    color: rgba(30,21,53,0.82);
+    background: #FFFFFF;
+    border: 1px solid rgba(30,21,53,0.12);
+    border-radius: 9px; outline: none;
+    transition: border-color 150ms;
+    color-scheme: light; /* switch the native datetime widget to light mode */
+}
+.expiryInput:focus { border-color: rgba(124,58,237,0.40); }
+.expiryInputExpired {
+    border-color: rgba(239,68,68,0.28);
+    color: #DC2626;
+}
+
+.expiryHint {
+    font-size: 11px; color: rgba(30,21,53,0.42);
+    font-style: italic; margin: 0; line-height: 1.55;
+}
+
+/* Countdown pill — active purple, expired red on white */
+.countdownPill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 100px;
+    font-size: 11.5px; font-weight: 600;
+    width: fit-content;
+}
+.countdownActive {
+    background: rgba(124,58,237,0.10);
+    border: 1px solid rgba(124,58,237,0.22);
+    color: #5B21B6;
+}
+.countdownExpired {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.18);
+    color: #DC2626;
+}
+
+/* Comment reply card */
+.commentReplyCard {
+    padding: 10px; border-radius: 10px;
+    background: rgba(124,58,237,0.03);
+    border: 1px solid rgba(124,58,237,0.09);
+    display: flex; flex-direction: column; gap: 10px;
+}
+.commentReplyHeader { display: flex; align-items: flex-start; gap: 10px; }
+
+/* Pro badge — amber, adapted for light */
+.proBadge {
+    display: inline-flex; align-items: center;
+    padding: 1px 7px; border-radius: 100px;
+    font-size: 10px; font-weight: 700;
+    background: rgba(245,158,11,0.12);
+    border: 1px solid rgba(245,158,11,0.25);
+    color: #B45309;
+    margin-left: 8px;
+}

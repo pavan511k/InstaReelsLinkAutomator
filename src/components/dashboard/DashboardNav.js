@@ -6,7 +6,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { LayoutDashboard, Grid3X3, BookOpen, Settings, LogOut, Lock, Menu, X, ChevronDown } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
-import styles from './DashboardNav.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './DashboardNav.module.css';
+import lightStyles from './DashboardNav.light.module.css';
 
 const NAV_ITEMS = [
     { href: '/dashboard',  label: 'Overview',      icon: LayoutDashboard, requiresConnection: false },
@@ -20,6 +22,7 @@ export default function DashboardNav({ user, isConnected = false, profilePicUrl 
     const router   = useRouter();
     const supabase = createClient();
     const [menuOpen, setMenuOpen] = useState(false);
+    const styles = useStyles(darkStyles, lightStyles);
 
     const handleLogout = async () => {
         await supabase.auth.signOut();

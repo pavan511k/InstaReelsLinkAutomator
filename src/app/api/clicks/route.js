@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
 
 /**
  * GET /api/clicks?automationId=xxx
@@ -21,6 +22,10 @@ export async function GET(request) {
     if (!automationId) {
         return NextResponse.json({ error: 'automationId is required' }, { status: 400 });
     }
+
+    const plan = await getUserEffectivePlan(supabase, user.id);
+    const gate = requirePro(plan, 'Click analytics require a Pro plan.');
+    if (gate) return gate;
 
     try {
         // Verify automation belongs to user, fetch dm_config for A/B info
