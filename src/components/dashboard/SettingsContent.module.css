@@ -1013,6 +1013,35 @@ select.formInput option {
   margin: 0;
 }
 
+/* ── Info boxes (used in GlobalAutomationsContent + WelcomeOpenersContent) ── */
+.infoBox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(99, 179, 237, 0.2);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(147, 210, 255, 0.9);
+  margin-bottom: 20px;
+}
+
+.infoBoxPurple {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(196, 181, 253, 0.9);
+  margin-bottom: 20px;
+}
+
 @media (max-width: 640px) {
   .settingsPage {
     padding: 20px 16px 48px;

@@ -3,7 +3,15 @@ import { createClient } from '@/lib/supabase-server';
 
 /**
  * POST /api/posts/sync
- * Fetches posts from all connected Instagram/Facebook accounts and saves to DB
+ * Fetches posts from all connected Instagram/Facebook accounts and upserts to DB.
+ *
+ * IMPORTANT: allPosts is deduplicated by ig_post_id before the upsert.
+ * A user can have both a 'both' account and a 'facebook' account active at the
+ * same time (different platform values, so the unique constraint allows it).
+ * If they share the same Facebook Page, the sync loop produces two entries with
+ * the same ig_post_id ('fb_<postId>'), which causes Postgres to throw:
+ *   "ON CONFLICT DO UPDATE command cannot affect row a second time"
+ * Deduplication prevents this.
  */
 export async function POST() {
     const supabase = await createClient();
@@ -69,7 +77,9 @@ export async function POST() {
                 const fbPosts = await fetchFacebookPosts(account.fb_page_id, account.fb_page_access_token || account.access_token);
                 allPosts.push(...fbPosts.map((p) => {
                     const attachment = p.attachments?.data?.[0];
-                    const mediaUrl = attachment?.media?.image?.src || null;
+                    // media{image{src}} is explicitly requested in fetchFacebookPosts so this path works.
+                    // attachment.url is the linked page URL (not a media URL) — only used as a last resort.
+                    const mediaUrl = attachment?.media?.image?.src || attachment?.url || null;
                     const mediaType = attachment?.media_type === 'video' ? 'VIDEO' : 'IMAGE';
 
                     return {
@@ -89,11 +99,24 @@ export async function POST() {
             }
         }
 
+        // ── Deduplicate by ig_post_id ───────────────────────────────────────
+        // Multiple active accounts can share the same Facebook Page, producing two
+        // entries for every FB post (same ig_post_id, different account_id).
+        // Postgres upsert ON CONFLICT DO UPDATE fails when the same conflict key
+        // appears more than once in a single INSERT statement.
+        // Last-write-wins: the final entry per ig_post_id is kept.
+        const deduped = Object.values(
+            allPosts.reduce((map, post) => {
+                map[post.ig_post_id] = post;
+                return map;
+            }, {}),
+        );
+
         // Upsert posts (insert or update on conflict)
-        if (allPosts.length > 0) {
+        if (deduped.length > 0) {
             const { error: upsertError } = await supabase
                 .from('instagram_posts')
-                .upsert(allPosts, { onConflict: 'ig_post_id' });
+                .upsert(deduped, { onConflict: 'ig_post_id' });
 
             if (upsertError) {
                 console.error('Failed to save posts:', upsertError);
@@ -103,7 +126,7 @@ export async function POST() {
 
         return NextResponse.json({
             success: true,
-            synced: allPosts.length,
+            synced: deduped.length,
             platforms: syncedPlatforms,
         });
     } catch (err) {
@@ -151,10 +174,13 @@ async function fetchInstagramStories(igUserId, accessToken) {
 }
 
 /**
- * Fetch posts from Facebook Page Graph API
+ * Fetch posts from Facebook Page Graph API.
+ * Uses explicit sub-field expansion so attachment.media.image.src is populated.
+ * Without media{image{src}}, the Graph API returns an opaque media object that
+ * does not include the image src, causing all thumbnails to be null.
  */
 async function fetchFacebookPosts(pageId, pageAccessToken) {
-    const fields = 'id,message,permalink_url,created_time,attachments{media,media_type,url}';
+    const fields = 'id,message,permalink_url,created_time,attachments{media_type,media{image{src}},url}';
     const response = await fetch(
         `https://graph.facebook.com/v21.0/${pageId}/posts?fields=${fields}&limit=100&access_token=${pageAccessToken}`
     );

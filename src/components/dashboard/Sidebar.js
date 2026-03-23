@@ -7,7 +7,7 @@ import Image from 'next/image';
 import {
     LayoutDashboard, Grid3X3, BookOpen, Settings,
     LogOut, Lock, Menu, X, Zap, ChevronRight, CreditCard, ScrollText,
-    Sun, Moon,
+    Sun, Moon, Globe, MessageSquarePlus, Users,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { createClient } from '@/lib/supabase-client';
@@ -15,11 +15,18 @@ import { useStyles, useIsDark } from '@/lib/useStyles';
 import darkStyles from './Sidebar.module.css';
 import lightStyles from './Sidebar.light.module.css';
 
+// Items with only a `section` key render as a section label divider.
 const NAV = [
+    { section: 'Navigation' },
     { href: '/dashboard', label: 'Dashboard',    icon: LayoutDashboard, locked: false },
     { href: '/posts',     label: 'Posts & Reels', icon: Grid3X3,         locked: true  },
     { href: '/stories',   label: 'Stories',       icon: BookOpen,        locked: true  },
     { href: '/logs',      label: 'DM Logs',       icon: ScrollText,      locked: true  },
+    { section: 'Tools' },
+    { href: '/global-automations', label: 'Global Triggers',  icon: Globe,              locked: true },
+    { href: '/welcome-openers',    label: 'Welcome Openers',  icon: MessageSquarePlus,  locked: true },
+    { href: '/leads',              label: 'Email Leads',      icon: Users,              locked: true },
+    { section: 'Account' },
     { href: '/settings',  label: 'Settings',      icon: Settings,        locked: false },
     { href: '/pricing',   label: 'Pricing',       icon: CreditCard,      locked: false },
 ];
@@ -103,8 +110,15 @@ export default function Sidebar({ user, isConnected = false, profilePicUrl = nul
 
             {/* Nav */}
             <nav className={styles.nav}>
-                <span className={styles.navSection}>Navigation</span>
-                {NAV.map(({ href, label, icon: Icon, locked }) => {
+                {NAV.map((item) => {
+                    // Section label divider
+                    if (item.section) {
+                        return (
+                            <span key={item.section} className={styles.navSection}>{item.section}</span>
+                        );
+                    }
+
+                    const { href, label, icon: Icon, locked } = item;
                     const disabled = locked && !isConnected;
                     const active   = pathname === href;
 
