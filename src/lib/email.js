@@ -121,7 +121,7 @@ export async function sendWelcomeEmail({ to, name }) {
         </p>
     `);
 
-    return resend.emails.send({
+    return getResend().emails.send({
         from: FROM,
         to,
         subject: 'Welcome to AutoDM 🎉 — Here\'s how to get started',
@@ -192,7 +192,7 @@ export async function sendTrialStartedEmail({ to, name, igUsername, trialEndsAt 
         </p>
     `);
 
-    return resend.emails.send({
+    return getResend().emails.send({
         from: FROM,
         to,
         subject: `🎁 Your 30-day AutoDM Pro trial has started!`,
@@ -241,7 +241,7 @@ export async function sendTrialExpiringEmail({ to, name, daysLeft, trialEndsAt }
         </p>
     `);
 
-    return resend.emails.send({
+    return getResend().emails.send({
         from: FROM,
         to,
         subject: `⚠️ Your AutoDM Pro trial expires in ${daysLeft} days`,

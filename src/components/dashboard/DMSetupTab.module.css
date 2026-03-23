@@ -894,3 +894,94 @@
     color: rgba(255,255,255,0.25);
     font-style: italic;
 }
+
+/* ── Collapsible Advanced / Templates sections ────────────────── */
+.advancedSection {
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 11px;
+    overflow: hidden;
+}
+
+.advancedHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 11px 14px;
+    background: rgba(255,255,255,0.03);
+    border: none;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    text-align: left;
+    transition: background 150ms;
+    gap: 10px;
+}
+.advancedHeader:hover {
+    background: rgba(255,255,255,0.055);
+}
+/* When A/B is active the header is locked open — show default cursor */
+.advancedHeaderLocked {
+    cursor: default;
+}
+.advancedHeaderLocked:hover {
+    background: rgba(255,255,255,0.03);
+}
+
+.advancedHeaderLabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.42);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+}
+
+.advancedChevron {
+    color: rgba(255,255,255,0.25);
+    transition: transform 200ms;
+    flex-shrink: 0;
+}
+.advancedChevronOpen {
+    transform: rotate(180deg);
+}
+
+.advancedBody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 14px 14px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    animation: slideIn 0.15s ease;
+}
+
+/* "A/B on" pill shown in the Advanced header when A/B is active */
+.abActivePill {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 100px;
+    font-size: 9.5px;
+    font-weight: 700;
+    background: rgba(16,185,129,0.15);
+    border: 1px solid rgba(16,185,129,0.28);
+    color: #6EE7B7;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+/* Template count badge in Templates header */
+.templateCount {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 700;
+    background: rgba(167,139,250,0.15);
+    border: 1px solid rgba(167,139,250,0.22);
+    color: #C4B5FD;
+}

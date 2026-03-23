@@ -104,7 +104,12 @@
     text-transform: uppercase;
     letter-spacing: 0.1em;
     padding: 0 8px;
+    margin-top: 18px;
     margin-bottom: 6px;
+}
+/* First section label needs no top gap */
+.nav > .navSection:first-child {
+    margin-top: 0;
 }
 
 .navItem {

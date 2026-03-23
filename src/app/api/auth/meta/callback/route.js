@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { sendTrialStartedEmail } from '@/lib/email';
 import {
     exchangeCodeForInstagramToken,
@@ -11,6 +12,92 @@ import {
     getInstagramAccount,
     getMetaUser,
 } from '@/lib/meta-oauth';
+
+/**
+ * Sync all posts for a user using a service-role client.
+ * Called from the OAuth callback so it doesn't rely on session cookies.
+ */
+async function syncPostsForUser(userId) {
+    const db = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+    );
+
+    const { data: accounts } = await db
+        .from('connected_accounts')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_active', true);
+
+    if (!accounts || accounts.length === 0) return;
+
+    const allPosts = [];
+
+    for (const account of accounts) {
+        if (account.ig_user_id && (account.platform === 'instagram' || account.platform === 'both')) {
+            try {
+                const token = account.fb_page_access_token || account.access_token;
+                const igRes = await fetch(
+                    `https://graph.facebook.com/v21.0/${account.ig_user_id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&limit=100&access_token=${token}`
+                );
+                if (igRes.ok) {
+                    const igData = await igRes.json();
+                    for (const p of igData.data || []) {
+                        allPosts.push({
+                            account_id: account.id,
+                            ig_post_id: p.id,
+                            media_type: p.media_type,
+                            media_url: p.media_url || null,
+                            thumbnail_url: p.thumbnail_url || p.media_url || null,
+                            caption: p.caption || '',
+                            permalink: p.permalink || '',
+                            timestamp: p.timestamp,
+                            is_story: false,
+                            synced_at: new Date().toISOString(),
+                        });
+                    }
+                }
+            } catch { /* non-fatal */ }
+        }
+
+        if (account.fb_page_id && (account.platform === 'facebook' || account.platform === 'both')) {
+            try {
+                const token = account.fb_page_access_token || account.access_token;
+                const fbRes = await fetch(
+                    `https://graph.facebook.com/v21.0/${account.fb_page_id}/posts?fields=id,message,permalink_url,created_time,attachments{media_type,media{image{src}},url}&limit=100&access_token=${token}`
+                );
+                if (fbRes.ok) {
+                    const fbData = await fbRes.json();
+                    for (const p of fbData.data || []) {
+                        const att = p.attachments?.data?.[0];
+                        const mediaUrl = att?.media?.image?.src || att?.url || null;
+                        allPosts.push({
+                            account_id: account.id,
+                            ig_post_id: `fb_${p.id}`,
+                            media_type: att?.media_type === 'video' ? 'VIDEO' : 'IMAGE',
+                            media_url: mediaUrl,
+                            thumbnail_url: mediaUrl,
+                            caption: p.message || '',
+                            permalink: p.permalink_url || '',
+                            timestamp: p.created_time,
+                            is_story: false,
+                            synced_at: new Date().toISOString(),
+                        });
+                    }
+                }
+            } catch { /* non-fatal */ }
+        }
+    }
+
+    if (allPosts.length === 0) return;
+
+    // Deduplicate by ig_post_id (same fix as in /api/posts/sync)
+    const deduped = Object.values(
+        allPosts.reduce((map, post) => { map[post.ig_post_id] = post; return map; }, {}),
+    );
+
+    await db.from('instagram_posts').upsert(deduped, { onConflict: 'ig_post_id' });
+}
 
 /**
  * GET /api/auth/meta/callback?code=xxx&state=type:userId
@@ -142,19 +229,14 @@ export async function GET(request) {
                 console.warn('[Email] Could not send trial email:', emailErr.message);
             }
         }
-        // Auto-sync posts after successful connection (#14)
+        // Auto-sync posts after successful connection.
+        // Uses a service-role client so this works regardless of whether the
+        // session cookie survives the server-to-server fetch boundary.
         try {
-            const syncUrl = `${appUrl}/api/posts/sync`;
-            await fetch(syncUrl, {
-                method: 'POST',
-                headers: {
-                    // Forward cookies for authentication
-                    cookie: request.headers.get('cookie') || '',
-                },
-            });
-            console.log('[OAuth Callback] Auto-sync triggered after connection');
+            await syncPostsForUser(userId);
+            console.log('[OAuth Callback] Auto-sync completed after connection');
         } catch (syncErr) {
-            // Non-critical — user can manually sync later
+            // Non-critical — user can manually sync later via the Posts page.
             console.warn('[OAuth Callback] Auto-sync failed (non-critical):', syncErr.message);
         }
 
@@ -162,8 +244,13 @@ export async function GET(request) {
         return NextResponse.redirect(`${appUrl}/posts?connected=${connectionType}`);
     } catch (err) {
         console.error('OAuth callback error:', err);
+        // Pass the thrown error message as the 'error' query param so ConnectAccount.js
+        // can look it up in ERROR_MESSAGES (e.g. 'no_facebook_page', 'no_instagram_account').
+        // Fall back to 'oauth_failed' for generic/unexpected errors.
+        const knownErrors = ['no_facebook_page', 'no_instagram_account', 'save_failed'];
+        const errorKey = knownErrors.includes(err.message) ? err.message : 'oauth_failed';
         return NextResponse.redirect(
-            `${appUrl}/dashboard?error=oauth_failed&message=${encodeURIComponent(err.message)}`
+            `${appUrl}/dashboard?error=${errorKey}`
         );
     }
 }

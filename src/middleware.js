@@ -37,7 +37,10 @@ export async function middleware(request) {
     const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') ||
         request.nextUrl.pathname.startsWith('/posts') ||
         request.nextUrl.pathname.startsWith('/stories') ||
-        request.nextUrl.pathname.startsWith('/settings');
+        request.nextUrl.pathname.startsWith('/settings') ||
+        request.nextUrl.pathname.startsWith('/global-automations') ||
+        request.nextUrl.pathname.startsWith('/welcome-openers') ||
+        request.nextUrl.pathname.startsWith('/leads');
 
     if (isProtectedRoute && !user) {
         const url = request.nextUrl.clone();

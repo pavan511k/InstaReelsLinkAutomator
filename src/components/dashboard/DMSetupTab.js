@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import {
     Plus, Trash2, Image as ImageIcon, BookmarkPlus, FileDown, Loader2,
-    Link2, ExternalLink, MessageSquare, MousePointerClick, Zap, FlaskConical,
+    Link2, ExternalLink, MessageSquare, MousePointerClick, Zap, FlaskConical, ChevronDown,
 } from 'lucide-react';
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from './DMSetupTab.module.css';
@@ -52,6 +52,10 @@ export default function DMSetupTab({
     const [templateName, setTemplateName]           = useState('');
     const [isFetchingUrl, setIsFetchingUrl]         = useState(false);
     const [fetchError, setFetchError]               = useState('');
+    // Progressive disclosure — both collapsed by default for noob users.
+    // Advanced auto-opens when A/B is enabled so variant pills stay reachable.
+    const [showAdvanced, setShowAdvanced]           = useState(false);
+    const [showTemplates, setShowTemplates]         = useState(templates.length > 0);
 
     // ─── A/B routing ─────────────────────────────────────────────
     const isAB = !!config.abEnabled;
@@ -73,6 +77,7 @@ export default function DMSetupTab({
 
     const handleToggleAB = () => {
         if (!isAB) {
+            setShowAdvanced(true); // ensure Advanced section is open so variant pills are visible
             onChange({
                 ...config,
                 abEnabled: true,
@@ -255,106 +260,6 @@ export default function DMSetupTab({
     return (
         <>
         <div className={styles.tab}>
-
-            {/* ── Template bar ── */}
-            {(templates.length > 0 || onSaveTemplate) && (
-                <div className={styles.templateBar}>
-                    {templates.length > 0 && (
-                        <div className={styles.templateSelect}>
-                            <FileDown size={14} />
-                            <select className={styles.templateDropdown} defaultValue=""
-                                onChange={(e) => {
-                                    const t = templates.find((t) => t.id === e.target.value);
-                                    if (t) onLoadTemplate?.(t);
-                                    e.target.value = '';
-                                }}
-                            >
-                                <option value="" disabled>Load from template...</option>
-                                {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                            </select>
-                            {onDeleteTemplate && (
-                                <button className={styles.deleteTemplateBtn} title="Delete a template"
-                                    onClick={() => {
-                                        const name = prompt('Template name to delete:');
-                                        if (!name) return;
-                                        const t = templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
-                                        if (t && confirm(`Delete "${t.name}"?`)) onDeleteTemplate(t.id);
-                                        else if (!t) alert('Template not found.');
-                                    }}
-                                >
-                                    <Trash2 size={13} />
-                                </button>
-                            )}
-                        </div>
-                    )}
-                    {onSaveTemplate && (
-                        isPro ? (
-                            <button className={styles.saveTemplateBtn} onClick={() => { setTemplateName(''); setShowTemplateModal(true); }}>
-                                <BookmarkPlus size={13} /> Save as Template
-                            </button>
-                        ) : (
-                            <a href="/pricing" className={styles.saveTemplateBtnLocked} title="Upgrade to Pro to save templates">
-                                <BookmarkPlus size={13} />
-                                Save as Template
-                                <span className={styles.saveTemplateProTag}>Pro</span>
-                            </a>
-                        )
-                    )}
-                </div>
-            )}
-
-            {/* ── A/B Test toggle ── */}
-            <div className={styles.abCard}>
-                <div className={styles.abCardHeader}>
-                    <div className={styles.abCardLeft}>
-                        <div className={`${styles.abCardIcon} ${isAB ? styles.abCardIconOn : ''}`}>
-                            <FlaskConical size={14} />
-                        </div>
-                        <div>
-                            <span className={styles.checkText} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                A/B Message Testing
-                                {!isPro && <span className={styles.proBadge}>Pro</span>}
-                            </span>
-                            <p className={styles.abCardDesc}>
-                                Send two different messages and see which gets more clicks.
-                                {isAB && winnerVariant && (
-                                    <span className={styles.winnerHint}> 🏆 Winner: Variant {winnerVariant}</span>
-                                )}
-                            </p>
-                        </div>
-                    </div>
-                    {isPro ? (
-                        <div
-                            className={`${styles.toggle} ${isAB ? styles.toggleOn : ''}`}
-                            onClick={handleToggleAB}
-                            role="switch"
-                            aria-checked={isAB}
-                        >
-                            <div className={styles.toggleThumb} />
-                        </div>
-                    ) : (
-                        <a href="/pricing" className={styles.abProLink}>Upgrade</a>
-                    )}
-                </div>
-
-                {/* Variant A/B pills */}
-                {isAB && (
-                    <div className={styles.variantPills}>
-                        {(['A', 'B']).map((v) => (
-                            <button
-                                key={v}
-                                className={`${styles.variantPill} ${activeAbVariant === v ? styles.variantPillActive : ''} ${winnerVariant === v ? styles.variantPillWinner : ''}`}
-                                onClick={() => onAbVariantChange?.(v)}
-                            >
-                                {winnerVariant === v && '🏆 '}
-                                Variant {v}
-                                {winnerVariant === v && <span className={styles.winnerBadge}>Winner</span>}
-                            </button>
-                        ))}
-                        <span className={styles.variantHint}>Editing Variant {activeAbVariant}</span>
-                    </div>
-                )}
-            </div>
 
             {/* ── DM Type selector ── */}
             <div className={styles.formGroup}>
@@ -726,28 +631,180 @@ export default function DMSetupTab({
                 </div>
             )}
 
-            {/* ── Common controls ── */}
-            <div className={styles.commonControls}>
-                <div className={styles.comingSoonRow}>
-                    <div className={styles.comingSoonLeft}>
-                        <input
-                            type="checkbox"
-                            className={styles.checkbox}
-                            disabled={!isPro}
-                            checked={isPro && !!config.sendToPreviousComments}
-                            onChange={(e) => isPro && onChange({ ...config, sendToPreviousComments: e.target.checked })}
-                            style={{ cursor: isPro ? 'pointer' : 'not-allowed' }}
-                        />
-                        <div>
-                            <span className={styles.comingSoonLabel}>
-                                Send DMs to previous comments
-                                {!isPro && <span className={styles.proBadge}>Pro</span>}
-                            </span>
-                            <p className={styles.comingSoonDesc}>When you save this automation, AutoDM will fetch existing comments on this post and DM anyone who matches the trigger. Processed via your queue.</p>
+            {/* ── Advanced options — collapsed by default ──────────────────────────
+                 Auto-opens when A/B is enabled so variant pills stay reachable.
+                 Locked open (non-collapsible) while A/B is active to prevent
+                 the variant switcher from being hidden mid-setup.
+            ─────────────────────────────────────────────────────────────────── */}
+            <div className={styles.advancedSection}>
+                <button
+                    className={`${styles.advancedHeader} ${isAB ? styles.advancedHeaderLocked : ''}`}
+                    onClick={() => { if (!isAB) setShowAdvanced((v) => !v); }}
+                    type="button"
+                    title={isAB ? 'Close A/B testing first to collapse this section' : undefined}
+                >
+                    <span className={styles.advancedHeaderLabel}>
+                        <FlaskConical size={13} />
+                        Advanced options
+                        {isAB && <span className={styles.abActivePill}>A/B on</span>}
+                    </span>
+                    <ChevronDown
+                        size={14}
+                        className={`${styles.advancedChevron} ${(showAdvanced || isAB) ? styles.advancedChevronOpen : ''}`}
+                    />
+                </button>
+
+                {(showAdvanced || isAB) && (
+                    <div className={styles.advancedBody}>
+
+                        {/* A/B Test toggle */}
+                        <div className={styles.abCard}>
+                            <div className={styles.abCardHeader}>
+                                <div className={styles.abCardLeft}>
+                                    <div className={`${styles.abCardIcon} ${isAB ? styles.abCardIconOn : ''}`}>
+                                        <FlaskConical size={14} />
+                                    </div>
+                                    <div>
+                                        <span className={styles.checkText} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            A/B Message Testing
+                                            {!isPro && <span className={styles.proBadge}>Pro</span>}
+                                        </span>
+                                        <p className={styles.abCardDesc}>
+                                            Send two different messages and see which gets more clicks.
+                                            {isAB && winnerVariant && (
+                                                <span className={styles.winnerHint}> 🏆 Winner: Variant {winnerVariant}</span>
+                                            )}
+                                        </p>
+                                    </div>
+                                </div>
+                                {isPro ? (
+                                    <div
+                                        className={`${styles.toggle} ${isAB ? styles.toggleOn : ''}`}
+                                        onClick={handleToggleAB}
+                                        role="switch"
+                                        aria-checked={isAB}
+                                    >
+                                        <div className={styles.toggleThumb} />
+                                    </div>
+                                ) : (
+                                    <a href="/pricing" className={styles.abProLink}>Upgrade</a>
+                                )}
+                            </div>
+
+                            {/* Variant A/B pills */}
+                            {isAB && (
+                                <div className={styles.variantPills}>
+                                    {(['A', 'B']).map((v) => (
+                                        <button
+                                            key={v}
+                                            className={`${styles.variantPill} ${activeAbVariant === v ? styles.variantPillActive : ''} ${winnerVariant === v ? styles.variantPillWinner : ''}`}
+                                            onClick={() => onAbVariantChange?.(v)}
+                                        >
+                                            {winnerVariant === v && '🏆 '}
+                                            Variant {v}
+                                            {winnerVariant === v && <span className={styles.winnerBadge}>Winner</span>}
+                                        </button>
+                                    ))}
+                                    <span className={styles.variantHint}>Editing Variant {activeAbVariant}</span>
+                                </div>
+                            )}
                         </div>
+
+                        {/* Send DMs to previous comments */}
+                        <div className={styles.comingSoonRow}>
+                            <div className={styles.comingSoonLeft}>
+                                <input
+                                    type="checkbox"
+                                    className={styles.checkbox}
+                                    disabled={!isPro}
+                                    checked={isPro && !!config.sendToPreviousComments}
+                                    onChange={(e) => isPro && onChange({ ...config, sendToPreviousComments: e.target.checked })}
+                                    style={{ cursor: isPro ? 'pointer' : 'not-allowed' }}
+                                />
+                                <div>
+                                    <span className={styles.comingSoonLabel}>
+                                        Send DMs to previous comments
+                                        {!isPro && <span className={styles.proBadge}>Pro</span>}
+                                    </span>
+                                    <p className={styles.comingSoonDesc}>When you save this automation, AutoDM will fetch existing comments on this post and DM anyone who matches the trigger. Processed via your queue.</p>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
-                </div>
+                )}
             </div>
+
+            {/* ── Templates — collapsed for new users, expanded when templates exist ── */}
+            {(templates.length > 0 || onSaveTemplate) && (
+                <div className={styles.advancedSection}>
+                    <button
+                        className={styles.advancedHeader}
+                        onClick={() => setShowTemplates((v) => !v)}
+                        type="button"
+                    >
+                        <span className={styles.advancedHeaderLabel}>
+                            <BookmarkPlus size={13} />
+                            Templates
+                            {templates.length > 0 && (
+                                <span className={styles.templateCount}>{templates.length}</span>
+                            )}
+                        </span>
+                        <ChevronDown
+                            size={14}
+                            className={`${styles.advancedChevron} ${showTemplates ? styles.advancedChevronOpen : ''}`}
+                        />
+                    </button>
+
+                    {showTemplates && (
+                        <div className={styles.advancedBody}>
+                            <div className={styles.templateBar}>
+                                {templates.length > 0 && (
+                                    <div className={styles.templateSelect}>
+                                        <FileDown size={14} />
+                                        <select className={styles.templateDropdown} defaultValue=""
+                                            onChange={(e) => {
+                                                const t = templates.find((t) => t.id === e.target.value);
+                                                if (t) onLoadTemplate?.(t);
+                                                e.target.value = '';
+                                            }}
+                                        >
+                                            <option value="" disabled>Load from template...</option>
+                                            {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                        </select>
+                                        {onDeleteTemplate && (
+                                            <button className={styles.deleteTemplateBtn} title="Delete a template"
+                                                onClick={() => {
+                                                    const name = prompt('Template name to delete:');
+                                                    if (!name) return;
+                                                    const t = templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
+                                                    if (t && confirm(`Delete "${t.name}"?`)) onDeleteTemplate(t.id);
+                                                    else if (!t) alert('Template not found.');
+                                                }}
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                                {onSaveTemplate && (
+                                    isPro ? (
+                                        <button className={styles.saveTemplateBtn} onClick={() => { setTemplateName(''); setShowTemplateModal(true); }}>
+                                            <BookmarkPlus size={13} /> Save as Template
+                                        </button>
+                                    ) : (
+                                        <a href="/pricing" className={styles.saveTemplateBtnLocked} title="Upgrade to Pro to save templates">
+                                            <BookmarkPlus size={13} />
+                                            Save as Template
+                                            <span className={styles.saveTemplateProTag}>Pro</span>
+                                        </a>
+                                    )
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
         </div>
 

@@ -13,7 +13,7 @@ export default async function DashboardPage() {
     try {
         const { data: accounts } = await supabase
             .from('connected_accounts')
-            .select('id, platform, ig_username, ig_profile_picture_url, fb_page_name, is_active, plan, trial_ends_at, plan_expires_at')
+            .select('id, platform, ig_username, ig_profile_picture_url, fb_page_name, is_active')
             .eq('user_id', user.id)
             .eq('is_active', true);
 
@@ -175,12 +175,23 @@ export default async function DashboardPage() {
 
     } catch { /* tables may not exist */ }
 
+    // ── Plan — read from user_plans, not connected_accounts ────────────
+    // plan columns were dropped from connected_accounts in drop-plan-from-accounts.sql
+    let planRow = null;
+    try {
+        const { data } = await supabase
+            .from('user_plans')
+            .select('plan, plan_expires_at, trial_ends_at')
+            .eq('user_id', user.id)
+            .maybeSingle();
+        planRow = data;
+    } catch { /* user_plans may not exist in fresh deploys */ }
+
     // ── Derived values ───────────────────────────────────────────
-    const account         = connectedAccounts[0] || null;
-    const effectivePlan   = getEffectivePlan(account);     // 'free' | 'trial' | 'pro' | 'business'
+    const effectivePlan   = getEffectivePlan(planRow);     // 'free' | 'trial' | 'pro' | 'business'
     const monthlyDmLimit  = getDmLimit(effectivePlan);     // null = unlimited
     const unlimited       = isUnlimited(effectivePlan);
-    const trialDaysLeft   = trialDaysRemaining(account);   // 0 if not on trial
+    const trialDaysLeft   = trialDaysRemaining(planRow);   // 0 if not on trial
     const dmUsagePercent  = unlimited || !monthlyDmLimit
         ? 0
         : Math.min(100, Math.round((monthlySent / monthlyDmLimit) * 100));
