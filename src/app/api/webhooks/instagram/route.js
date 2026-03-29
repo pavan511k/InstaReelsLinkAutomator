@@ -58,10 +58,13 @@ export async function GET(request) {
 export async function POST(request) {
     const body = await request.json();
 
-    // Respond 200 immediately — Meta requires fast ACK
-    processWebhookEvents(body).catch((err) =>
-        console.error('[Webhook] Processing error:', err),
-    );
+    // Await fully — serverless runtimes kill unawaited promises once the
+    // response is returned. Meta waits up to 20s so this is safe.
+    try {
+        await processWebhookEvents(body);
+    } catch (err) {
+        console.error('[Webhook] Processing error:', err);
+    }
 
     return NextResponse.json({ received: true }, { status: 200 });
 }
@@ -477,10 +480,11 @@ async function processAutomationForComment(supabase, post, commentText, commente
     const token    = account.fb_page_access_token || account.access_token;
     const senderId = platform === 'facebook' ? account.fb_page_id : account.ig_user_id;
 
-    if (settingsConfig.delayMessage) {
-        const delay = Math.floor(Math.random() * 90_000) + 30_000;
-        await new Promise((r) => setTimeout(r, delay));
-    }
+    // delayMessage: store a future scheduled_after on the queue row instead of
+    // sleeping inline — sleeping here blocks the webhook and causes Meta retries.
+    const delayMs = settingsConfig.delayMessage
+        ? Math.floor(Math.random() * 90_000) + 30_000
+        : 0;
 
     const context = { username: commenterId, first_name: commenterId, comment_id: commentId };
 
@@ -567,7 +571,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
             queue_reason:    'overflow',
             priority:        5,
             status:          'pending',
-            scheduled_after: new Date().toISOString(),
+            scheduled_after: new Date(Date.now() + delayMs).toISOString(),
         });
 
         console.log(`[Webhook] DM enqueued for ${commenterId}${abVariant ? ` (variant ${abVariant})` : ''}`);

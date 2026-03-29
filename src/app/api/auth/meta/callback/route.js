@@ -244,6 +244,14 @@ export async function GET(request) {
             console.warn('[OAuth Callback] Auto-sync failed (non-critical):', syncErr.message);
         }
 
+        // Subscribe the connected account to Meta webhook events so comment/DM
+        // payloads are actually delivered to our webhook URL.
+        try {
+            await subscribeToWebhookEvents(accountData);
+        } catch (subErr) {
+            console.warn('[OAuth Callback] Webhook subscription failed (non-critical):', subErr.message);
+        }
+
         // Send new users straight to Posts & Reels so they can configure automations immediately
         return NextResponse.redirect(`${appUrl}/posts?connected=${connectionType}`);
     } catch (err) {
@@ -256,6 +264,45 @@ export async function GET(request) {
         return NextResponse.redirect(
             `${appUrl}/dashboard?error=${errorKey}`
         );
+    }
+}
+
+/**
+ * Subscribe the connected account to Meta webhook events.
+ *
+ * Instagram Business Login  → subscribes the IG user via graph.instagram.com
+ *   fields: comments, messages
+ * Facebook Login (both/facebook) → subscribes the FB Page via graph.facebook.com
+ *   fields: instagram_comments, messages, feed
+ *
+ * Without this call Meta will NOT deliver any webhook payloads for the account
+ * even if the webhook URL is correctly configured in the Developer Console.
+ */
+async function subscribeToWebhookEvents(accountData) {
+    if (accountData.platform === 'instagram') {
+        const url =
+            `https://graph.instagram.com/v21.0/${accountData.ig_user_id}/subscribed_apps` +
+            `?subscribed_fields=comments%2Cmessages` +
+            `&access_token=${encodeURIComponent(accountData.access_token)}`;
+        const res  = await fetch(url, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            console.warn('[OAuth] IG webhook subscription response:', JSON.stringify(data));
+        } else {
+            console.log('[OAuth] ✅ Instagram webhook subscribed (comments + messages)');
+        }
+    } else if (accountData.fb_page_id && accountData.fb_page_access_token) {
+        const url =
+            `https://graph.facebook.com/v21.0/${accountData.fb_page_id}/subscribed_apps` +
+            `?subscribed_fields=instagram_comments%2Cmessages%2Cfeed` +
+            `&access_token=${encodeURIComponent(accountData.fb_page_access_token)}`;
+        const res  = await fetch(url, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            console.warn('[OAuth] FB page webhook subscription response:', JSON.stringify(data));
+        } else {
+            console.log('[OAuth] ✅ Facebook page webhook subscribed (instagram_comments + messages + feed)');
+        }
     }
 }
 
