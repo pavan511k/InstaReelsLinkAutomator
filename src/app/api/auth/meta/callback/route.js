@@ -37,8 +37,12 @@ async function syncPostsForUser(userId) {
         if (account.ig_user_id && (account.platform === 'instagram' || account.platform === 'both')) {
             try {
                 const token = account.fb_page_access_token || account.access_token;
+                // Instagram Business Login tokens must use graph.instagram.com
+                // Facebook Page Access Tokens must use graph.facebook.com
+                const useIgApi = !account.fb_page_access_token && account.platform === 'instagram';
+                const igBase = useIgApi ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
                 const igRes = await fetch(
-                    `https://graph.facebook.com/v21.0/${account.ig_user_id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&limit=100&access_token=${token}`
+                    `${igBase}/v21.0/${account.ig_user_id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&limit=100&access_token=${token}`
                 );
                 if (igRes.ok) {
                     const igData = await igRes.json();
