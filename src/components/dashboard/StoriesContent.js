@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Instagram, Facebook, Clock, Search, Edit3, Pause, Play, Trash2 } from 'lucide-react';
+import { RefreshCw, Instagram, Facebook, Clock, Search, Edit3, Pause, Play, Trash2, Film } from 'lucide-react';
 import SetupDMModal from '@/components/dashboard/SetupDMModal';
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from '../../app/(dashboard)/stories/stories.module.css';
@@ -174,60 +174,95 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                         </div>
                     </div>
                     <div className={styles.storyGrid}>
-                        {recentStories.map((story) => (
-                            <div key={story.id} className={styles.storyCard}>
-                                <div className={styles.storyMedia}>
-                                    {story.media_url ? (
-                                        <img src={story.media_url} alt="" />
-                                    ) : (
-                                        <div className={styles.storyPlaceholder}>
-                                            <Instagram size={22} />
+                        {recentStories.map((story) => {
+                            const truncatedCaption = story.caption?.length > 55
+                                ? story.caption.substring(0, 55) + '...'
+                                : story.caption || '';
+                            const isVideo = story.media_type === 'VIDEO';
+                            const isFacebook = story.platform === 'facebook';
+                            return (
+                                <div key={story.id} className={styles.storyCard}>
+                                    {/* Thumbnail */}
+                                    <div className={styles.storyMedia}>
+                                        {story.media_url ? (
+                                            <img src={story.media_url} alt={truncatedCaption} className={styles.storyImg} />
+                                        ) : (
+                                            <div className={styles.storyPlaceholder}>
+                                                <Instagram size={22} />
+                                            </div>
+                                        )}
+                                        {/* Top-left: video badge */}
+                                        {isVideo && (
+                                            <span className={styles.videoBadge}>
+                                                <Film size={11} />
+                                            </span>
+                                        )}
+                                        {/* Top-right: platform badge */}
+                                        <span className={`${styles.storyPlatformBadge} ${isFacebook ? styles.storyPlatformBadgeFacebook : ''}`}>
+                                            {isFacebook ? <Facebook size={12} /> : <Instagram size={12} />}
+                                        </span>
+                                        {/* Bottom-left: sent count */}
+                                        {story.sent > 0 && (
+                                            <span className={styles.sentBadge}>✉ {story.sent}</span>
+                                        )}
+                                        {/* Status pill overlay */}
+                                        {story.status === 'active' && (
+                                            <span className={styles.statusOverlayActive}>● Active</span>
+                                        )}
+                                        {story.status === 'paused' && (
+                                            <span className={styles.statusOverlayPaused}>⏸ Paused</span>
+                                        )}
+                                    </div>
+
+                                    {/* Body */}
+                                    <div className={styles.storyBody}>
+                                        <p className={styles.storyCaption}>
+                                            {truncatedCaption || 'No caption'}
+                                        </p>
+                                        <div className={styles.storyFooter}>
+                                            <span className={styles.storyDate}>
+                                                {new Date(story.timestamp).toLocaleDateString('en-US', {
+                                                    month: 'short', day: 'numeric',
+                                                })}
+                                            </span>
+                                            {story.story_expires_at && (
+                                                <div className={styles.storyExpiry}>
+                                                    <Clock size={10} />
+                                                    <span>{Math.max(0, Math.round((new Date(story.story_expires_at) - new Date()) / 3600000))}h left</span>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                    {story.media_type === 'VIDEO' && (
-                                        <span className={styles.videoIcon}>▶</span>
-                                    )}
-                                    <span className={`${styles.storyPlatformBadge} ${platform === 'facebook' ? styles.storyPlatformBadgeFacebook : ''}`}>
-                                        {platform === 'facebook' ? <Facebook size={13} /> : <Instagram size={13} />}
-                                    </span>
-                                </div>
-                                <div className={styles.storyMeta}>
-                                    <span className={styles.storyDate}>
-                                        {new Date(story.timestamp).toLocaleDateString('en-US', {
-                                            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-                                        })}
-                                    </span>
-                                    {story.story_expires_at && (
-                                        <div className={styles.storyExpiry}>
-                                            <Clock size={11} />
-                                            <span>Expires in {Math.max(0, Math.round((new Date(story.story_expires_at) - new Date()) / 3600000))}h</span>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className={styles.storyActions}>
-                                    {story.status === 'setup' ? (
-                                        <>
+                                    </div>
+
+                                    {/* Actions — no Skip button, single full-width CTA */}
+                                    <div className={styles.storyActions}>
+                                        {story.status === 'setup' ? (
                                             <button className={styles.storyActionBtn} onClick={() => handleSetupStory(story.id)}>
-                                                Configure AutoDM
+                                                <Edit3 size={13} /> Configure AutoDM
                                             </button>
-                                            <button className={styles.skipBtn} onClick={() => handleSkipStory(story.id)} disabled={skippingId === story.id}>
-                                                {skippingId === story.id ? 'Skipping…' : 'Skip'}
-                                            </button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <button className={styles.storyActionBtn} onClick={() => handleSetupStory(story.id)}>
-                                                <Edit3 size={12} /> Edit
-                                            </button>
-                                            <button className={styles.skipBtn} onClick={() => handleToggleStatus(story)} disabled={togglingId === story.id}>
-                                                {story.status === 'active' ? <Pause size={12} /> : <Play size={12} />}
-                                                {story.status === 'active' ? 'Pause' : 'Resume'}
-                                            </button>
-                                        </>
-                                    )}
+                                        ) : story.status === 'active' ? (
+                                            <>
+                                                <button className={`${styles.storyActionBtn} ${styles.storyActionBtnActive}`} onClick={() => handleSetupStory(story.id)}>
+                                                    <Edit3 size={13} /> Edit AutoDM
+                                                </button>
+                                                <button className={styles.skipBtn} onClick={() => handleToggleStatus(story)} disabled={togglingId === story.id}>
+                                                    <Pause size={12} /> Pause
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <button className={`${styles.storyActionBtn} ${styles.storyActionBtnPaused}`} onClick={() => handleSetupStory(story.id)}>
+                                                    <Edit3 size={13} /> Edit AutoDM
+                                                </button>
+                                                <button className={styles.skipBtn} onClick={() => handleToggleStatus(story)} disabled={togglingId === story.id}>
+                                                    <Play size={12} /> Resume
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}
