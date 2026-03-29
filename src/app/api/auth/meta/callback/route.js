@@ -282,7 +282,7 @@ async function subscribeToWebhookEvents(accountData) {
     if (accountData.platform === 'instagram') {
         const url =
             `https://graph.instagram.com/v21.0/${accountData.ig_user_id}/subscribed_apps` +
-            `?subscribed_fields=comments%2Cmessages` +
+            `?subscribed_fields=comments%2Cmessages%2Cmentions` +
             `&access_token=${encodeURIComponent(accountData.access_token)}`;
         const res  = await fetch(url, { method: 'POST' });
         const data = await res.json();

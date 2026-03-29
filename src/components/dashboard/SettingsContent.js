@@ -661,8 +661,7 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                             <li>Your account and login credentials</li>
                         </ul>
                         <div className={styles.formGroup}>
-                            <label className={styles.formLabel}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <label className={styles.modalFormLabel}>
                                 <span>Type your email to confirm</span>
                                 <span style={{
                                     display: 'inline-flex', alignItems: 'center', gap: 5,
