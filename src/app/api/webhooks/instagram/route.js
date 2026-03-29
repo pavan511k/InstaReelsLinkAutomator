@@ -341,7 +341,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
 
     const { data: account } = await supabase
         .from('connected_accounts')
-        .select('access_token, fb_page_access_token, ig_user_id, fb_page_id, default_config')
+        .select('access_token, fb_page_access_token, ig_user_id, fb_page_id, platform, default_config')
         .eq('id', post.account_id)
         .single();
 
@@ -479,6 +479,9 @@ async function processAutomationForComment(supabase, post, commentText, commente
 
     const token    = account.fb_page_access_token || account.access_token;
     const senderId = platform === 'facebook' ? account.fb_page_id : account.ig_user_id;
+    // Instagram Business Login tokens must use graph.instagram.com for comment replies
+    // Facebook Page Access Tokens use graph.facebook.com
+    const useIgApi = !account.fb_page_access_token && account.platform === 'instagram';
 
     // delayMessage: store a future scheduled_after on the queue row instead of
     // sleeping inline — sleeping here blocks the webhook and causes Meta retries.
@@ -549,7 +552,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
         const DEFAULT_COMMENT_REPLY = 'Hey! Check your DM \u2764\ufe0f Didn\'t receive the link? Follow and comment again.';
         const replyMsg = settingsConfig.replyMessage || settingsConfig.autoReplyText || DEFAULT_COMMENT_REPLY;
         try {
-            await replyToComment(commentId, resolveMessageVariables(replyMsg, context), token);
+            await replyToComment(commentId, resolveMessageVariables(replyMsg, context), token, useIgApi);
             console.log('[Webhook] Comment reply sent');
         } catch (replyErr) {
             console.warn('[Webhook] Comment reply failed (non-fatal):', replyErr.message);
