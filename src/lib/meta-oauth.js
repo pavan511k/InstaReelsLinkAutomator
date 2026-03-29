@@ -6,9 +6,11 @@
  * Both connections use Facebook's OAuth (grants both IG + FB permissions)
  */
 
-const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
-const META_APP_SECRET = process.env.META_APP_SECRET;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;                          // Facebook App ID
+const INSTAGRAM_APP_ID = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID || process.env.NEXT_PUBLIC_META_APP_ID; // Instagram App ID (separate from FB)
+const META_APP_SECRET = process.env.META_APP_SECRET;                              // Facebook App Secret
+const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET; // Instagram App Secret (separate from FB)
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, ''); // strip trailing slash
 const REDIRECT_URI = `${APP_URL}/api/auth/meta/callback`;
 
 // Instagram API with Instagram Login scopes
@@ -56,7 +58,7 @@ export function buildAuthUrl(connectionType, state) {
         const params = new URLSearchParams({
             enable_fb_login: '0',
             force_authentication: '1',
-            client_id: META_APP_ID,
+            client_id: INSTAGRAM_APP_ID,   // Instagram App ID — NOT the Facebook App ID
             redirect_uri: REDIRECT_URI,
             response_type: 'code',
             scope: IG_SCOPES.join(','),
@@ -91,8 +93,8 @@ export function buildAuthUrl(connectionType, state) {
  */
 export async function exchangeCodeForInstagramToken(code) {
     const body = new URLSearchParams({
-        client_id: META_APP_ID,
-        client_secret: META_APP_SECRET,
+        client_id: INSTAGRAM_APP_ID,         // Instagram App ID
+        client_secret: INSTAGRAM_APP_SECRET, // Instagram App Secret
         grant_type: 'authorization_code',
         redirect_uri: REDIRECT_URI,
         code,
@@ -117,7 +119,7 @@ export async function exchangeCodeForInstagramToken(code) {
 export async function getInstagramLongLivedToken(shortLivedToken) {
     const params = new URLSearchParams({
         grant_type: 'ig_exchange_token',
-        client_secret: META_APP_SECRET,
+        client_secret: INSTAGRAM_APP_SECRET, // Instagram App Secret
         access_token: shortLivedToken,
     });
 
