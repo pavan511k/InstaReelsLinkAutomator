@@ -133,6 +133,8 @@ export async function GET(request) {
 
             const token    = account.fb_page_access_token || account.access_token;
             const igSender = account.ig_user_id;
+            // Instagram Business Login tokens must use graph.instagram.com for DM sending
+            const useIgApi = !account.fb_page_access_token;
 
             for (const item of toProcess) {
                 if (sentThisRun >= budgetThisWindow) {
@@ -184,6 +186,7 @@ export async function GET(request) {
                         item.platform || 'instagram',
                         trackingMap,
                         item.user_plan || 'free',
+                        useIgApi,
                     );
 
                     // Log the successful send.
