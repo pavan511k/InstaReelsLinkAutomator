@@ -42,7 +42,8 @@ export default function DashboardView({
     trialDaysLeft = 0,
 }) {
     const styles = useStyles(darkStyles, lightStyles);
-    const MONTHLY_DM_LIMIT = monthlyDmLimit ?? 3000;
+    // null = unlimited (pro/trial). Do NOT fall back to 3000 — pass null so UsageProgress shows ∞
+    const MONTHLY_DM_LIMIT = monthlyDmLimit;
 
     const isOnTrial       = effectivePlan === 'trial';
     const isTrialExpiring = isOnTrial && trialDaysLeft <= 5;
