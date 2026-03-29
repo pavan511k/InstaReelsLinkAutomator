@@ -39,8 +39,15 @@ export async function POST() {
         for (const account of accounts) {
             // Fetch Instagram posts if Instagram is connected
             if (account.ig_user_id && (account.platform === 'instagram' || account.platform === 'both')) {
+                // Instagram Business Login tokens (platform=instagram, no fb_page_access_token)
+                // must use graph.instagram.com — NOT graph.facebook.com.
+                // Facebook Login tokens (platform=both/facebook, has fb_page_access_token)
+                // must use graph.facebook.com.
+                const igToken = account.fb_page_access_token || account.access_token;
+                const useIgApi = !account.fb_page_access_token && account.platform === 'instagram';
+
                 // Fetch Posts
-                const igPosts = await fetchInstagramPosts(account.ig_user_id, account.fb_page_access_token || account.access_token);
+                const igPosts = await fetchInstagramPosts(account.ig_user_id, igToken, useIgApi);
                 allPosts.push(...igPosts.map((p) => ({
                     account_id: account.id,
                     ig_post_id: p.id,
@@ -55,7 +62,7 @@ export async function POST() {
                 })));
 
                 // Fetch Stories (Active items within 24h limit)
-                const igStories = await fetchInstagramStories(account.ig_user_id, account.fb_page_access_token || account.access_token);
+                const igStories = await fetchInstagramStories(account.ig_user_id, igToken, useIgApi);
                 allPosts.push(...igStories.map((s) => ({
                     account_id: account.id,
                     ig_post_id: s.id,
@@ -139,11 +146,14 @@ export async function POST() {
 
 /**
  * Fetch posts from Instagram Graph API
+ * useIgApi=true  → Instagram Business Login token → graph.instagram.com
+ * useIgApi=false → Facebook Page Access Token    → graph.facebook.com
  */
-async function fetchInstagramPosts(igUserId, accessToken) {
+async function fetchInstagramPosts(igUserId, accessToken, useIgApi = false) {
     const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp';
+    const base = useIgApi ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
     const response = await fetch(
-        `https://graph.facebook.com/v21.0/${igUserId}/media?fields=${fields}&limit=100&access_token=${accessToken}`
+        `${base}/v21.0/${igUserId}/media?fields=${fields}&limit=100&access_token=${accessToken}`
     );
 
     if (!response.ok) {
@@ -157,11 +167,14 @@ async function fetchInstagramPosts(igUserId, accessToken) {
 
 /**
  * Fetch stories from Instagram Graph API
+ * useIgApi=true  → Instagram Business Login token → graph.instagram.com
+ * useIgApi=false → Facebook Page Access Token    → graph.facebook.com
  */
-async function fetchInstagramStories(igUserId, accessToken) {
+async function fetchInstagramStories(igUserId, accessToken, useIgApi = false) {
     const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp';
+    const base = useIgApi ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
     const response = await fetch(
-        `https://graph.facebook.com/v21.0/${igUserId}/stories?fields=${fields}&limit=100&access_token=${accessToken}`
+        `${base}/v21.0/${igUserId}/stories?fields=${fields}&limit=100&access_token=${accessToken}`
     );
 
     if (!response.ok) {
