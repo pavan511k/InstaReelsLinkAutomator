@@ -68,9 +68,10 @@ export async function GET(request) {
     }
 
     try {
-        // Dynamic import to avoid build issues if supabase isn't configured
-        const { createClient } = await import('@/lib/supabase-server');
-        const supabase = await createClient();
+        // Use admin client — this endpoint has no user session (called by Meta),
+        // and the table is RLS-protected with no anon policies.
+        const { createAdminClient } = await import('@/lib/supabase-admin');
+        const supabase = createAdminClient();
 
         const { data: deletion } = await supabase
             .from('data_deletion_requests')
@@ -134,8 +135,9 @@ function parseSignedRequest(signedRequest) {
  */
 async function deleteUserPlatformData(appScopedUserId, confirmationCode) {
     try {
-        const { createClient } = await import('@/lib/supabase-server');
-        const supabase = await createClient();
+        // Use admin client — webhook has no user session and table has RLS enabled.
+        const { createAdminClient } = await import('@/lib/supabase-admin');
+        const supabase = createAdminClient();
 
         // Find connected accounts by ig_user_id (which is the app-scoped ID)
         const { data: accounts } = await supabase
@@ -235,8 +237,8 @@ async function deleteUserPlatformData(appScopedUserId, confirmationCode) {
         console.error('Platform data deletion error:', err);
         // Still try to mark as failed
         try {
-            const { createClient } = await import('@/lib/supabase-server');
-            const supabase = await createClient();
+            const { createAdminClient } = await import('@/lib/supabase-admin');
+            const supabase = createAdminClient();
             await supabase
                 .from('data_deletion_requests')
                 .update({ status: 'error', details: { error: err.message } })

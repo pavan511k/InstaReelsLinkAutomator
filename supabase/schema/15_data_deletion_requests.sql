@@ -33,8 +33,10 @@ CREATE TABLE IF NOT EXISTS data_deletion_requests (
     details             jsonb DEFAULT '{}'
 );
 
--- No RLS — accessed by webhooks (service role) and the public
--- status-check endpoint (which only exposes status, not PII).
+-- RLS: enabled. All access goes through the service role key (supabase-admin.js)
+-- which bypasses RLS entirely, so no explicit policies are needed.
+-- Anon/authenticated clients cannot read or write this table directly.
+ALTER TABLE public.data_deletion_requests ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS idx_data_deletion_requests_code
     ON data_deletion_requests (confirmation_code);

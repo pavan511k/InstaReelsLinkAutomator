@@ -199,7 +199,9 @@
 
 /* New card body classes — light versions */
 .storyImg {
-    width: 100%; height: 100%; object-fit: cover;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    object-position: center top;
     transition: transform 300ms;
 }
 .storyCard:hover .storyImg { transform: scale(1.04); }
