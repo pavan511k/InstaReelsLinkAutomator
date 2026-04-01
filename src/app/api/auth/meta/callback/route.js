@@ -294,14 +294,14 @@ async function subscribeToWebhookEvents(accountData) {
     } else if (accountData.fb_page_id && accountData.fb_page_access_token) {
         const url =
             `https://graph.facebook.com/v21.0/${accountData.fb_page_id}/subscribed_apps` +
-            `?subscribed_fields=instagram_comments%2Cmessages%2Cfeed` +
+            `?subscribed_fields=feed%2Cmessages%2Cfeed` +
             `&access_token=${encodeURIComponent(accountData.fb_page_access_token)}`;
         const res  = await fetch(url, { method: 'POST' });
         const data = await res.json();
         if (!res.ok || !data.success) {
             console.warn('[OAuth] FB page webhook subscription response:', JSON.stringify(data));
         } else {
-            console.log('[OAuth] ✅ Facebook page webhook subscribed (instagram_comments + messages + feed)');
+            console.log('[OAuth] ✅ Facebook page webhook subscribed (feed + messages)');
         }
     }
 }
