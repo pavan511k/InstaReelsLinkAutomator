@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import {
     sendAutomatedDM, sendFollowGateDM, checkUserIsFollower,
@@ -578,6 +578,22 @@ async function processAutomationForComment(supabase, post, commentText, commente
         });
 
         console.log(`[Webhook] DM enqueued for ${commenterId}${abVariant ? ` (variant ${abVariant})` : ''}`);
+
+        // Trigger immediate queue processing for non-delayed DMs so the DM
+        // goes out in ~1s instead of waiting up to 5 minutes for the cron.
+        if(!delayMs) {
+            const cronSecret = process.env.CRON_SECRET || '';
+            after( async () => {
+                try {
+                    await fetch(`${appUrl}/api/cron/process-queue`, { 
+                        headers: { Authorization: `Bearer ${cronSecret}` },
+                    });
+                } catch (err) {
+                    /* non-fatal - cron will still pick it up*/
+                    console.error('[Webhook] Failed to trigger immediate queue processing:', err.message);
+                }
+            });
+        }
 
         checkAndFireLimitAlert(supabase, automation.user_id, (totalMonthly || 0) + 1)
             .catch((e) => console.warn('[Webhook] Limit alert check failed (non-fatal):', e.message));
