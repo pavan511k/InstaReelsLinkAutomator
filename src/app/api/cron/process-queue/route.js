@@ -132,7 +132,6 @@ export async function GET(request) {
             const toProcess = accountItems.slice(0, budgetThisWindow);
 
             const token    = account.fb_page_access_token || account.access_token;
-            const igSender = account.ig_user_id;
             // Instagram Business Login tokens must use graph.instagram.com for DM sending
             const useIgApi = !account.fb_page_access_token;
 
@@ -177,11 +176,17 @@ export async function GET(request) {
                         comment_id: item.comment_id || '',
                     };
 
+                    // Facebook DMs must be sent FROM the Page ID, not the IG user ID.
+                    // Instagram DMs use ig_user_id as the sender.
+                    const senderForItem = (item.platform === 'facebook' && account.fb_page_id)
+                        ? account.fb_page_id
+                        : account.ig_user_id;
+
                     await sendAutomatedDM(
                         fakeAutomation,
                         item.recipient_ig_id,
                         token,
-                        igSender,
+                        senderForItem,
                         context,
                         item.platform || 'instagram',
                         trackingMap,
