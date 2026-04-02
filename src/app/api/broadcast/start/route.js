@@ -6,6 +6,32 @@ const GRAPH_API_VERSION = 'v21.0';
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 /**
+ * GET /api/broadcast/start?postId=xxx
+ * Returns the active (running or paused) broadcast job for a post, if any.
+ * Used by the modal on mount to resume an in-progress job instead of starting fresh.
+ */
+export async function GET(request) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+    const { searchParams } = new URL(request.url);
+    const postId = searchParams.get('postId');
+    if (!postId) return NextResponse.json({ error: 'postId is required' }, { status: 400 });
+
+    const { data: job } = await supabase
+        .from('broadcast_jobs')
+        .select('id, status')
+        .eq('post_id', postId)
+        .eq('user_id', user.id)
+        .in('status', ['pending', 'running', 'paused'])
+        .order('created_at', { ascending: false })
+        .maybeSingle();
+
+    return NextResponse.json({ job: job || null });
+}
+
+/**
  * POST /api/broadcast/start
  *
  * Body: {
@@ -64,7 +90,7 @@ export async function POST(request) {
 
     if (existing) {
         return NextResponse.json(
-            { error: 'A broadcast is already running for this post. Pause or cancel it first.' },
+            { error: 'A broadcast is already running for this post. Pause or cancel it first.', jobId: existing.id },
             { status: 409 },
         );
     }

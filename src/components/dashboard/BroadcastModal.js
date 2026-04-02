@@ -50,43 +50,74 @@ export default function BroadcastModal({ post, onClose }) {
     const [message,        setMessage]         = useState('');
     const [ctaButtons,     setCtaButtons]      = useState([{ label: '', url: '' }]);
     const [rateLimit,      setRateLimit]       = useState(10);
-    const [useExisting,    setUseExisting]     = useState(true);  // pre-fill from automation
     const [existingConfig, setExistingConfig]  = useState(null);
     const [loadingConfig,  setLoadingConfig]   = useState(true);
 
     // Confirm
     const [startLoading,   setStartLoading]    = useState(false);
     const [startError,     setStartError]      = useState('');
-    const [recipientCount, setRecipientCount]  = useState(null); // set after start
+    const [recipientCount, setRecipientCount]  = useState(null);
 
     // Running
     const [jobId,   setJobId]   = useState(null);
     const [jobData, setJobData] = useState(null);
     const pollRef = useRef(null);
 
-    // ── Load existing automation config ───────────────────────────
+    // Derived: is an active job in flight (user must not be able to silently dismiss)
+    const isJobActive = phase === 'running' && ['running', 'paused'].includes(jobData?.status);
+
+    const handleOverlayClick = () => {
+        if (isJobActive) return; // swallow — job is running, close is disabled
+        onClose();
+    };
+
+    // ── On mount: check for an already-running job for this post ──
+    // If found, jump straight to the running phase so the user can
+    // pause/cancel without having to start a new broadcast.
     useEffect(() => {
         if (!post?.id) { setLoadingConfig(false); return; }
-        fetch(`/api/automations?postId=${post.id}`)
-            .then((r) => r.json())
-            .then((d) => {
-                const auto = d.automations?.[0];
-                if (auto?.dm_config) {
-                    setExistingConfig(auto.dm_config);
-                    // Pre-fill form from existing config
-                    const cfg = auto.dm_config;
-                    const cfgType = cfg.abEnabled ? (cfg.variantA?.type || 'message_template') : (cfg.type || 'message_template');
-                    const cfgMsg  = cfg.abEnabled ? (cfg.variantA?.message || '') : (cfg.message || '');
-                    const cfgBtns = cfg.abEnabled ? (cfg.variantA?.buttons || []) : (cfg.buttons || []);
-                    if (cfgType === 'multi_cta' || cfgType === 'message_template') {
-                        setDmType(cfgType);
-                        setMessage(cfgMsg);
-                        if (cfgBtns.length > 0) setCtaButtons(cfgBtns.map((b) => ({ label: b.label || '', url: b.url || '' })));
+
+        let cancelled = false;
+
+        const init = async () => {
+            // 1. Check for an active broadcast job
+            try {
+                const res  = await fetch(/api/broadcast/start?postId=${post.id});
+                const data = await res.json();
+                if (!cancelled && data.job?.id) {
+                    setJobId(data.job.id);
+                    setPhase('running');
+                    setLoadingConfig(false);
+                    return; // skip config pre-fill — user is in the running view
+                }
+            } catch { /* non-fatal — fall through to config load */ }
+
+            // 2. Pre-fill form from existing automation config
+            try {
+                const res  = await fetch(/api/automations?postId=${post.id});
+                const data = await res.json();
+                if (!cancelled) {
+                    const auto = data.automations?.[0];
+                    if (auto?.dm_config) {
+                        setExistingConfig(auto.dm_config);
+                        const cfg     = auto.dm_config;
+                        const cfgType = cfg.abEnabled ? (cfg.variantA?.type || 'message_template') : (cfg.type || 'message_template');
+                        const cfgMsg  = cfg.abEnabled ? (cfg.variantA?.message || '') : (cfg.message || '');
+                        const cfgBtns = cfg.abEnabled ? (cfg.variantA?.buttons || []) : (cfg.buttons || []);
+                        if (cfgType === 'multi_cta' || cfgType === 'message_template') {
+                            setDmType(cfgType);
+                            setMessage(cfgMsg);
+                            if (cfgBtns.length > 0) setCtaButtons(cfgBtns.map((b) => ({ label: b.label || '', url: b.url || '' })));
+                        }
                     }
                 }
-            })
-            .catch(() => {})
-            .finally(() => setLoadingConfig(false));
+            } catch { /* non-fatal */ }
+
+            if (!cancelled) setLoadingConfig(false);
+        };
+
+        init();
+        return () => { cancelled = true; };
     }, [post?.id]);
 
     // ── Poll running job ──────────────────────────────────────────
@@ -149,6 +180,11 @@ export default function BroadcastModal({ post, onClose }) {
             const data = await res.json();
 
             if (!res.ok) {
+                if (res.status == 409 && data.jobId) {
+                    setJobId(data.jobId);
+                    setPhase('running');
+                    return;
+                }
                 setStartError(data.error || 'Failed to start broadcast');
                 return;
             }
@@ -197,7 +233,7 @@ export default function BroadcastModal({ post, onClose }) {
     })[s] || s;
 
     return (
-        <div className={styles.overlay} onClick={onClose}>
+        <div className={styles.overlay} onClick={handleOveralyClick}>
             <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
 
                 {/* Header */}
@@ -215,7 +251,12 @@ export default function BroadcastModal({ post, onClose }) {
                             </p>
                         </div>
                     </div>
-                    <button className={styles.closeBtn} onClick={onClose}>
+                    <button 
+                    className={styles.closeBtn} 
+                    onClick={isJobActive ? undefined : onClose}
+                    disabled={isJobActive}
+                    title={isJobActive ? 'Pause or cancel the broadcas before closing' : 'Close'}
+                    >
                         <X size={15} />
                     </button>
                 </div>
@@ -486,6 +527,13 @@ export default function BroadcastModal({ post, onClose }) {
                                     <CheckCircle size={14} />
                                     Broadcast complete! {jobData.sent_count?.toLocaleString()} DMs sent successfully.
                                 </div>
+                            )}
+
+                            {/* Lock hint - shown while job is active */}
+                            {isJobActive && (
+                                <p className = {styles.lockHint}>
+                                    Pause or cancel to close the window
+                                </p>
                             )}
 
                             {/* Controls */}

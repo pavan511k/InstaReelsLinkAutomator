@@ -331,6 +331,11 @@
 }
 .rateInfo strong { color: rgba(30,21,53,0.65); }
 
+.lockHint {
+    font-size: 11px; color: rgba(30,21,53,0.38); 
+    text-align: center; margin: 0;
+}
+
 .runningControls { display: flex; gap: 8px; flex-wrap: wrap; }
 .pauseBtn, .resumeBtn, .cancelBtn, .doneBtn {
     display: inline-flex; align-items: center; gap: 6px;
