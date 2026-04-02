@@ -94,7 +94,7 @@ export default function BroadcastModal({ post, onClose }) {
 
             // 2. Pre-fill form from existing automation config
             try {
-                const res  = await fetch(/api/automations?postId=${post.id});
+                const res  = await fetch(`/api/automations?postId=${post.id}`);
                 const data = await res.json();
                 if (!cancelled) {
                     const auto = data.automations?.[0];
