@@ -68,6 +68,7 @@ export async function POST(request) {
 
         const token    = account.fb_page_access_token || account.access_token;
         const pageOrIg = account.fb_page_id || account.ig_user_id;
+        const iceBase  = account.fb_page_access_token ? GRAPH : 'https://graph.instagram.com/v21.0';
 
         // Validate each ice breaker
         const validated = iceBreakers
@@ -92,7 +93,7 @@ export async function POST(request) {
 
         if (pageOrIg && token) {
             try {
-                const res = await fetch(`${GRAPH}/${pageOrIg}/messenger_profile`, {
+                 const res = await fetch(`${iceBase}/${pageOrIg}/messenger_profile`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ...metaPayload, access_token: token }),

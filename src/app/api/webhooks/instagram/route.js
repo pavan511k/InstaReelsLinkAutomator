@@ -871,7 +871,7 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
 
     const { data: account } = await supabase
         .from('connected_accounts')
-        .select('id, user_id, access_token, ig_user_id, default_config')
+        .select('id, user_id, access_token, fb_page_access_token, ig_user_id, default_config')
         .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
 
     if (!account) return;
@@ -879,9 +879,13 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
     const mentionConfig = account.default_config?.mentionDm;
     if (!mentionConfig?.enabled || !mentionConfig?.message?.trim()) return;
 
+    const mentionToken  = account.fb_page_access_token || account.access_token;
+    const useIgApi      = !account.fb_page_access_token;
+    const mentionBase   = useIgApi ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
+
     try {
         const mediaRes = await fetch(
-            `https://graph.facebook.com/v21.0/${media_id}?fields=from&access_token=${encodeURIComponent(account.access_token)}`
+            `${mentionBase}/${media_id}?fields=from&access_token=${encodeURIComponent(mentionToken)}`
         );
         if (!mediaRes.ok) return;
 
@@ -915,7 +919,7 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
 
         const message = mentionConfig.message
             .replace('{username}', mentionerId).replace('{first_name}', mentionerId);
-        await sendTextDM(account.ig_user_id, mentionerId, message, account.access_token);
+        await sendTextDM(account.ig_user_id, mentionerId, message, mentionToken, useIgApi);
 
         await supabase.from('dm_sent_log').insert({
             automation_id:   null,

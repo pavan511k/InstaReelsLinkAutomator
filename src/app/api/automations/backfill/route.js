@@ -49,7 +49,7 @@ export async function POST(request) {
         // ── Fetch automation + post + account ─────────────────────────────
         const autoQuery = supabase
             .from('dm_automations')
-            .select('*, connected_accounts!inner(id, access_token, ig_user_id)')
+            .select('*, connected_accounts!inner(id, access_token, fb_page_access_token, ig_user_id)')
             .eq('id', automationId);
         if (!isInternal && userId) autoQuery.eq('user_id', userId);
         const { data: automation, error: autoErr } = await autoQuery.single();
@@ -67,9 +67,11 @@ export async function POST(request) {
         if (postErr || !post) {
             return NextResponse.json({ error: 'Post not found' }, { status: 404 });
         }
-
+        
         const account   = automation.connected_accounts;
-        const token     = account.access_token;
+        const token     = account.fb_page_access_token || account.access_token;
+        const useIgApi  = !account.fb_page_access_token;
+        const graphBase = useIgApi ? 'https://graph.instagram.com/v21.0' : GRAPH;
         const igPostId  = post.ig_post_id;
 
         if (!igPostId || igPostId.startsWith('fb_')) {
@@ -122,7 +124,7 @@ export async function POST(request) {
             }
         } catch { /* non-fatal */ }
 
-        let nextUrl = `${GRAPH}/${igPostId}/comments?fields=id,text,from,timestamp&limit=${MAX_COMMENTS_PER_PAGE}&access_token=${encodeURIComponent(token)}`;
+        let nextUrl = `${graphBase}/${igPostId}/comments?fields=id,text,from,timestamp&limit=${MAX_COMMENTS_PER_PAGE}&access_token=${encodeURIComponent(token)}`;
         let page = 0;
 
         while (nextUrl && page < MAX_PAGES) {

@@ -49,6 +49,9 @@ export async function POST(request) {
     const account     = post.connected_accounts;
     const accessToken = account.fb_page_access_token || account.access_token;
     const igAccountId = account.ig_user_id;
+    // Instagram Business Login tokens only work on graph.instagram.com.
+    // Facebook Page Access Tokens use graph.facebook.com.
+    const useIgApi    = !account.fb_page_access_token;
 
     // ── Guard: no concurrent running job for this post ────────────
     const { data: existing } = await supabase
@@ -67,7 +70,7 @@ export async function POST(request) {
     }
 
     // ── Fetch all comments from Instagram Graph API ───────────────
-    const commenterIds = await fetchAllCommenters(post.ig_post_id, accessToken, igAccountId);
+    const commenterIds = await fetchAllCommenters(post.ig_post_id, accessToken, igAccountId, useIgApi);
 
     if (commenterIds.length === 0) {
         return NextResponse.json({ error: 'No comments found on this post.' }, { status: 422 });
@@ -165,11 +168,19 @@ export async function POST(request) {
  * Excludes the account owner's own ID.
  * Capped at 5,000 unique commenters for edge memory safety.
  */
-async function fetchAllCommenters(igMediaId, accessToken, ownerIgId) {
+async function fetchAllCommenters(igMediaId, accessToken, ownerIgId, useIgApi = false) {
     const seen = new Set();
     const MAX  = 5_000;
+    
+    // Facebook posts are stored with a 'fb_' prefix (e.g. 'fb_615632..._122100...')
+    // Strip it before calling the Graph API — the prefix is our internal convention only.
+    const rawMediaId = igMediaId.startsWith('fb_') ? igMediaId.slice(3) : igMediaId;
 
-    let url = `${GRAPH_BASE}/${igMediaId}/comments`
+    // Instagram Business Login tokens must use graph.instagram.com.
+    // Facebook Page Access Tokens use graph.facebook.com.
+    const base = useIgApi ? 'https://graph.instagram.com/v21.0' : GRAPH_BASE;
+
+    let url = `${base}/${rawMediaId}/comments`
         + `?fields=id,from`
         + `&limit=100`
         + `&access_token=${encodeURIComponent(accessToken)}`;
