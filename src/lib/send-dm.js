@@ -211,13 +211,31 @@ export async function sendFacebookPrivateReply(commentId, message, accessToken) 
 }
 
 /**
- * Reply to an Instagram comment publicly
+ * Reply to a comment publicly.
+ *
+ * Instagram: POST /{comment-id}/replies       (graph.instagram.com or graph.facebook.com)
+ * Facebook:  POST /{comment-id}/comments      (graph.facebook.com only)
+ *
+ * Facebook feed webhooks deliver compound comment IDs in the format
+ * "{post_id}_{comment_id}". The Graph API comment-reply endpoint only
+ * accepts the plain comment ID, so we strip the prefix here.
+ *
  * useIgApi=true  → Instagram Business Login token → graph.instagram.com
  * useIgApi=false → Facebook Page Access Token    → graph.facebook.com
  */
 export async function replyToComment(commentId, message, accessToken, useIgApi = false) {
-    const base = useIgApi ? 'https://graph.instagram.com/v21.0' : GRAPH_API_BASE;
-    const url = `${base}/${commentId}/replies`;
+    const isFacebook = !useIgApi;
+
+    // Facebook compound comment IDs arrive as "{post_id}_{comment_id}".
+    // Strip the post-ID prefix so the API call targets the comment itself.
+    const resolvedCommentId = isFacebook && commentId.includes('_')
+        ? commentId.split('_').pop()
+        : commentId;
+
+    const base     = useIgApi ? 'https://graph.instagram.com/v21.0' : GRAPH_API_BASE;
+    // Instagram uses /replies; Facebook uses /comments
+    const endpoint = isFacebook ? 'comments' : 'replies';
+    const url      = `${base}/${resolvedCommentId}/${endpoint}`;
 
     const res = await fetch(url, {
         method: 'POST',
@@ -338,10 +356,13 @@ export function resolveMessageVariables(template, context) {
 export async function sendAutomatedDM(automation, recipientId, accessToken, igUserId, context = {}, platform = 'instagram', trackingMap = {}, plan = 'free', useIgApi = false) {
     const { dm_type, dm_config } = automation;
 
-    // Facebook only supports text via private_replies
+    // Facebook DMs go through the standard Messenger messages endpoint:
+    // POST /{page-id}/messages with the recipient's Facebook user ID.
+    // private_replies is legacy, requires established pages + approved
+    // pages_messaging, and fails on new pages — do not use it here.
     if (platform === 'facebook') {
         const message = resolveMessageVariables(dm_config.message || 'Check your DMs!', context);
-        return sendFacebookPrivateReply(context.comment_id || recipientId, message, accessToken);
+        return sendTextDM(igUserId, recipientId, message, accessToken, false);
     }
 
     switch (dm_type) {
