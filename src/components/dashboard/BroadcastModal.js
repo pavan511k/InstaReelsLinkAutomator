@@ -82,7 +82,7 @@ export default function BroadcastModal({ post, onClose }) {
         const init = async () => {
             // 1. Check for an active broadcast job
             try {
-                const res  = await fetch(/api/broadcast/start?postId=${post.id});
+                const res  = await fetch(`/api/broadcast/start?postId=${post.id}`);
                 const data = await res.json();
                 if (!cancelled && data.job?.id) {
                     setJobId(data.job.id);
