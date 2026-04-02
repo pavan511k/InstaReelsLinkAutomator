@@ -123,6 +123,7 @@ export async function POST(request) {
             ig_post_id:        post.ig_post_id,
             ig_account_id:     igAccountId,
             access_token:      accessToken,
+            use_ig_api:       useIgApi,
             dm_type:           dmType,
             dm_config:         dmConfig,
             status:            'running',

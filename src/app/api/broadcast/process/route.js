@@ -135,6 +135,7 @@ async function processJob(supabase, job) {
                 job.dm_type,
                 job.dm_config,
                 trackingMap,
+                job.use_ig_api ?? false,
             );
             sent++;
 
@@ -199,16 +200,16 @@ function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function sendBroadcastDM(igAccountId, recipientId, accessToken, dmType, dmConfig, trackingMap) {
+async function sendBroadcastDM(igAccountId, recipientId, accessToken, dmType, dmConfig, trackingMap, useIApi = false) {
     switch (dmType) {
         case 'button_template':
-            return sendButtonTemplateDM(igAccountId, recipientId, dmConfig.slides || [], accessToken, trackingMap);
+            return sendButtonTemplateDM(igAccountId, recipientId, dmConfig.slides || [], accessToken, trackingMap, undefined, useIApi);
 
         case 'multi_cta':
-            return sendMultiCtaDM(igAccountId, recipientId, dmConfig.message || '', dmConfig.buttons || [], accessToken, trackingMap);
+            return sendMultiCtaDM(igAccountId, recipientId, dmConfig.message || '', dmConfig.buttons || [], accessToken, trackingMap, undefined, useIApi);
 
         case 'message_template':
         default:
-            return sendTextDM(igAccountId, recipientId, dmConfig.message || '', accessToken);
+            return sendTextDM(igAccountId, recipientId, dmConfig.message || '', accessToken, useIApi);
     }
 }

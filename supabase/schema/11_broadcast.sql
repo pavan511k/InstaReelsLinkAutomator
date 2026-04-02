@@ -32,7 +32,11 @@ CREATE TABLE IF NOT EXISTS broadcast_jobs (
     -- Rate limiting (DMs per minute during the broadcast)
     rate_limit_per_min  integer NOT NULL DEFAULT 20
                         CHECK (rate_limit_per_min BETWEEN 1 AND 60),
+    
+    -- Set at job creation time so the process cron uses the right endpoint
+    use_ig_api          boolean NOT NULL DEFAULT false,
 
+    -- Timestamps
     started_at          timestamptz,
     completed_at        timestamptz,
     error_message       text,
