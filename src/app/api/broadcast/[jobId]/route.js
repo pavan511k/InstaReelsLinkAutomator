@@ -5,15 +5,17 @@ import { createClient } from '@/lib/supabase-server';
  * GET /api/broadcast/[jobId]
  * Returns job status + progress for polling.
  */
-export async function GET(request, { params }) {
+export async function GET(request, { params: rawParams }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
+    const { jobId } = await rawParams;
+
     const { data: job } = await supabase
         .from('broadcast_jobs')
         .select('id, status, total_recipients, processed_count, sent_count, failed_count, skipped_count, rate_limit_per_min, started_at, completed_at, created_at, error_message, dm_type')
-        .eq('id', params.jobId)
+        .eq('id', jobId)
         .eq('user_id', user.id)
         .maybeSingle();
 
@@ -30,11 +32,12 @@ export async function GET(request, { params }) {
  * PATCH /api/broadcast/[jobId]
  * Body: { action: 'pause' | 'resume' | 'cancel' }
  */
-export async function PATCH(request, { params }) {
+export async function PATCH(request, { params: rawParams }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
+    const { jobId } = await rawParams;
     const { action } = await request.json();
     if (!['pause', 'resume', 'cancel'].includes(action)) {
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
@@ -43,7 +46,7 @@ export async function PATCH(request, { params }) {
     const { data: job } = await supabase
         .from('broadcast_jobs')
         .select('id, status')
-        .eq('id', params.jobId)
+        .eq('id', jobId)
         .eq('user_id', user.id)
         .maybeSingle();
 
@@ -65,7 +68,7 @@ export async function PATCH(request, { params }) {
     const { error } = await supabase
         .from('broadcast_jobs')
         .update(updates)
-        .eq('id', params.jobId)
+        .eq('id', jobId)
         .eq('user_id', user.id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

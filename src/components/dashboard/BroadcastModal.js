@@ -437,6 +437,7 @@ export default function BroadcastModal({ post, onClose }) {
                                 <ProgressBar
                                     pct={jobData.progressPct || 0}
                                     status={jobData.status}
+                                    styles={styles}
                                 />
                             )}
 
