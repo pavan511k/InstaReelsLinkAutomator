@@ -358,6 +358,8 @@ export function resolveMessageVariables(template, context) {
 export async function sendAutomatedDM(automation, recipientId, accessToken, igUserId, context = {}, platform = 'instagram', trackingMap = {}, plan = 'free', useIgApi = false) {
     const { dm_type, dm_config } = automation;
 
+    console.log(`[sendAutomatedDM:debug] platform=${platform} dm_type=${dm_type} igUserId=${igUserId} recipient=${recipientId} useIgApi=${useIgApi} token_prefix=${accessToken?.slice(0, 12)}`);
+
     // Facebook DMs go through the standard Messenger messages endpoint:
     // POST /{page-id}/messages with the recipient's Facebook user ID.
     // private_replies is legacy, requires established pages + approved
