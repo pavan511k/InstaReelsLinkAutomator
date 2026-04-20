@@ -15,6 +15,8 @@ const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 export async function sendTextDM(igUserId, recipientId, message, accessToken, useIgApi = false) {
     const base = useIgApi ? 'https://graph.instagram.com/v21.0' : GRAPH_API_BASE;
     const url = `${base}/${igUserId}/messages`;
+    
+    console.log(`[sendTextDM:debug] url=${url} recipient=${recipientId} useIgApi=${useIgApi} token_prefix=${accessToken?.slice(0, 12)}`);
 
     const res = await fetch(url, {
         method: 'POST',
