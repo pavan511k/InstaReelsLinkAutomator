@@ -134,6 +134,8 @@ export async function GET(request) {
             const token    = account.fb_page_access_token || account.access_token;
             // Instagram Business Login tokens must use graph.instagram.com for DM sending
             const useIgApi = !account.fb_page_access_token;
+            
+            console.log(`[Queue:debug] account=${accountId} ig_user_id=${account.ig_user_id} fb_page_id=${account.fb_page_id || 'none'} has_fb_token=${!!account.fb_page_access_token} useIgApi=${useIgApi} token_prefix=${token?.slice(0, 12)}`);
 
             for (const item of toProcess) {
                 if (sentThisRun >= budgetThisWindow) {
@@ -181,6 +183,8 @@ export async function GET(request) {
                     const senderForItem = (item.platform === 'facebook' && account.fb_page_id)
                         ? account.fb_page_id
                         : account.ig_user_id;
+                    
+                    console.log(`[Queue:debug] sending → platform=${item.platform || 'instagram'} sender=${senderForItem} recipient=${item.recipient_ig_id} dm_type=${item.dm_type} useIgApi=${useIgApi}`);
 
                     await sendAutomatedDM(
                         fakeAutomation,
