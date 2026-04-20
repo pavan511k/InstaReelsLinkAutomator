@@ -166,6 +166,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 
     const account     = queueEntry.connected_accounts;
     const accessToken = account.fb_page_access_token || account.access_token;
+    const useIgApi    = !account.fb_page_access_token;
     const igSenderId  = queueEntry.ig_sender_id;
 
     console.log(`[Webhook] Checking if ${senderId} follows ${igSenderId}...`);
@@ -191,7 +192,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 
         try {
             await sendRewardDM(igSenderId, senderId, queueEntry.link_dm_type,
-                queueEntry.link_dm_config, accessToken, {}, rewardPlan);
+                queueEntry.link_dm_config, accessToken, {}, rewardPlan, useIgApi);
 
             await supabase.from('dm_followup_queue')
                 .update({ status: 'link_sent', updated_at: new Date().toISOString() })
@@ -224,7 +225,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
             try {
                 await sendTextDM(igSenderId, senderId,
                     "Sorry, we couldn't verify your follow after multiple attempts. Feel free to try again by commenting! \ud83d\ude0a",
-                    accessToken);
+                    accessToken, useIgApi);
             } catch (err) {
                 console.warn('[Webhook] Failed to send max-retry message:', err.message);
             }
@@ -246,17 +247,17 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
     }
 }
 
-async function sendRewardDM(igSenderId, recipientId, dmType, dmConfig, accessToken, trackingMap = {}, plan = 'free') {
+async function sendRewardDM(igSenderId, recipientId, dmType, dmConfig, accessToken, trackingMap = {}, plan = 'free', useIgApi = false) {
     switch (dmType) {
         case 'button_template':
-            return sendButtonTemplateDM(igSenderId, recipientId, dmConfig.slides || [], accessToken, trackingMap, plan);
+            return sendButtonTemplateDM(igSenderId, recipientId, dmConfig.slides || [], accessToken, trackingMap, plan, useIgApi);
         case 'quick_reply':
-            return sendQuickReplyDM(igSenderId, recipientId, dmConfig.message || '', dmConfig.quickReplies || [], accessToken);
+            return sendQuickReplyDM(igSenderId, recipientId, dmConfig.message || '', dmConfig.quickReplies || [], accessToken, useIgApi);
         case 'multi_cta':
-            return sendMultiCtaDM(igSenderId, recipientId, dmConfig.message || '', dmConfig.buttons || [], accessToken, trackingMap, plan);
+            return sendMultiCtaDM(igSenderId, recipientId, dmConfig.message || '', dmConfig.buttons || [], accessToken, trackingMap, plan, useIgApi);
         case 'message_template':
         default:
-            return sendTextDM(igSenderId, recipientId, dmConfig.message || '', accessToken);
+            return sendTextDM(igSenderId, recipientId, dmConfig.message || '', accessToken, useIgApi);
     }
 }
 
@@ -481,7 +482,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
     const senderId = platform === 'facebook' ? account.fb_page_id : account.ig_user_id;
     // Instagram Business Login tokens must use graph.instagram.com for comment replies
     // Facebook Page Access Tokens use graph.facebook.com
-    const useIgApi = !account.fb_page_access_token && account.platform === 'instagram';
+    const useIgApi = !account.fb_page_access_token;
 
     // delayMessage: store a future scheduled_after on the queue row instead of
     // sleeping inline — sleeping here blocks the webhook and causes Meta retries.
@@ -544,7 +545,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
         }
 
         if (activeAutomation.dm_type === 'email_collector') {
-            await handleEmailCollectorAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token);
+            await handleEmailCollectorAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token, useIgApi);
             return true;
         }
 
@@ -750,7 +751,7 @@ async function handleFollowUpAutomation(supabase, automation, post, commenterId,
 
 // ─── Email Collector Comment Handler ─────────────────────────────────────────
 
-async function handleEmailCollectorAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken) {
+async function handleEmailCollectorAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken, useIgApi = false) {
     const dmConfig = automation.dm_config;
 
     const { data: existing } = await supabase
@@ -769,7 +770,7 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
     );
 
     try {
-        await sendTextDM(igSenderId, commenterId, askMessage, accessToken);
+        await sendTextDM(igSenderId, commenterId, askMessage, accessToken, useIgApi);
 
         await supabase.from('email_collect_queue').insert({
             automation_id:        automation.id,
@@ -819,17 +820,19 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
     if (!emailMatch) {
         console.log('[Webhook] DM reply has no valid email address');
         try {
-            const account = queueEntry.connected_accounts;
+            const account      = queueEntry.connected_accounts;
+            const replyUseIgApi = !account.fb_page_access_token;
             await sendTextDM(account.ig_user_id, senderId,
-                'Please reply with a valid email address (e.g. you@example.com) \ud83d\udce7', account.access_token);
+                'Please reply with a valid email address (e.g. you@example.com) \ud83d\udce7', account.access_token, replyUseIgApi);
         } catch { /* non-critical */ }
         return;
     }
 
-    const email    = emailMatch[0].toLowerCase();
-    const account  = queueEntry.connected_accounts;
-    const token    = account.access_token;
-    const igSender = account.ig_user_id;
+    const email       = emailMatch[0].toLowerCase();
+    const account     = queueEntry.connected_accounts;
+    const token       = account.fb_page_access_token || account.access_token;
+    const igSender    = account.ig_user_id;
+    const replyUseIgApi = !account.fb_page_access_token;
 
     console.log(`[Webhook] Captured email ${email} from ${senderId}`);
 
@@ -853,7 +856,7 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
 
         const confirmMsg = queueEntry.confirmation_message ||
             `Thanks! \ud83c\udf89 We've saved your email (${email}) and will be in touch soon.`;
-        await sendTextDM(igSender, senderId, confirmMsg, token);
+        await sendTextDM(igSender, senderId, confirmMsg, token, replyUseIgApi);
 
         console.log(`[Webhook] Email lead captured for ${senderId}`);
     } catch (err) {
@@ -1047,7 +1050,7 @@ async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload
     }
 
     try {
-        await sendTextDM(account.ig_user_id, senderId, matched.responseMessage, account.access_token);
+        await sendTextDM(account.ig_user_id, senderId, matched.responseMessage, account.access_token, true);
         console.log(`[IceBreaker] \u2705 Response sent for "${matched.title}" to ${senderId}`);
         return true;
     } catch (err) {
