@@ -233,7 +233,7 @@ export default function BroadcastModal({ post, onClose }) {
     })[s] || s;
 
     return (
-        <div className={styles.overlay} onClick={handleOveralyClick}>
+        <div className={styles.overlay} onClick={handleOverlayClick}>
             <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
 
                 {/* Header */}
