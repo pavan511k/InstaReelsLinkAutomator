@@ -94,7 +94,19 @@ export async function POST(request) {
         signaturesMatch = false;
     }
     if (!signaturesMatch) {
-        console.warn('[Webhook] Invalid X-Hub-Signature-256 — rejecting');
+        // TEMP DEBUG — remove once signature mismatch is diagnosed.
+        // All values below are safe to log: hash prefixes are one-way, and the
+        // secret fingerprint is SHA256(secret) so the secret itself never leaks.
+        const secretFingerprint = createHmac('sha256', appSecret).update('').digest('hex').slice(0, 8);
+        console.warn('[Webhook] Invalid X-Hub-Signature-256 — rejecting', {
+            providedPrefix: providedHex.slice(0, 12),
+            expectedPrefix: expectedHex.slice(0, 12),
+            providedLen: providedHex.length,
+            expectedLen: expectedHex.length,
+            bodyBytes: Buffer.byteLength(rawBody, 'utf8'),
+            secretFingerprint,
+            ua: request.headers.get('user-agent') || null,
+        });
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
