@@ -25,22 +25,30 @@ async function throwIfMetaError(res, fallbackMsg) {
     }
 }
 
+// Use Private Replies (recipient.comment_id) when responding to a public
+// comment — bypasses the 24-hour standard messaging window and gives a 7-day
+// window from comment creation. Falls back to recipient.id when no commentId
+// is available (e.g. follow-up flow steps, user-initiated replies).
+function buildRecipient(recipientId, commentId) {
+    return commentId ? { comment_id: commentId } : { id: recipientId };
+}
+
 /**
  * Send a plain text DM
  * useIgApi=true  → Instagram Business Login token → graph.instagram.com
  * useIgApi=false → Facebook Page Access Token    → graph.facebook.com
  */
-export async function sendTextDM(igUserId, recipientId, message, accessToken, useIgApi = false) {
+export async function sendTextDM(igUserId, recipientId, message, accessToken, useIgApi = false, commentId = null) {
     const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
     const url = `${base}/${igUserId}/messages`;
-    
-    console.log(`[sendTextDM:debug] url=${url} recipient=${recipientId} useIgApi=${useIgApi}`);
+
+    console.log(`[sendTextDM:debug] url=${url} recipient=${recipientId} useIgApi=${useIgApi} privateReply=${!!commentId}`);
 
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            recipient: { id: recipientId },
+            recipient: buildRecipient(recipientId, commentId),
             message: { text: message },
             access_token: accessToken,
         }),
@@ -55,7 +63,7 @@ export async function sendTextDM(igUserId, recipientId, message, accessToken, us
  * Instagram supports up to 13 quick reply chips, each ≤20 chars
  * https://developers.facebook.com/docs/messenger-platform/send-messages/quick-replies
  */
-export async function sendQuickReplyDM(igUserId, recipientId, message, quickReplies, accessToken, useIgApi = false) {
+export async function sendQuickReplyDM(igUserId, recipientId, message, quickReplies, accessToken, useIgApi = false, commentId = null) {
     const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
     const url = `${base}/${igUserId}/messages`;
 
@@ -76,7 +84,7 @@ export async function sendQuickReplyDM(igUserId, recipientId, message, quickRepl
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            recipient: { id: recipientId },
+            recipient: buildRecipient(recipientId, commentId),
             message: {
                 text: message,
                 quick_replies: validReplies,
@@ -97,7 +105,7 @@ export async function sendQuickReplyDM(igUserId, recipientId, message, quickRepl
  * Subtitle = branding line; controlled by dmConfig.appendBranding (default
  * true) and dmConfig.branding (Pro custom override).
  */
-export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, accessToken, trackingMap = {}, plan = 'free', useIgApi = false, dmConfig = {}) {
+export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, accessToken, trackingMap = {}, plan = 'free', useIgApi = false, dmConfig = {}, commentId = null) {
     const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
     const url = `${base}/${igUserId}/messages`;
 
@@ -134,7 +142,7 @@ export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, ac
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            recipient: { id: recipientId },
+            recipient: buildRecipient(recipientId, commentId),
             message: {
                 attachment: {
                     type: 'template',
@@ -171,7 +179,7 @@ export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, ac
  */
 export const META_MAX_CARDS = 10;
 
-export async function sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap = {}, plan = 'free', useIgApi = false, dmConfig = {}) {
+export async function sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap = {}, plan = 'free', useIgApi = false, dmConfig = {}, commentId = null) {
     const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
     const url = `${base}/${igUserId}/messages`;
 
@@ -226,7 +234,7 @@ export async function sendButtonTemplateDM(igUserId, recipientId, slides, access
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            recipient: { id: recipientId },
+            recipient: buildRecipient(recipientId, commentId),
             message: {
                 attachment: {
                     type: 'template',
@@ -353,7 +361,7 @@ export async function checkUserIsFollower(igAccountId, checkUserId, accessToken)
  * @param {string} message     — the gate message text
  * @param {string} accessToken
  */
-export async function sendFollowGateDM(igUserId, recipientId, message, accessToken, useIgApi = false) {
+export async function sendFollowGateDM(igUserId, recipientId, message, accessToken, useIgApi = false, commentId = null) {
     // Send with YES and NO quick reply chips so the user doesn't need to type anything.
     // YES triggers the follow-check flow; NO gives them a polite decline.
     const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
@@ -363,7 +371,7 @@ export async function sendFollowGateDM(igUserId, recipientId, message, accessTok
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            recipient: { id: recipientId },
+            recipient: buildRecipient(recipientId, commentId),
             message: {
                 text: message,
                 quick_replies: [
@@ -464,7 +472,12 @@ export function applyBranding(message, dmConfig, plan) {
 export async function sendAutomatedDM(automation, recipientId, accessToken, igUserId, context = {}, platform = 'instagram', trackingMap = {}, plan = 'free', useIgApi = false) {
     const { dm_type, dm_config } = automation;
 
-    console.log(`[sendAutomatedDM:debug] platform=${platform} dm_type=${dm_type} igUserId=${igUserId} recipient=${recipientId} useIgApi=${useIgApi}`);
+    // Comment-triggered first DMs need Private Replies (recipient.comment_id)
+    // to bypass the 24h messaging window. Only applies to Instagram —
+    // Facebook stays on the standard messages endpoint per the comment below.
+    const commentId = (platform === 'instagram' && context?.comment_id) ? context.comment_id : null;
+
+    console.log(`[sendAutomatedDM:debug] platform=${platform} dm_type=${dm_type} igUserId=${igUserId} recipient=${recipientId} useIgApi=${useIgApi} privateReply=${!!commentId}`);
 
     // Facebook DMs go through the standard Messenger messages endpoint:
     // POST /{page-id}/messages with the recipient's Facebook user ID.
@@ -482,7 +495,7 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
     switch (dm_type) {
         case 'button_template': {
             const slides = dm_config.slides || [];
-            return sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap, plan, useIgApi, dm_config);
+            return sendButtonTemplateDM(igUserId, recipientId, slides, accessToken, trackingMap, plan, useIgApi, dm_config, commentId);
         }
 
         case 'message_template': {
@@ -491,7 +504,7 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
                 dm_config,
                 plan,
             );
-            return sendTextDM(igUserId, recipientId, message, accessToken, useIgApi);
+            return sendTextDM(igUserId, recipientId, message, accessToken, useIgApi, commentId);
         }
 
         case 'quick_reply': {
@@ -500,12 +513,12 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
                 dm_config,
                 plan,
             );
-            return sendQuickReplyDM(igUserId, recipientId, message, dm_config.quickReplies || [], accessToken, useIgApi);
+            return sendQuickReplyDM(igUserId, recipientId, message, dm_config.quickReplies || [], accessToken, useIgApi, commentId);
         }
 
         case 'multi_cta': {
             const message = resolveMessageVariables(dm_config.message || '', context);
-            return sendMultiCtaDM(igUserId, recipientId, message, dm_config.buttons || [], accessToken, trackingMap, plan, useIgApi, dm_config);
+            return sendMultiCtaDM(igUserId, recipientId, message, dm_config.buttons || [], accessToken, trackingMap, plan, useIgApi, dm_config, commentId);
         }
 
         case 'follow_up': {
@@ -515,7 +528,7 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
                 dm_config,
                 plan,
             );
-            return sendFollowGateDM(igUserId, recipientId, message, accessToken, useIgApi);
+            return sendFollowGateDM(igUserId, recipientId, message, accessToken, useIgApi, commentId);
         }
 
         case 'email_collector': {
@@ -528,7 +541,7 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
                 dm_config,
                 plan,
             );
-            return sendTextDM(igUserId, recipientId, message, accessToken, useIgApi);
+            return sendTextDM(igUserId, recipientId, message, accessToken, useIgApi, commentId);
         }
 
         default:
