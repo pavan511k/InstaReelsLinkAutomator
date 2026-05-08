@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase-server';
 import SettingsContent from '@/components/dashboard/SettingsContent';
+import { getUserEffectivePlan } from '@/lib/plan-server';
 
 export const metadata = {
     title: 'Settings — AutoDM',
@@ -22,10 +23,13 @@ export default async function SettingsPage() {
         // Table may not exist yet
     }
 
+    const userPlan = await getUserEffectivePlan(supabase, user.id);
+
     return (
         <SettingsContent
             user={user}
             connectedAccounts={connectedAccounts}
+            userPlan={userPlan}
         />
     );
 }

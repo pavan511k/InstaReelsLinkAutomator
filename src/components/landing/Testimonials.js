@@ -1,6 +1,10 @@
-import styles from './Testimonials.module.css';
+'use client';
+
 import { Star } from 'lucide-react';
 import ScrollReveal from './ScrollReveal';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './Testimonials.module.css';
+import lightStyles from './Testimonials.light.module.css';
 
 const TESTIMONIALS = [
   {
@@ -30,6 +34,7 @@ const TESTIMONIALS = [
 ];
 
 export default function Testimonials() {
+  const styles = useStyles(darkStyles, lightStyles);
   return (
     <section className={styles.section}>
       <div className={styles.inner}>

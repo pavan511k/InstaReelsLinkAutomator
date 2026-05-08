@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Users, Send, MousePointerClick, MessageCircle } from 'lucide-react';
 import ScrollReveal from './ScrollReveal';
-import styles from './Stats.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './Stats.module.css';
+import lightStyles from './Stats.light.module.css';
 
 const STATS = [
   { icon: Users,            value: 46000,  suffix: '+',        label: 'Creators using AutoDM',    color: '#F59E0B', bg: 'rgba(245,158,11,0.1)'  },
@@ -39,6 +41,7 @@ function Counter({ target, suffix }) {
 }
 
 export default function Stats() {
+  const styles = useStyles(darkStyles, lightStyles);
   return (
     <section className={styles.section}>
       <div className={styles.inner}>

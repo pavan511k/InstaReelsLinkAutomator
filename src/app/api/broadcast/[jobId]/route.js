@@ -25,7 +25,19 @@ export async function GET(request, { params: rawParams }) {
         ? Math.round((job.processed_count / job.total_recipients) * 100)
         : 0;
 
-    return NextResponse.json({ ...job, progressPct: pct });
+    let throttleUntil = null;
+    let throttleCount = 0;
+    if (job.status === 'throttled' && job.error_message) {
+        try {
+            const state = JSON.parse(job.error_message);
+            if (state.type === 'throttle') {
+                throttleUntil = state.until;
+                throttleCount = state.count || 1;
+            }
+        } catch { /* non-fatal */ }
+    }
+
+    return NextResponse.json({ ...job, progressPct: pct, throttleUntil, throttleCount });
 }
 
 /**

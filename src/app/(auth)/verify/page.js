@@ -1,9 +1,14 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
 import { MailCheck, ArrowRight, ArrowLeft } from 'lucide-react';
-import styles from './verify.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './verify.module.css';
+import lightStyles from './verify.light.module.css';
 
 export default function VerifyPage() {
+    const styles = useStyles(darkStyles, lightStyles);
     return (
         <div className={styles.page}>
 

@@ -1,25 +1,30 @@
 'use client';
 
 import { useState } from 'react';
-import { MessageSquarePlus, Save, Trash2, Plus, X } from 'lucide-react';
+import Link from 'next/link';
+import { MessageSquarePlus, Save, Trash2, Plus, X, Sparkles, Lock } from 'lucide-react';
 import { useStyles } from '@/lib/useStyles';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { toast } from 'sonner';
+import { isProOrTrial } from '@/lib/plans';
 import darkStyles from './SettingsContent.module.css';
 import lightStyles from './SettingsContent.light.module.css';
 
-export default function WelcomeOpenersContent({ connectedAccounts = [] }) {
+export default function WelcomeOpenersContent({ connectedAccounts = [], userPlan = 'free' }) {
     const styles = useStyles(darkStyles, lightStyles);
+    const { confirm } = useConfirm();
     const firstActiveAccount = connectedAccounts.find((a) => a.is_active) || null;
+    const isPro = isProOrTrial(userPlan);
 
     const iceBreakerCfg = firstActiveAccount?.default_config?.iceBreakers || [];
     const [iceBreakers, setIceBreakers] = useState(
         iceBreakerCfg.length > 0 ? iceBreakerCfg : [{ title: '', responseMessage: '' }]
     );
     const [ibSaving, setIbSaving] = useState(false);
-    const [ibMsg, setIbMsg]       = useState('');
 
     const handleSaveIceBreakers = async () => {
         if (!firstActiveAccount) return;
-        setIbSaving(true); setIbMsg('');
+        setIbSaving(true);
         try {
             const filled = iceBreakers.filter((ib) => ib.title?.trim() && ib.responseMessage?.trim());
             const res = await fetch('/api/ice-breakers', {
@@ -28,25 +33,50 @@ export default function WelcomeOpenersContent({ connectedAccounts = [] }) {
                 body: JSON.stringify({ accountId: firstActiveAccount.id, iceBreakers: filled }),
             });
             const data = await res.json();
-            if (res.ok) {
-                const msg = data.metaPushSuccess
-                    ? `✅ ${data.savedCount} welcome opener${data.savedCount !== 1 ? 's' : ''} saved and pushed to Instagram`
-                    : `✅ Saved locally. Meta push failed: ${data.metaError || 'unknown error'}. Will retry automatically.`;
-                setIbMsg(msg);
-                setTimeout(() => setIbMsg(''), 5000);
-            } else {
-                setIbMsg(`❌ ${data.error}`);
+            if (!res.ok) {
+                toast.error(data.error || 'Could not save welcome openers');
+                return;
             }
-        } catch (e) { setIbMsg(`❌ ${e.message}`); }
-        finally { setIbSaving(false); }
+            const count = data.savedCount;
+            if (data.metaPushSuccess) {
+                toast.success(
+                    `${count} welcome opener${count !== 1 ? 's' : ''} saved and pushed to Instagram`
+                );
+            } else {
+                // Local save succeeded but the Meta push failed. Show a
+                // warning toast so the user knows the change is durable
+                // but won't appear on Instagram until the retry succeeds.
+                toast.warning('Saved locally — Meta push failed', {
+                    description: `${data.metaError || 'unknown error'} · Will retry automatically.`,
+                });
+            }
+        } catch (e) {
+            toast.error(e.message || 'Could not save welcome openers');
+        } finally {
+            setIbSaving(false);
+        }
     };
 
     const handleClearIceBreakers = async () => {
-        if (!firstActiveAccount || !confirm('Remove all welcome openers?')) return;
-        await fetch(`/api/ice-breakers?accountId=${firstActiveAccount.id}`, { method: 'DELETE' });
-        setIceBreakers([{ title: '', responseMessage: '' }]);
-        setIbMsg('✅ Welcome openers cleared');
-        setTimeout(() => setIbMsg(''), 3000);
+        if (!firstActiveAccount) return;
+        const ok = await confirm({
+            title: 'Remove all welcome openers?',
+            message: 'All welcome openers for this account will be cleared on Instagram.',
+            confirmText: 'Remove all',
+        });
+        if (!ok) return;
+        try {
+            const res = await fetch(`/api/ice-breakers?accountId=${firstActiveAccount.id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                toast.error(data.error || 'Could not clear welcome openers');
+                return;
+            }
+            setIceBreakers([{ title: '', responseMessage: '' }]);
+            toast.success('Welcome openers cleared');
+        } catch (e) {
+            toast.error(e.message || 'Could not clear welcome openers');
+        }
     };
 
     if (!firstActiveAccount) {
@@ -88,6 +118,23 @@ export default function WelcomeOpenersContent({ connectedAccounts = [] }) {
                             💡 These buttons appear inside your DM inbox on Instagram. When a visitor taps one, AutoDM instantly
                             replies with the message you configure here. Requires a Facebook Page connection.
                         </div>
+
+                        {!isPro && (
+                            <div className={styles.proUpsellBanner}>
+                                <div className={styles.proUpsellIcon}>
+                                    <Sparkles size={16} />
+                                </div>
+                                <div className={styles.proUpsellBody}>
+                                    <p className={styles.proUpsellTitle}>Welcome Openers is a Pro feature</p>
+                                    <p className={styles.proUpsellDesc}>
+                                        You can view or remove existing openers, but saving new ones requires a Pro plan.
+                                    </p>
+                                </div>
+                                <Link href="/pricing" className={styles.proUpsellBtn}>
+                                    Upgrade to Pro
+                                </Link>
+                            </div>
+                        )}
 
                         {iceBreakers.map((ib, i) => (
                             <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'flex-start' }}>
@@ -133,14 +180,19 @@ export default function WelcomeOpenersContent({ connectedAccounts = [] }) {
                         )}
 
                         <div className={styles.configSaveRow}>
-                            <button className={styles.saveBtn} onClick={handleSaveIceBreakers} disabled={ibSaving || !firstActiveAccount}>
-                                <Save size={14} /> {ibSaving ? 'Saving…' : 'Save & push to Instagram'}
-                            </button>
+                            {isPro ? (
+                                <button className={styles.saveBtn} onClick={handleSaveIceBreakers} disabled={ibSaving || !firstActiveAccount}>
+                                    <Save size={14} /> {ibSaving ? 'Saving…' : 'Save & push to Instagram'}
+                                </button>
+                            ) : (
+                                <button className={styles.saveBtn} disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Upgrade to Pro to save Welcome Openers">
+                                    <Lock size={14} /> Save & push to Instagram
+                                </button>
+                            )}
                             <button className={styles.disconnectBtn} onClick={handleClearIceBreakers} disabled={!firstActiveAccount}>
                                 <Trash2 size={13} /> Clear all
                             </button>
                         </div>
-                        {ibMsg && <p className={styles.saveMsg} style={{ marginTop: 10 }}>{ibMsg}</p>}
                     </div>
                 </div>
             </div>

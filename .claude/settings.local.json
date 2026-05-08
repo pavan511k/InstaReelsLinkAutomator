@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next *)",
+      "Bash(xargs grep *)",
+      "Bash(npx eslint *)",
+      "Bash(npm run *)",
+      "Bash(command -v chrome)",
+      "Bash(command -v chromium)",
+      "Bash(command -v google-chrome)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft/Edge/Application/**)",
+      "Read(//c/Users/PAVANK~1.KOD/AppData/Local/Temp/**)",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --hide-scrollbars --window-size=1440,900 --screenshot=\"C:\\\\Users\\\\PAVANK~1.KOD\\\\AppData\\\\Local\\\\Temp\\\\autodm-hero.png\" \"http://localhost:3000\")",
+      "Bash(rm -f autodm-hero-v2.png)",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2500 --screenshot=\"C:\\\\Users\\\\PAVANK~1.KOD\\\\AppData\\\\Local\\\\Temp\\\\autodm-hero-v2.png\" \"http://localhost:3000\")",
+      "Bash(rm -f autodm-hero-v3.png)",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --hide-scrollbars --window-size=1500,950 --virtual-time-budget=3000 --screenshot=\"C:\\\\Users\\\\PAVANK~1.KOD\\\\AppData\\\\Local\\\\Temp\\\\autodm-hero-v3.png\" \"http://localhost:3000?_cookieconsent=1\")",
+      "Bash(node -e \"console.log\\(require\\('sharp'\\).versions\\)\")",
+      "Bash(cp /tmp/compress-icons.mjs ./compress-icons.mjs)",
+      "Bash(node ./compress-icons.mjs)",
+      "Bash(npm install *)",
+      "Bash(node *)"
+    ]
+  }
+}

@@ -25,6 +25,70 @@
     gap: 6px;
 }
 
+.formLabelRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.charCounter {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.32);
+    font-variant-numeric: tabular-nums;
+}
+.charCounterOver { color: #FCA5A5; }
+
+.fieldHint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.32);
+    line-height: 1.45;
+}
+
+/* "Free" tag next to the Branding label so users see why it's locked */
+.brandingPlanTag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.55);
+    margin-left: 4px;
+}
+
+/* Locked branding chip shown to free users — read-only preview of what
+   will be appended, plus a clear upgrade affordance. */
+.brandingLocked {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 13px;
+    background: rgba(124, 58, 237, 0.06);
+    border: 1px solid rgba(167, 139, 250, 0.18);
+    border-radius: 9px;
+}
+.brandingLockedText {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.62);
+    font-style: italic;
+}
+.brandingLockedUpgrade {
+    font-size: 11px;
+    font-weight: 700;
+    color: #C4B5FD;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 150ms;
+}
+.brandingLockedUpgrade:hover { color: #DDD6FE; text-decoration: underline; }
+
 .input {
     width: 100%;
     padding: 9px 13px;
@@ -51,29 +115,38 @@
 
 .select {
     width: 100%;
-    padding: 9px 13px;
+    height: 40px;
+    padding: 0 38px 0 14px;
     font-family: 'Inter', sans-serif;
-    font-size: 0.855rem;
-    font-weight: 400;
-    color: rgba(255,255,255,0.82);
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 9px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.92);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
     outline: none;
     cursor: pointer;
-    transition: border-color 150ms;
+    transition: border-color 150ms, background 150ms, box-shadow 150ms;
     -webkit-appearance: none;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23A78BFA' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 12px center;
-    padding-right: 34px;
+    background-position: right 14px center;
     box-sizing: border-box;
 }
-.select:focus { border-color: rgba(167,139,250,0.45); }
+.select:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.18);
+}
+.select:focus {
+    border-color: rgba(167,139,250,0.55);
+    background: rgba(124,58,237,0.06);
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.18);
+}
 .select option {
     background: #1A1130;
-    color: rgba(255,255,255,0.82);
+    color: rgba(255,255,255,0.92);
+    padding: 8px;
 }
 
 /* ── Template bar ─────────────────────────────────────────────── */
@@ -101,17 +174,34 @@
 .templateDropdown {
     flex: 1;
     min-width: 0;
-    padding: 6px 10px;
+    height: 34px;
+    padding: 0 32px 0 12px;
     font-family: 'Inter', sans-serif;
-    font-size: 0.82rem;
-    color: rgba(255,255,255,0.7);
+    font-size: 0.825rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.85);
     background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 7px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
     outline: none;
     cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23A78BFA' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: border-color 150ms, background-color 150ms, box-shadow 150ms;
 }
-.templateDropdown option { background: #1A1130; }
+.templateDropdown:hover {
+    border-color: rgba(255,255,255,0.20);
+    background-color: rgba(255,255,255,0.08);
+}
+.templateDropdown:focus {
+    border-color: rgba(167,139,250,0.55);
+    background-color: rgba(124,58,237,0.08);
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.18);
+}
+.templateDropdown option { background: #1A1130; padding: 6px; }
 
 .saveTemplateBtn {
     display: inline-flex;
@@ -192,6 +282,14 @@
     border-color: rgba(239,68,68,0.25);
     color: #FCA5A5;
 }
+/* Active = the user has armed delete-mode; the dropdown is now in
+   deletion intent. Solid red treatment so it's unambiguous. */
+.deleteTemplateBtnActive,
+.deleteTemplateBtnActive:hover {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: rgba(239, 68, 68, 0.50);
+    color: #FECACA;
+}
 
 /* ── Section wrapper ──────────────────────────────────────────── */
 .section {
@@ -204,7 +302,15 @@
 .carouselPills {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
+}
+
+.carouselHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .carouselLabel {
@@ -215,6 +321,18 @@
     letter-spacing: 0.08em;
 }
 
+.carouselCount {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.40);
+    letter-spacing: 0;
+    text-transform: none;
+}
+.carouselCountPro {
+    color: #FCD34D;
+    font-weight: 700;
+}
+
 .pillRow {
     display: flex;
     align-items: center;
@@ -222,21 +340,39 @@
     flex-wrap: wrap;
 }
 
+/* Wrap so the X-remove button can sit at the corner of each pill, and
+   so HTML5 drag handles a single draggable surface per slide. */
+.pillWrap {
+    position: relative;
+    display: inline-flex;
+    transition: transform 150ms, opacity 150ms;
+}
+.pillWrap:hover .pillRemove { opacity: 1; transform: scale(1); }
+.pillDragging { opacity: 0.45; }
+.pillDragOver .pill {
+    border-color: rgba(167, 139, 250, 0.85) !important;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.25);
+}
+
 .pill {
-    width: 34px;
-    height: 34px;
+    width: 38px;
+    height: 38px;
     border-radius: 9px;
     border: 1px solid rgba(255,255,255,0.12);
     background: rgba(255,255,255,0.05);
-    color: rgba(255,255,255,0.45);
+    color: rgba(255,255,255,0.55);
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 2px;
+    padding: 4px 0 0;
     transition: all 150ms;
     font-family: 'Inter', sans-serif;
+    user-select: none;
 }
 .pill:hover {
     border-color: rgba(167,139,250,0.4);
@@ -250,6 +386,45 @@
     color: #fff !important;
     box-shadow: 0 4px 12px rgba(124,58,237,0.38);
 }
+
+/* Status dot inside the pill — green=complete / amber=partial / grey=empty */
+.pillStatusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+.pillStatusDot_complete { background: #10B981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.20); }
+.pillStatusDot_partial  { background: #F59E0B; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.20); }
+.pillStatusDot_empty    { background: rgba(255, 255, 255, 0.18); }
+.pillActive .pillStatusDot_empty { background: rgba(255, 255, 255, 0.45); }
+
+/* Per-pill X — appears at top-right of the pill on hover */
+.pillRemove {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #1A1130;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.65);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity 120ms, transform 120ms, background 150ms;
+    z-index: 1;
+}
+.pillRemove:hover {
+    background: #DC2626;
+    border-color: #DC2626;
+    color: #fff;
+}
+/* Always-visible on the active pill so a one-pill nav doesn't hide the X */
+.pillWrap:focus-within .pillRemove { opacity: 1; transform: scale(1); }
 
 .pillAdd {
     width: 34px;
@@ -287,15 +462,39 @@
     color: #FCA5A5;
 }
 
+/* CTA group — visually pairs Button label + URL inside the slide form so
+   they read as one logical element ("the call-to-action button") rather
+   than two free-floating fields. */
+.ctaGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid rgba(167, 139, 250, 0.18);
+    background: rgba(167, 139, 250, 0.04);
+    border-radius: 10px;
+}
+.ctaGroupHeader {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(196, 181, 253, 0.85);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
 /* ── Slide form ───────────────────────────────────────────────── */
+/* Flat layout — sits directly on the form panel, no nested card.
+   Previous design wrapped fields in a card-inside-a-card-inside-a-card
+   (formPanel → slideForm → ctaGroup) which added visual weight without
+   any information benefit. The slide form now reads as a continuous
+   block of fields. */
 .slideForm {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 16px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 12px;
+    gap: 12px;
     animation: slideIn 0.2s ease;
 }
 @keyframes slideIn {
@@ -303,19 +502,46 @@
     to   { opacity: 1; transform: none; }
 }
 
+/* Two-column rows — at ≥520px the drawer is wide enough to pair
+   tightly-related fields side by side. URL+label and headline+description
+   each share a row, so the form reads as 3 logical pairs (CTA / image /
+   copy) instead of 5 stacked single-line inputs. Collapses to 1 column
+   automatically on narrower viewports. */
+/* Renamed from `.ctaRow` because that class already existed for Multi-CTA
+   button rows (display: flex; align-items: center) — having two definitions
+   meant the flex one won and made the Button-URL/Button-label labels
+   vertically center per their own content height, mis-aligning them. */
+.fieldRow2col {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 12px;
+    align-items: start;
+}
+@media (max-width: 520px) {
+    .fieldRow2col { grid-template-columns: 1fr; }
+}
+
 .formField {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 6px;
+    min-width: 0;
 }
 
+/* Label — pure block element with an explicit line-height + height.
+   Was display:flex (left over from when labels had an icon prefix).
+   Flex containers can compute baseline differently per browser depending
+   on content shape; locking line-height + height removes any chance of
+   two same-class labels rendering at slightly different Y positions. */
 .fieldLabel {
+    display: block;
     font-size: 11.5px;
     font-weight: 600;
     color: rgba(255,255,255,0.45);
-    display: flex;
-    align-items: center;
-    gap: 5px;
+    line-height: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
 }
 
 /* URL input row */
@@ -371,6 +597,66 @@
     background: rgba(124,58,237,0.06);
 }
 
+/* Drop zone — replaces the single-line uploadBtn for the empty-image
+   state. Stacked icon + title + hint reads as a real upload affordance
+   instead of a passive button. Hover lifts the border + tints the
+   surface so the click target is unmistakable. */
+.uploadDropZone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    padding: 28px 16px 22px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1.5px dashed rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms, color 150ms, transform 150ms;
+}
+.uploadDropZone:hover {
+    background: rgba(124, 58, 237, 0.07);
+    border-color: rgba(167, 139, 250, 0.45);
+    color: rgba(255, 255, 255, 0.85);
+}
+.uploadDropZone:active { transform: scale(0.995); }
+.uploadDropZoneIcon {
+    color: rgba(167, 139, 250, 0.85);
+    margin-bottom: 6px;
+}
+.uploadDropZoneTitle {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: inherit;
+    letter-spacing: -0.01em;
+}
+.uploadDropZoneHint {
+    font-size: 0.74rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0;
+}
+
+/* Compact branding row — single line, quiet visual. Was a 2-line
+   checkbox row eating ~52px; now it's ~30px. */
+.brandingRow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 6px 0;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    transition: color 150ms;
+}
+.brandingRow:hover { color: rgba(255, 255, 255, 0.85); }
+
 .uploadedImage {
     position: relative;
     border-radius: 10px;
@@ -400,6 +686,31 @@
     transition: opacity 150ms;
 }
 .uploadedImage:hover .imageOverlay { opacity: 1; }
+
+/* Remove (X) button — top-right of the uploaded image */
+.imageRemoveBtn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    transition: background 150ms, transform 150ms;
+    z-index: 2;
+}
+.imageRemoveBtn:hover {
+    background: rgba(220, 38, 38, 0.9);
+    border-color: rgba(255, 255, 255, 0.30);
+    transform: scale(1.08);
+}
 
 /* Locked field */
 .lockedField {
@@ -575,6 +886,18 @@
 }
 .typeHintLink:hover { color: #C4B5FD; text-decoration: underline; }
 
+/* Facebook-only inline note explaining text-DM limitation. */
+.fbNote {
+    margin-top: 10px;
+    padding: 9px 12px;
+    background: rgba(24, 119, 242, 0.10);
+    border: 1px solid rgba(24, 119, 242, 0.30);
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.78);
+}
+
 .infoBox {
     display: flex;
     align-items: flex-start;
@@ -590,6 +913,30 @@
 }
 .infoBox svg { flex-shrink: 0; margin-top: 1px; color: #60A5FA; }
 
+/* Violet variant — used by Follow Gate header to match its purple feature accent */
+.infoBoxViolet {
+    background: rgba(124, 58, 237, 0.10);
+    border-color: rgba(167, 139, 250, 0.25);
+    color: rgba(196, 181, 253, 0.90);
+}
+.infoBoxViolet strong { color: #DDD6FE; font-weight: 700; }
+
+/* Blue variant — used by Email Collector header */
+.infoBoxBlue {
+    background: rgba(59, 130, 246, 0.10);
+    border-color: rgba(99, 179, 237, 0.28);
+    color: rgba(147, 210, 255, 0.92);
+}
+.infoBoxBlue strong { color: #93C5FD; font-weight: 700; }
+
+/* Amber variant — used for "tip" / educational footnotes */
+.infoBoxAmber {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: rgba(245, 158, 11, 0.22);
+    color: rgba(252, 211, 77, 0.85);
+}
+.infoBoxAmber strong { color: #FCD34D; font-weight: 700; }
+
 /* ── Limit note ──────────────────────────────────────────── */
 .limitNote {
     font-size: 10.5px;
@@ -602,8 +949,58 @@
 .chipList {
     display: flex;
     flex-direction: column;
+    gap: 10px;
+}
+
+/* New chip-card layout — title + per-chip response on one card */
+.chipCard {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+}
+.chipCardHeader {
+    display: flex;
+    align-items: center;
     gap: 8px;
 }
+.chipCardIndex {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(124, 58, 237, 0.18);
+    border: 1px solid rgba(167, 139, 250, 0.30);
+    color: #C4B5FD;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-variant-numeric: tabular-nums;
+}
+.chipCardResponse {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding-left: 30px;  /* aligns with chip label, indented from index dot */
+}
+.chipResponseLabel {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.40);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+.chipResponseArea {
+    resize: vertical;
+    min-height: 56px;
+    line-height: 1.5;
+}
+
 .chipRow {
     display: flex;
     align-items: center;

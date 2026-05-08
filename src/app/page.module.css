@@ -1,0 +1,13 @@
+/* Landing-root background.
+   Dark stays the existing near-black violet (#0A0915).
+   Light is the warm off-white pick (#FAFAF9) — softer than pure white,
+   intentionally NOT the dashboard's lavender --page-bg so the landing
+   reads as a distinct, calmer surface. */
+.root {
+  background: #FAFAF9;
+  min-height: 100vh;
+}
+
+:global([data-theme="dark"]) .root {
+  background: #0A0915;
+}

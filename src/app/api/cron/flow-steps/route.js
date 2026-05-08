@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { getDmLimit, getEffectivePlan } from '@/lib/plans';
+import { getMonthlyDmCount } from '@/lib/plan-server';
 
 /**
  * GET /api/cron/flow-steps
@@ -35,10 +36,19 @@ function db() {
     );
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
-    const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret) {
+        // Fail closed — never allow public invocation. cron-job.org passes
+        // Authorization: Bearer <CRON_SECRET>. If the env var is missing,
+        // this is a misconfiguration, not a free pass to the endpoint.
+        console.error('[FlowSteps] CRON_SECRET not configured');
+        return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${cronSecret}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -47,10 +57,18 @@ export async function GET(request) {
     const results  = { checked: 0, enqueued: 0, skipped: 0 };
 
     try {
+        // Lower bound on sent_at: only consider rows old enough that ANY
+        // possible flow step might be ready. The shortest reasonable delay
+        // we honour is 1 minute; rows newer than that can't be eligible yet.
+        // Without this filter, 300 freshly-sent rows can starve out older
+        // eligible rows when ordering by sent_at ASC (see route audit notes).
+        const minAgeIso = new Date(now.getTime() - 60_000).toISOString();
+
         const { data: logRows, error: fetchErr } = await supabase
             .from('dm_sent_log')
             .select(`
-                id, automation_id, recipient_ig_id, post_id, sent_at, flow_step,
+                id, automation_id, recipient_ig_id, recipient_username,
+                post_id, sent_at, flow_step,
                 dm_automations!inner(
                     id, user_id, settings_config,
                     connected_accounts!inner(id, access_token, ig_user_id)
@@ -58,6 +76,7 @@ export async function GET(request) {
             `)
             .eq('status', 'sent')
             .not('flow_step', 'is', null)
+            .lt('sent_at', minAgeIso)
             .order('sent_at', { ascending: true })
             .limit(BATCH_SIZE);
 
@@ -88,8 +107,9 @@ export async function GET(request) {
             }
 
             const step = flowSteps[nextStepIdx];
+            // Use ?? not || so a legit 0-hour delay (immediate next step) is preserved.
             const stepDelayHours = step?.delayHours ?? step?.delay;
-            if (!step?.message?.trim() || !stepDelayHours) { results.skipped++; continue; }
+            if (!step?.message?.trim() || stepDelayHours == null) { results.skipped++; continue; }
 
             // Cumulative delay — each step's delay is sequential from the initial send
             const cumulativeDelayHours = flowSteps
@@ -119,51 +139,56 @@ export async function GET(request) {
             const dmLimit  = getDmLimit(userPlan);
 
             if (dmLimit !== null) {
-                const startOfMonth = new Date();
-                startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
-
-                const { data: autoIds } = await supabase
-                    .from('dm_automations').select('id').eq('user_id', automation.user_id);
-                const allIds = (autoIds || []).map((a) => a.id);
-
-                const { count: monthlyCount } = await supabase
-                    .from('dm_sent_log').select('id', { count: 'exact', head: true })
-                    .in('automation_id', allIds).eq('status', 'sent')
-                    .gte('sent_at', startOfMonth.toISOString());
-
-                if ((monthlyCount || 0) >= dmLimit) {
+                const monthlyCount = await getMonthlyDmCount(supabase, automation.user_id);
+                if (monthlyCount >= dmLimit) {
                     console.log(`[FlowSteps] Monthly limit reached for user ${automation.user_id} — skipping`);
                     results.skipped++;
                     continue;
                 }
             }
 
+            // Personalization: use the captured username when available, else
+            // fall back to "there" so we never leak the numeric IGSID into a
+            // user-facing DM. Username is captured at initial send (webhook
+            // from.username for comments).
+            const personal = row.recipient_username || 'there';
             const rawMessage = step.message
-                .replace(/{first_name}/g, row.recipient_ig_id)
-                .replace(/{username}/g, row.recipient_ig_id);
+                .replace(/{first_name}/g, personal)
+                .replace(/{username}/g, personal);
 
             const { error: insertErr } = await supabase.from('dm_queue').insert({
-                user_id:         automation.user_id,
-                account_id:      account.id,
-                automation_id:   automation.id,
-                post_id:         row.post_id,
-                recipient_ig_id: row.recipient_ig_id,
-                comment_id:      null,
-                comment_text:    `[flow step ${nextStepIdx + 1}]`,
-                platform:        'instagram',
-                dm_type:         'message_template',
-                dm_config:       { type: 'message_template', message: rawMessage },
-                tracking_map:    {},
-                user_plan:       userPlan,
-                queue_reason:    'flow_step',
-                is_upsell:       false,
-                source_log_id:   row.id,
-                priority:        6,
-                status:          'pending',
-                scheduled_after: now.toISOString(),
+                user_id:            automation.user_id,
+                account_id:         account.id,
+                automation_id:      automation.id,
+                post_id:            row.post_id,
+                recipient_ig_id:    row.recipient_ig_id,
+                recipient_username: row.recipient_username,
+                comment_id:         null,
+                comment_text:       `[flow step ${nextStepIdx + 1}]`,
+                platform:           'instagram',
+                dm_type:            'message_template',
+                dm_config:          { type: 'message_template', message: rawMessage },
+                tracking_map:       {},
+                user_plan:          userPlan,
+                queue_reason:       'flow_step',
+                is_upsell:          false,
+                source_log_id:      row.id,
+                flow_step_index:    nextStepIdx + 1,
+                priority:           6,
+                status:             'pending',
+                scheduled_after:    now.toISOString(),
             });
 
             if (insertErr) {
+                // Postgres unique-violation (idx_dm_queue_flow_upsell_dedup) — another
+                // overlapping cron run beat us to it. Treat as already-queued and
+                // advance the flow_step counter so we don't retry forever.
+                if (insertErr.code === '23505') {
+                    await supabase.from('dm_sent_log')
+                        .update({ flow_step: nextStepIdx + 1 }).eq('id', row.id);
+                    results.skipped++;
+                    continue;
+                }
                 console.error(`[FlowSteps] Failed to enqueue step ${nextStepIdx + 1} for ${row.recipient_ig_id}:`, insertErr.message);
                 results.skipped++;
                 continue;

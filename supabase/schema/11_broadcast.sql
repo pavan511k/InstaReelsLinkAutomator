@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS broadcast_jobs (
 
     -- Progress counters
     status              text NOT NULL DEFAULT 'pending'
-                        CHECK (status IN ('pending','running','paused','completed','failed')),
+                        CHECK (status IN ('pending','running','paused','throttled','completed','failed')),
     total_recipients    integer NOT NULL DEFAULT 0,
     processed_count     integer NOT NULL DEFAULT 0,
     sent_count          integer NOT NULL DEFAULT 0,
@@ -50,7 +50,7 @@ CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_user
 
 CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_status
     ON broadcast_jobs (status)
-    WHERE status IN ('running', 'pending');
+    WHERE status IN ('running', 'pending', 'throttled');
 
 CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_post
     ON broadcast_jobs (post_id);
@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS broadcast_recipients (
     recipient_ig_id text NOT NULL,
     status          text NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending','sent','failed','skipped')),
+    retry_count     integer NOT NULL DEFAULT 0,     -- incremented on each transient failure, max 3
     error_message   text,
     processed_at    timestamptz
 );

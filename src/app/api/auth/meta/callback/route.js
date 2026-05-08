@@ -12,6 +12,7 @@ import {
     getInstagramAccount,
     getMetaUser,
 } from '@/lib/meta-oauth';
+import { GRAPH_API_VERSION, GRAPH_FB_BASE, GRAPH_IG_BASE } from '@/lib/meta-graph';
 
 /**
  * Sync all posts for a user using a service-role client.
@@ -42,7 +43,7 @@ async function syncPostsForUser(userId) {
                 const useIgApi = !account.fb_page_access_token && account.platform === 'instagram';
                 const igBase = useIgApi ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
                 const igRes = await fetch(
-                    `${igBase}/v21.0/${account.ig_user_id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&limit=100&access_token=${token}`
+                    `${igBase}/${GRAPH_API_VERSION}/${account.ig_user_id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&limit=100&access_token=${token}`
                 );
                 if (igRes.ok) {
                     const igData = await igRes.json();
@@ -68,7 +69,7 @@ async function syncPostsForUser(userId) {
             try {
                 const token = account.fb_page_access_token || account.access_token;
                 const fbRes = await fetch(
-                    `https://graph.facebook.com/v21.0/${account.fb_page_id}/posts?fields=id,message,permalink_url,created_time,attachments{media_type,media{image{src}},url}&limit=100&access_token=${token}`
+                    `${GRAPH_FB_BASE}/${account.fb_page_id}/posts?fields=id,message,permalink_url,created_time,attachments{media_type,media{image{src}},url}&limit=100&access_token=${token}`
                 );
                 if (fbRes.ok) {
                     const fbData = await fbRes.json();
@@ -281,7 +282,7 @@ export async function GET(request) {
 async function subscribeToWebhookEvents(accountData) {
     if (accountData.platform === 'instagram') {
         const url =
-            `https://graph.instagram.com/v21.0/${accountData.ig_user_id}/subscribed_apps` +
+            `${GRAPH_IG_BASE}/${accountData.ig_user_id}/subscribed_apps` +
             `?subscribed_fields=comments%2Cmessages%2Cmentions` +
             `&access_token=${encodeURIComponent(accountData.access_token)}`;
         const res  = await fetch(url, { method: 'POST' });
@@ -293,7 +294,7 @@ async function subscribeToWebhookEvents(accountData) {
         }
     } else if (accountData.fb_page_id && accountData.fb_page_access_token) {
         const url =
-            `https://graph.facebook.com/v21.0/${accountData.fb_page_id}/subscribed_apps` +
+            `${GRAPH_FB_BASE}/${accountData.fb_page_id}/subscribed_apps` +
             `?subscribed_fields=feed%2Cmessages%2Cfeed` +
             `&access_token=${encodeURIComponent(accountData.fb_page_access_token)}`;
         const res  = await fetch(url, { method: 'POST' });

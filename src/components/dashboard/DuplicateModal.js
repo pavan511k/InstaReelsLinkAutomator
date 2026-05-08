@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { X, Search, Copy, CheckCircle, Loader2, Instagram, Facebook } from 'lucide-react';
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from './DuplicateModal.module.css';
 import lightStyles from './DuplicateModal.light.module.css';
+import Modal from '@/components/ui/Modal';
 
 export default function DuplicateModal({ sourcePost, allPosts, onClose, onSuccess }) {
     const styles = useStyles(darkStyles, lightStyles);
@@ -14,9 +15,7 @@ export default function DuplicateModal({ sourcePost, allPosts, onClose, onSucces
     const [error,      setError]      = useState('');
     const [done,       setDone]       = useState(false);
     const searchRef = useRef(null);
-
-    // Focus search on mount
-    useEffect(() => { searchRef.current?.focus(); }, []);
+    // Modal primitive will focus this on open (replaces the old useEffect).
 
     // Posts eligible for duplication — exclude the source and any that already have automations
     const eligible = allPosts.filter(
@@ -65,10 +64,21 @@ export default function DuplicateModal({ sourcePost, allPosts, onClose, onSucces
     };
 
     return (
-        <div className={styles.overlay} onClick={onClose}>
-            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-
-                {/* ── Header ── */}
+        <Modal
+            open={true}
+            onClose={onClose}
+            size="md"
+            closable={!loading}
+            showCloseButton={false}
+            initialFocusRef={searchRef}
+            ariaLabel="Duplicate automation"
+            noPadding
+            className={styles.modal}
+        >
+                {/* ── Header (kept inline so the icon-pill, border-bottom, and
+                    subtitle styling from DuplicateModal.module.css are preserved
+                    exactly. The Modal primitive provides focus trap + escape +
+                    backdrop guard around this content.) ── */}
                 <div className={styles.header}>
                     <div className={styles.headerLeft}>
                         <div className={styles.headerIcon}>
@@ -79,7 +89,7 @@ export default function DuplicateModal({ sourcePost, allPosts, onClose, onSucces
                             <p className={styles.subtitle}>Copy this automation's config to another post</p>
                         </div>
                     </div>
-                    <button className={styles.closeBtn} onClick={onClose}>
+                    <button className={styles.closeBtn} onClick={onClose} disabled={loading}>
                         <X size={16} />
                     </button>
                 </div>
@@ -202,7 +212,6 @@ export default function DuplicateModal({ sourcePost, allPosts, onClose, onSucces
                         </div>
                     </>
                 )}
-            </div>
-        </div>
+        </Modal>
     );
 }

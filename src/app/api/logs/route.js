@@ -16,27 +16,24 @@ export async function GET(request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status') || 'all';   // all | sent | failed
-    const range  = searchParams.get('range')  || '7d';    // today | 7d | 30d | all
-    const page   = parseInt(searchParams.get('page') || '0', 10);
-    const search = searchParams.get('search') || '';
+    const status   = searchParams.get('status')   || 'all';   // all | sent | failed
+    const range    = searchParams.get('range')    || '7d';    // today | 7d | 30d | all
+    const platform = searchParams.get('platform') || 'all';   // all | instagram | facebook
+    const page     = parseInt(searchParams.get('page') || '0', 10);
+    const search   = searchParams.get('search')   || '';
 
     try {
-        // Get all automation IDs for this user
+        // Fetch the user's automations only to build the post-info enrichment
+        // map (caption + thumbnail per row). The dm_sent_log query itself
+        // filters by user_id directly so logs survive automation deletions.
         const { data: userAutomations } = await supabase
             .from('dm_automations')
             .select('id, post_id, instagram_posts(caption, thumbnail_url, media_url)')
             .eq('user_id', user.id);
 
-        if (!userAutomations || userAutomations.length === 0) {
-            return NextResponse.json({ rows: [], total: 0, hasMore: false });
-        }
-
-        const allIds = userAutomations.map((a) => a.id);
-
-        // Build automation → post map
+        // automation → post lookup (caption + thumbnail for the table)
         const autoMap = {};
-        for (const a of userAutomations) {
+        for (const a of (userAutomations || [])) {
             autoMap[a.id] = {
                 caption:      a.instagram_posts?.caption || 'No caption',
                 thumbnailUrl: a.instagram_posts?.thumbnail_url || a.instagram_posts?.media_url || null,
@@ -56,34 +53,49 @@ export async function GET(request) {
             }
         }
 
-        // Build query
+        // Build query — filter by user_id, the source of truth that matches
+        // the sidebar's cached counter and survives automation deletions.
         let query = supabase
             .from('dm_sent_log')
-            .select('id, automation_id, recipient_ig_id, comment_text, status, error_message, sent_at', { count: 'exact' })
-            .in('automation_id', allIds)
+            .select('id, automation_id, recipient_ig_id, comment_text, status, error_message, sent_at, platform', { count: 'exact' })
+            .eq('user_id', user.id)
             .order('sent_at', { ascending: false })
             .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
         if (status !== 'all') {
             query = query.eq('status', status);
         }
+        if (platform !== 'all') {
+            // Direct read from the new dm_sent_log.platform column.
+            query = query.eq('platform', platform);
+        }
         if (fromDate) {
             query = query.gte('sent_at', fromDate.toISOString());
         }
         if (search.trim()) {
-            // Search in comment_text or recipient_ig_id
-            query = query.or(`comment_text.ilike.%${search}%,recipient_ig_id.ilike.%${search}%`);
+            // PostgREST parses or() as a comma/paren-delimited mini-DSL.
+            // Strip characters that can break or extend the filter expression
+            // (commas, parens, quotes, the ilike wildcard, backslash). What
+            // remains is safe to splice into the template.
+            const safeSearch = search.replace(/[%,()'"*\\]/g, '').trim();
+            if (safeSearch) {
+                query = query.or(`comment_text.ilike.%${safeSearch}%,recipient_ig_id.ilike.%${safeSearch}%`);
+            }
         }
 
         const { data: logs, count, error } = await query;
 
         if (error) throw error;
 
-        // Enrich with post info
-        const rows = (logs || []).map((log) => ({
-            ...log,
-            post: autoMap[log.automation_id] || { caption: 'Unknown post', thumbnailUrl: null },
-        }));
+        // Enrich with post info — platform comes straight off the row.
+        const rows = (logs || []).map((log) => {
+            const info = autoMap[log.automation_id] || { caption: 'Unknown post', thumbnailUrl: null };
+            return {
+                ...log,
+                platform: log.platform || 'instagram',
+                post: { caption: info.caption, thumbnailUrl: info.thumbnailUrl },
+            };
+        });
 
         return NextResponse.json({
             rows,

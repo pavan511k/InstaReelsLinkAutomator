@@ -6,6 +6,8 @@
  * Both connections use Facebook's OAuth (grants both IG + FB permissions)
  */
 
+import { GRAPH_FB_BASE, GRAPH_IG_BASE, FB_OAUTH_BASE } from '@/lib/meta-graph';
+
 const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;                          // Facebook App ID
 const INSTAGRAM_APP_ID = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID || process.env.NEXT_PUBLIC_META_APP_ID; // Instagram App ID (separate from FB)
 const META_APP_SECRET = process.env.META_APP_SECRET;                              // Facebook App Secret
@@ -82,7 +84,7 @@ export function buildAuthUrl(connectionType, state) {
         response_type: 'code',
         state: encodedState,
     });
-    return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
+    return `${FB_OAUTH_BASE}/dialog/oauth?${params.toString()}`;
 }
 
 // ─── Instagram Token Exchange ───────────────────────────────────
@@ -140,7 +142,7 @@ export async function getInstagramLongLivedToken(shortLivedToken) {
  */
 export async function getInstagramUserProfile(accessToken) {
     const response = await fetch(
-        `https://graph.instagram.com/v21.0/me?fields=user_id,username,profile_picture_url,name&access_token=${accessToken}`
+        `${GRAPH_IG_BASE}/me?fields=user_id,username,profile_picture_url,name&access_token=${accessToken}`
     );
 
     if (!response.ok) {
@@ -165,7 +167,7 @@ export async function exchangeCodeForFacebookToken(code) {
     });
 
     const response = await fetch(
-        `https://graph.facebook.com/v21.0/oauth/access_token?${params.toString()}`
+        `${GRAPH_FB_BASE}/oauth/access_token?${params.toString()}`
     );
 
     if (!response.ok) {
@@ -188,7 +190,7 @@ export async function getFacebookLongLivedToken(shortLivedToken) {
     });
 
     const response = await fetch(
-        `https://graph.facebook.com/v21.0/oauth/access_token?${params.toString()}`
+        `${GRAPH_FB_BASE}/oauth/access_token?${params.toString()}`
     );
 
     if (!response.ok) {
@@ -206,7 +208,7 @@ export async function getFacebookLongLivedToken(shortLivedToken) {
  */
 export async function getUserPages(accessToken) {
     const response = await fetch(
-        `https://graph.facebook.com/v21.0/me/accounts?access_token=${accessToken}`
+        `${GRAPH_FB_BASE}/me/accounts?access_token=${accessToken}`
     );
 
     if (!response.ok) {
@@ -223,7 +225,7 @@ export async function getUserPages(accessToken) {
  */
 export async function getInstagramAccount(pageId, pageAccessToken) {
     const response = await fetch(
-        `https://graph.facebook.com/v21.0/${pageId}?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${pageAccessToken}`
+        `${GRAPH_FB_BASE}/${pageId}?fields=instagram_business_account{id,username,profile_picture_url}&access_token=${pageAccessToken}`
     );
 
     if (!response.ok) {
@@ -240,7 +242,7 @@ export async function getInstagramAccount(pageId, pageAccessToken) {
  */
 export async function getMetaUser(accessToken) {
     const response = await fetch(
-        `https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${accessToken}`
+        `${GRAPH_FB_BASE}/me?fields=id,name&access_token=${accessToken}`
     );
 
     if (!response.ok) {

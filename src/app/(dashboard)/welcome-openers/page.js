@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase-server';
 import WelcomeOpenersContent from '@/components/dashboard/WelcomeOpenersContent';
+import { getUserEffectivePlan } from '@/lib/plan-server';
 
 export const metadata = { title: 'Welcome Openers — AutoDM' };
 
@@ -11,10 +12,12 @@ export default async function WelcomeOpenersPage() {
     try {
         const { data: accounts } = await supabase
             .from('connected_accounts')
-            .select('id, platform, is_active, default_config')
+            .select('id, platform, is_active, default_config, ig_username')
             .eq('user_id', user.id);
         connectedAccounts = accounts || [];
     } catch { /* table may not exist */ }
 
-    return <WelcomeOpenersContent connectedAccounts={connectedAccounts} />;
+    const userPlan = await getUserEffectivePlan(supabase, user.id);
+
+    return <WelcomeOpenersContent connectedAccounts={connectedAccounts} userPlan={userPlan} />;
 }

@@ -1,12 +1,48 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Instagram, Facebook, LogOut, RefreshCw } from 'lucide-react';
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from './ConnectedAccountBanner.module.css';
 import lightStyles from './ConnectedAccountBanner.light.module.css';
 import DisconnectModal from './DisconnectModal';
+
+/* Self-contained avatar with self-healing refresh.
+   Meta's signed IG CDN URLs expire after a few hours. When the <img>
+   fails to load, we (1) swap to the platform-icon fallback immediately
+   and (2) hit /api/accounts/refresh-profile-pic in the background to
+   pull a fresh URL from Meta's API. The fresh URL replaces the stale
+   one in local state so the photo reappears without a page reload. */
+function AccountAvatar({ account, fallback }) {
+    const [url, setUrl] = useState(account.ig_profile_picture_url || null);
+    const [errored, setErrored] = useState(false);
+    useEffect(() => {
+        setUrl(account.ig_profile_picture_url || null);
+        setErrored(false);
+    }, [account.ig_profile_picture_url]);
+
+    const handleError = async () => {
+        setErrored(true);
+        try {
+            const res = await fetch('/api/accounts/refresh-profile-pic', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId: account.id }),
+            });
+            const data = await res.json();
+            if (data?.refreshed && data?.profilePictureUrl && data.profilePictureUrl !== url) {
+                setUrl(data.profilePictureUrl);
+                setErrored(false);
+            }
+        } catch { /* non-fatal — fallback icon stays */ }
+    };
+
+    if (url && !errored) {
+        return <img src={url} alt="" onError={handleError} />;
+    }
+    return fallback;
+}
 
 export default function ConnectedAccountBanner({ accounts = [], connectedPlatforms = [] }) {
     const router = useRouter();
@@ -90,11 +126,10 @@ export default function ConnectedAccountBanner({ accounts = [], connectedPlatfor
                     <div key={account.id} className={styles.banner}>
                         <div className={styles.accountInfo}>
                             <div className={`${styles.accountAvatar} ${styles[`avatar_${account.platform}`]}`}>
-                                {account.ig_profile_picture_url ? (
-                                    <img src={account.ig_profile_picture_url} alt="" />
-                                ) : (
-                                    getPlatformIcon(account.platform)
-                                )}
+                                <AccountAvatar
+                                    account={account}
+                                    fallback={getPlatformIcon(account.platform)}
+                                />
                             </div>
                             <div className={styles.accountDetails}>
                                 <span className={styles.accountName}>

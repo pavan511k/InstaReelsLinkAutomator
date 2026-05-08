@@ -33,6 +33,67 @@
     gap: 6px;
 }
 
+.formLabelRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.charCounter {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(30,21,53,0.45);
+    font-variant-numeric: tabular-nums;
+}
+.charCounterOver { color: #DC2626; }
+
+.fieldHint {
+    font-size: 11px;
+    color: rgba(30,21,53,0.45);
+    line-height: 1.45;
+}
+
+.brandingPlanTag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: rgba(30,21,53,0.06);
+    border: 1px solid rgba(30,21,53,0.12);
+    color: rgba(30,21,53,0.55);
+    margin-left: 4px;
+}
+
+.brandingLocked {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 13px;
+    background: rgba(124, 58, 237, 0.06);
+    border: 1px solid rgba(124, 58, 237, 0.18);
+    border-radius: 9px;
+}
+.brandingLockedText {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: rgba(30,21,53,0.65);
+    font-style: italic;
+}
+.brandingLockedUpgrade {
+    font-size: 11px;
+    font-weight: 700;
+    color: #5B21B6;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 150ms;
+}
+.brandingLockedUpgrade:hover { color: #4C1D95; text-decoration: underline; }
+
 .input {
     width: 100%;
     padding: 9px 13px;
@@ -59,29 +120,36 @@
 
 .select {
     width: 100%;
-    padding: 9px 13px;
+    height: 40px;
+    padding: 0 38px 0 14px;
     font-family: 'Inter', sans-serif;
-    font-size: 0.855rem;
-    font-weight: 400;
-    color: rgba(30,21,53,0.85);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #1E1535;
     background: #FFFFFF;
-    border: 1px solid rgba(30,21,53,0.12);
-    border-radius: 9px;
+    border: 1px solid rgba(124,58,237,0.18);
+    border-radius: 10px;
     outline: none;
     cursor: pointer;
-    transition: border-color 150ms;
+    transition: border-color 150ms, background 150ms, box-shadow 150ms;
     -webkit-appearance: none;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(30%2C21%2C53%2C0.45)' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237C3AED' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 12px center;
-    padding-right: 34px;
+    background-position: right 14px center;
     box-sizing: border-box;
 }
-.select:focus { border-color: rgba(124,58,237,0.40); }
+.select:hover {
+    border-color: rgba(124,58,237,0.35);
+}
+.select:focus {
+    border-color: #7C3AED;
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.12);
+}
 .select option {
     background: #FFFFFF;
-    color: rgba(30,21,53,0.85);
+    color: #1E1535;
+    padding: 8px;
 }
 
 /* ── Template bar ─────────────────────────────────────────────── */
@@ -109,17 +177,30 @@
 .templateDropdown {
     flex: 1;
     min-width: 0;
-    padding: 6px 10px;
+    height: 34px;
+    padding: 0 32px 0 12px;
     font-family: 'Inter', sans-serif;
-    font-size: 0.82rem;
-    color: rgba(30,21,53,0.82);
+    font-size: 0.825rem;
+    font-weight: 500;
+    color: #1E1535;
     background: #FFFFFF;
-    border: 1px solid rgba(30,21,53,0.10);
-    border-radius: 7px;
+    border: 1px solid rgba(124,58,237,0.18);
+    border-radius: 8px;
     outline: none;
     cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237C3AED' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: border-color 150ms, background-color 150ms, box-shadow 150ms;
 }
-.templateDropdown option { background: #FFFFFF; }
+.templateDropdown:hover { border-color: rgba(124,58,237,0.35); }
+.templateDropdown:focus {
+    border-color: #7C3AED;
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.12);
+}
+.templateDropdown option { background: #FFFFFF; padding: 6px; }
 
 /* Save template button */
 .saveTemplateBtn {
@@ -199,48 +280,114 @@
     border-color: rgba(239,68,68,0.22);
     color: #DC2626;
 }
+.deleteTemplateBtnActive,
+.deleteTemplateBtnActive:hover {
+    background: rgba(239, 68, 68, 0.10);
+    border-color: rgba(220, 38, 38, 0.45);
+    color: #B91C1C;
+}
 
 /* ── Section wrapper ──────────────────────────────────────────── */
 .section { display: flex; flex-direction: column; gap: 16px; }
 
 /* ── Carousel pills ───────────────────────────────────────────── */
-.carouselPills { display: flex; flex-direction: column; gap: 8px; }
+.carouselPills { display: flex; flex-direction: column; gap: 10px; }
+
+.carouselHeader {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+}
 
 .carouselLabel {
     font-size: 10.5px;
     font-weight: 700;
-    color: rgba(30,21,53,0.38);
+    color: rgba(30,21,53,0.45);
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
 
+.carouselCount {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(30,21,53,0.50);
+}
+.carouselCountPro {
+    color: #B45309;
+    font-weight: 700;
+}
+
 .pillRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+.pillWrap {
+    position: relative;
+    display: inline-flex;
+    transition: transform 150ms, opacity 150ms;
+}
+.pillWrap:hover .pillRemove { opacity: 1; transform: scale(1); }
+.pillDragging { opacity: 0.45; }
+.pillDragOver .pill {
+    border-color: rgba(124, 58, 237, 0.65) !important;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
 .pill {
-    width: 34px; height: 34px;
+    width: 38px; height: 38px;
     border-radius: 9px;
     border: 1px solid rgba(30,21,53,0.12);
-    background: rgba(30,21,53,0.03);
-    color: rgba(30,21,53,0.50);
+    background: #FFFFFF;
+    color: rgba(30,21,53,0.65);
     font-size: 13px; font-weight: 700;
     cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 2px; padding: 4px 0 0;
     transition: all 150ms;
     font-family: 'Inter', sans-serif;
+    user-select: none;
 }
 .pill:hover {
     border-color: rgba(124,58,237,0.35);
     color: #5B21B6;
-    background: rgba(124,58,237,0.08);
+    background: rgba(124,58,237,0.06);
 }
 
-/* Active pill — purple gradient, unchanged */
 .pillActive {
     background: linear-gradient(135deg, #7C3AED, #5B21B6) !important;
     border-color: transparent !important;
     color: #fff !important;
     box-shadow: 0 4px 12px rgba(124,58,237,0.28);
 }
+
+.pillStatusDot {
+    width: 6px; height: 6px; border-radius: 50%;
+}
+.pillStatusDot_complete { background: #10B981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18); }
+.pillStatusDot_partial  { background: #F59E0B; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18); }
+.pillStatusDot_empty    { background: rgba(30, 21, 53, 0.20); }
+.pillActive .pillStatusDot_empty { background: rgba(255, 255, 255, 0.55); }
+
+.pillRemove {
+    position: absolute;
+    top: -5px; right: -5px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    border: 1px solid rgba(30, 21, 53, 0.18);
+    color: rgba(30, 21, 53, 0.65);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(30, 21, 53, 0.12);
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity 120ms, transform 120ms, background 150ms, color 150ms;
+    z-index: 1;
+}
+.pillRemove:hover {
+    background: #DC2626;
+    border-color: #DC2626;
+    color: #fff;
+}
+.pillWrap:focus-within .pillRemove { opacity: 1; transform: scale(1); }
 
 .pillAdd {
     width: 34px; height: 34px;
@@ -272,15 +419,33 @@
     color: #DC2626;
 }
 
+/* CTA group — pairs Button label + URL inside the slide form. */
+.ctaGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid rgba(124, 58, 237, 0.18);
+    background: rgba(124, 58, 237, 0.04);
+    border-radius: 10px;
+}
+.ctaGroupHeader {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(124, 58, 237, 0.85);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
 /* ── Slide form ───────────────────────────────────────────────── */
+/* Flat layout — see dark pair for rationale. */
 .slideForm {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 16px;
-    background: rgba(124,58,237,0.025);
-    border: 1px solid rgba(124,58,237,0.09);
-    border-radius: 12px;
+    gap: 12px;
     animation: slideIn 0.2s ease;
 }
 @keyframes slideIn {
@@ -288,13 +453,33 @@
     to   { opacity: 1; transform: none; }
 }
 
-.formField { display: flex; flex-direction: column; gap: 7px; }
+/* See dark pair for renaming rationale (avoid clash with Multi-CTA .ctaRow). */
+.fieldRow2col {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 12px;
+    align-items: start;
+}
+@media (max-width: 520px) {
+    .fieldRow2col { grid-template-columns: 1fr; }
+}
+
+.formField {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
 
 .fieldLabel {
+    display: block;
     font-size: 11.5px;
     font-weight: 600;
     color: rgba(30,21,53,0.55);
-    display: flex; align-items: center; gap: 5px;
+    line-height: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
 }
 
 /* URL input row */
@@ -331,6 +516,62 @@
     background: rgba(124,58,237,0.04);
 }
 
+/* Drop zone — light pair. */
+.uploadDropZone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    padding: 28px 16px 22px;
+    background: #FFFFFF;
+    border: 1.5px dashed #C4B5FD;
+    border-radius: 12px;
+    color: #525252;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms, color 150ms, transform 150ms;
+}
+.uploadDropZone:hover {
+    background: #F5F3FF;
+    border-color: #A78BFA;
+    color: #0A0A0A;
+}
+.uploadDropZone:active { transform: scale(0.995); }
+.uploadDropZoneIcon {
+    color: #6D28D9;
+    margin-bottom: 6px;
+}
+.uploadDropZoneTitle {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: inherit;
+    letter-spacing: -0.01em;
+}
+.uploadDropZoneHint {
+    font-size: 0.74rem;
+    font-weight: 500;
+    color: #78716C;
+    letter-spacing: 0;
+}
+
+/* Compact branding row — light pair. */
+.brandingRow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 6px 0;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(30, 21, 53, 0.65);
+    transition: color 150ms;
+}
+.brandingRow:hover { color: rgba(30, 21, 53, 0.92); }
+
 .uploadedImage {
     position: relative;
     border-radius: 10px; overflow: hidden;
@@ -347,6 +588,32 @@
     opacity: 0; transition: opacity 150ms;
 }
 .uploadedImage:hover .imageOverlay { opacity: 1; }
+
+/* Remove (X) button — top-right of the uploaded image */
+.imageRemoveBtn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(124, 58, 237, 0.18);
+    color: rgba(30, 21, 53, 0.75);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: background 150ms, color 150ms, transform 150ms;
+    z-index: 2;
+}
+.imageRemoveBtn:hover {
+    background: #DC2626;
+    border-color: #DC2626;
+    color: #fff;
+    transform: scale(1.08);
+}
 
 /* Locked field */
 .lockedField {
@@ -468,6 +735,18 @@
 }
 .typeHintLink:hover { color: #7C3AED; text-decoration: underline; }
 
+/* Facebook-only inline note */
+.fbNote {
+    margin-top: 10px;
+    padding: 9px 12px;
+    background: rgba(24, 119, 242, 0.08);
+    border: 1px solid rgba(24, 119, 242, 0.28);
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #1E40AF;
+}
+
 /* ── Info box — blue tinted ──────────────────────────────────── */
 .infoBox {
     display: flex; align-items: flex-start; gap: 8px;
@@ -481,6 +760,31 @@
 }
 .infoBox svg { flex-shrink: 0; margin-top: 1px; color: #2563EB; }
 
+/* Violet variant — used by Follow Gate header. Light-mode needs deep violet
+   text against a lavender chip so the copy + the YES/NO bolds stay legible. */
+.infoBoxViolet {
+    background: rgba(124, 58, 237, 0.06);
+    border-color: rgba(124, 58, 237, 0.20);
+    color: #5B21B6;
+}
+.infoBoxViolet strong { color: #4C1D95; font-weight: 700; }
+
+/* Blue variant — used by Email Collector header */
+.infoBoxBlue {
+    background: rgba(59, 130, 246, 0.06);
+    border-color: rgba(59, 130, 246, 0.22);
+    color: #1E40AF;
+}
+.infoBoxBlue strong { color: #1E3A8A; font-weight: 700; }
+
+/* Amber variant — "tip" footnote */
+.infoBoxAmber {
+    background: rgba(245, 158, 11, 0.06);
+    border-color: rgba(245, 158, 11, 0.22);
+    color: #92400E;
+}
+.infoBoxAmber strong { color: #78350F; font-weight: 700; }
+
 /* ── Limit note ──────────────────────────────────────────────── */
 .limitNote {
     font-size: 10.5px; font-weight: 400;
@@ -488,7 +792,44 @@
 }
 
 /* ── Quick Reply chips ──────────────────────────────────────── */
-.chipList { display: flex; flex-direction: column; gap: 8px; }
+.chipList { display: flex; flex-direction: column; gap: 10px; }
+
+.chipCard {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 12px;
+    background: rgba(124, 58, 237, 0.03);
+    border: 1px solid rgba(124, 58, 237, 0.10);
+    border-radius: 10px;
+}
+.chipCardHeader { display: flex; align-items: center; gap: 8px; }
+.chipCardIndex {
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(124, 58, 237, 0.10);
+    border: 1px solid rgba(124, 58, 237, 0.25);
+    color: #5B21B6;
+    font-size: 11px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums;
+}
+.chipCardResponse {
+    display: flex; flex-direction: column; gap: 5px;
+    padding-left: 30px;
+}
+.chipResponseLabel {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: rgba(30, 21, 53, 0.55);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+.chipResponseArea {
+    resize: vertical;
+    min-height: 56px;
+    line-height: 1.5;
+}
+
 .chipRow { display: flex; align-items: center; gap: 8px; }
 .chipInput { flex: 1; }
 .charCount {
@@ -669,14 +1010,15 @@
 }
 .variantPill:hover { color: rgba(30,21,53,0.80); background: rgba(30,21,53,0.07); }
 .variantPillActive {
-    color: #fff !important;
-    background: rgba(16,185,129,0.18) !important;
-    border-color: rgba(16,185,129,0.32) !important;
+    color: #047857 !important;
+    background: rgba(16,185,129,0.14) !important;
+    border-color: rgba(16,185,129,0.40) !important;
+    box-shadow: 0 0 0 2px rgba(16,185,129,0.10);
 }
 .variantPillWinner {
-    color: #B45309 !important;
-    background: rgba(245,158,11,0.10) !important;
-    border-color: rgba(245,158,11,0.25) !important;
+    color: #92400E !important;
+    background: rgba(245,158,11,0.14) !important;
+    border-color: rgba(245,158,11,0.40) !important;
 }
 .winnerBadge {
     display: inline-flex; align-items: center;

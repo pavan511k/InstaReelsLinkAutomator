@@ -95,8 +95,12 @@ function PaymentResult() {
     );
 }
 
-// Loading skeleton shown while the inner component suspends
+// Loading skeleton shown while the inner component suspends.
+// useStyles is called here too because VerifyingFallback and
+// PaymentSuccessPage render outside PaymentResult — `styles` is not in
+// scope by closure, so each component that uses it must resolve it.
 function VerifyingFallback() {
+    const styles = useStyles(darkStyles, lightStyles);
     return (
         <div className={styles.card}>
             <div className={styles.iconWrap} style={{ background: 'rgba(124,58,237,0.12)', borderColor: 'rgba(167,139,250,0.25)' }}>
@@ -109,6 +113,7 @@ function VerifyingFallback() {
 }
 
 export default function PaymentSuccessPage() {
+    const styles = useStyles(darkStyles, lightStyles);
     return (
         <div className={styles.page}>
             <Suspense fallback={<VerifyingFallback />}>

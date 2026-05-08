@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { GRAPH_FB_BASE, GRAPH_IG_BASE } from '@/lib/meta-graph';
 
 /**
  * POST /api/accounts/resubscribe
@@ -41,7 +42,7 @@ export async function POST() {
             if (account.platform === 'instagram' && account.ig_user_id && account.access_token) {
                 // Instagram Business Login — subscribe via graph.instagram.com
                 const url =
-                    `https://graph.instagram.com/v21.0/${account.ig_user_id}/subscribed_apps` +
+                    `${GRAPH_IG_BASE}/${account.ig_user_id}/subscribed_apps` +
                     `?subscribed_fields=comments%2Cmessages%2Cmentions` +
                     `&access_token=${encodeURIComponent(account.access_token)}`;
                 const res  = await fetch(url, { method: 'POST' });
@@ -57,7 +58,7 @@ export async function POST() {
             } else if (account.fb_page_id && account.fb_page_access_token) {
                 // Facebook Login — subscribe the Page via graph.facebook.com
                 const url =
-                    `https://graph.facebook.com/v21.0/${account.fb_page_id}/subscribed_apps` +
+                    `${GRAPH_FB_BASE}/${account.fb_page_id}/subscribed_apps` +
                     `?subscribed_fields=instagram_comments%2Cmessages%2Cfeed` +
                     `&access_token=${encodeURIComponent(account.fb_page_access_token)}`;
                 const res  = await fetch(url, { method: 'POST' });

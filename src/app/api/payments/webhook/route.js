@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createHmac } from 'crypto';
+import { BILLING_PLANS, computePlanExpiresAt } from '@/lib/plans';
 
 function createSupabase() {
     return createServiceClient(
@@ -28,6 +29,12 @@ async function activatePlan(supabase, userId, planId, expiresAt) {
                 user_id:         userId,
                 plan:            planId,
                 plan_expires_at: expiresAt.toISOString(),
+                // Clear trial — once the user has paid, the trial concept is
+                // done. getEffectivePlan() already prefers paid-pro over trial,
+                // so this is purely a data-cleanliness step (no behavior
+                // change), but it keeps the row semantically accurate and
+                // simplifies future analytics ("trial → paid" conversion).
+                trial_ends_at:   null,
                 updated_at:      new Date().toISOString(),
             },
             { onConflict: 'user_id' },
@@ -48,17 +55,24 @@ export async function POST(request) {
     const signature = request.headers.get('x-webhook-signature');
     const timestamp = request.headers.get('x-webhook-timestamp');
 
-    // ── Verify Cashfree signature ──────────────────────────────
-    if (signature && timestamp && process.env.CASHFREE_WEBHOOK_SECRET) {
-        const signedPayload = `${timestamp}${rawBody}`;
-        const expectedSig = createHmac('sha256', process.env.CASHFREE_WEBHOOK_SECRET)
-            .update(signedPayload)
-            .digest('base64');
+    // ── Verify Cashfree signature — fail closed ────────────────
+    const webhookSecret = process.env.CASHFREE_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+        console.error('[Webhook/Payments] CASHFREE_WEBHOOK_SECRET not configured');
+        return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
+    if (!signature || !timestamp) {
+        console.warn('[Webhook/Payments] Missing signature or timestamp header');
+        return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+    }
+    const signedPayload = `${timestamp}${rawBody}`;
+    const expectedSig = createHmac('sha256', webhookSecret)
+        .update(signedPayload)
+        .digest('base64');
 
-        if (expectedSig !== signature) {
-            console.warn('[Webhook/Payments] Invalid Cashfree signature — ignoring');
-            return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-        }
+    if (expectedSig !== signature) {
+        console.warn('[Webhook/Payments] Invalid Cashfree signature — ignoring');
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
     let event;
@@ -97,11 +111,15 @@ export async function POST(request) {
             return NextResponse.json({ received: true });
         }
 
-        const planExpiresAt = new Date();
-        planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
+        // Look up the SKU the user purchased; map to entitlement + duration.
+        // Falls back to monthly Pro for legacy rows that have plan_id='pro'.
+        const billingPlan  = BILLING_PLANS[order.plan_id] || BILLING_PLANS.pro;
+        const planExpiresAt = computePlanExpiresAt(
+            BILLING_PLANS[order.plan_id] ? order.plan_id : 'pro',
+        );
 
         try {
-            await activatePlan(supabase, order.user_id, order.plan_id, planExpiresAt);
+            await activatePlan(supabase, order.user_id, billingPlan.entitlement, planExpiresAt);
         } catch (err) {
             console.error('[Webhook/Payments] activatePlan failed:', err.message);
             return NextResponse.json({ error: 'Plan activation failed' }, { status: 500 });

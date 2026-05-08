@@ -7,10 +7,8 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+/* Match dark module — outer page padding lives on layout's <main>. */
 .container {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 32px 28px 64px;
   font-family: 'Inter', -apple-system, sans-serif;
   animation: fadeIn 0.35s ease both;
 }
@@ -222,6 +220,7 @@
   color: #5B21B6; background: rgba(124,58,237,0.10);
   border: 1px solid rgba(124,58,237,0.20);
   border-radius: 6px; cursor: pointer;
+  white-space: nowrap;
   transition: all 150ms;
 }
 .setupBadge:hover { background: rgba(124,58,237,0.18); }

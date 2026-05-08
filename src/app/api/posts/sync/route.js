@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { GRAPH_API_VERSION, GRAPH_FB_BASE } from '@/lib/meta-graph';
 
 /**
  * POST /api/posts/sync
@@ -34,9 +35,15 @@ export async function POST() {
 
     const allPosts = [];
     const syncedPlatforms = [];
+    // Per-account list of currently-live story IDs from Graph. Anything in
+    // our DB tagged is_story=true for the account but missing from this set
+    // was either deleted by the user or naturally expired — we mark those
+    // expired immediately so the UI stops offering "Configure" on dead stories.
+    const liveStoryIdsByAccount = {};
 
     try {
         for (const account of accounts) {
+            liveStoryIdsByAccount[account.id] = [];
             // Fetch Instagram posts if Instagram is connected
             if (account.ig_user_id && (account.platform === 'instagram' || account.platform === 'both')) {
                 // Instagram Business Login tokens (platform=instagram, no fb_page_access_token)
@@ -61,9 +68,15 @@ export async function POST() {
                     synced_at: new Date().toISOString(),
                 })));
 
-                // Fetch Stories (Active items within 24h limit)
+                // Fetch Stories (Active items within 24h limit).
+                // null = fetch failed → skip the expired-sweep for this account.
                 const igStories = await fetchInstagramStories(account.ig_user_id, igToken, useIgApi);
-                allPosts.push(...igStories.map((s) => ({
+                if (igStories === null) {
+                    liveStoryIdsByAccount[account.id] = null;
+                } else {
+                    liveStoryIdsByAccount[account.id].push(...igStories.map((s) => s.id));
+                }
+                allPosts.push(...(igStories || []).map((s) => ({
                     account_id: account.id,
                     ig_post_id: s.id,
                     media_type: s.media_type,
@@ -73,6 +86,12 @@ export async function POST() {
                     permalink: s.permalink || '',
                     timestamp: s.timestamp,
                     is_story: true,
+                    // IG stories are alive for exactly 24h from their timestamp.
+                    // Persist the computed expiry so the UI can filter expired
+                    // stories without depending on wall-clock-vs-sync drift.
+                    story_expires_at: s.timestamp
+                        ? new Date(new Date(s.timestamp).getTime() + 24 * 60 * 60 * 1000).toISOString()
+                        : null,
                     synced_at: new Date().toISOString(),
                 })));
 
@@ -131,6 +150,41 @@ export async function POST() {
             }
         }
 
+        // Reconcile expired/deleted stories per account.
+        // Any DB row marked is_story=true for an account whose ig_post_id
+        // didn't come back from Graph is dead — either it expired naturally
+        // or the user deleted it from Instagram. Force its story_expires_at
+        // to now() so the UI shows "Expired" and stops offering Configure
+        // on a story that no longer exists.
+        // Note: we do NOT filter on the current story_expires_at value —
+        // pre-fix rows have NULL there and the older `.gt()` filter would
+        // have skipped them, leaving deleted stories permanently in
+        // "Configure" state.
+        const nowIso = new Date().toISOString();
+        for (const account of accounts) {
+            if (!account.ig_user_id) continue;
+            const liveIds = liveStoryIdsByAccount[account.id];
+            // Skip when null — Graph fetch failed for this account, so we
+            // can't safely declare anything dead.
+            if (liveIds === null) {
+                console.log(`[Sync] Skipping expire-sweep for account ${account.id} — Graph fetch failed`);
+                continue;
+            }
+            // Only touch rows that are NULL (pre-fix legacy) or still-future
+            // — already-expired rows stay frozen at their original expiry time
+            // so we don't churn the DB on every sync.
+            let q = supabase
+                .from('instagram_posts')
+                .update({ story_expires_at: nowIso })
+                .eq('account_id', account.id)
+                .eq('is_story', true)
+                .or(`story_expires_at.is.null,story_expires_at.gt.${nowIso}`);
+            if (liveIds.length > 0) q = q.not('ig_post_id', 'in', `(${liveIds.map((id) => `"${id}"`).join(',')})`);
+            const { error: expireError, count } = await q;
+            if (expireError) console.error('[Sync] Failed to mark stories expired:', expireError);
+            else console.log(`[Sync] Account ${account.id}: live=${liveIds.length}, marked expired=${count ?? '?'}`);
+        }
+
         return NextResponse.json({
             success: true,
             synced: deduped.length,
@@ -153,7 +207,7 @@ async function fetchInstagramPosts(igUserId, accessToken, useIgApi = false) {
     const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp';
     const base = useIgApi ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
     const response = await fetch(
-        `${base}/v21.0/${igUserId}/media?fields=${fields}&limit=100&access_token=${accessToken}`
+        `${base}/${GRAPH_API_VERSION}/${igUserId}/media?fields=${fields}&limit=100&access_token=${accessToken}`
     );
 
     if (!response.ok) {
@@ -174,12 +228,15 @@ async function fetchInstagramStories(igUserId, accessToken, useIgApi = false) {
     const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp';
     const base = useIgApi ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
     const response = await fetch(
-        `${base}/v21.0/${igUserId}/stories?fields=${fields}&limit=100&access_token=${accessToken}`
+        `${base}/${GRAPH_API_VERSION}/${igUserId}/stories?fields=${fields}&limit=100&access_token=${accessToken}`
     );
 
+    // Returns null on fetch error so the caller can distinguish "no stories"
+    // from "Graph hiccup" — the expired-sweep must skip on hiccups, otherwise
+    // a transient failure would falsely expire every live story in the DB.
     if (!response.ok) {
         console.warn('Failed to fetch Instagram stories, they might not be available or expired.');
-        return [];
+        return null;
     }
 
     const data = await response.json();
@@ -195,7 +252,7 @@ async function fetchInstagramStories(igUserId, accessToken, useIgApi = false) {
 async function fetchFacebookPosts(pageId, pageAccessToken) {
     const fields = 'id,message,permalink_url,created_time,attachments{media_type,media{image{src}},url}';
     const response = await fetch(
-        `https://graph.facebook.com/v21.0/${pageId}/posts?fields=${fields}&limit=100&access_token=${pageAccessToken}`
+        `${GRAPH_FB_BASE}/${pageId}/posts?fields=${fields}&limit=100&access_token=${pageAccessToken}`
     );
 
     if (!response.ok) {

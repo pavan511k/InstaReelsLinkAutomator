@@ -1,0 +1,191 @@
+.wrap {
+    position: relative;
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+}
+
+.trigger {
+    width: 100%;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 150ms, background 150ms, box-shadow 150ms;
+    box-sizing: border-box;
+}
+.trigger:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.20);
+}
+.triggerOpen,
+.trigger:focus {
+    border-color: rgba(167, 139, 250, 0.55);
+    background: rgba(124, 58, 237, 0.08);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+    outline: none;
+}
+
+.triggerSm { height: 34px; font-size: 0.825rem; }
+
+.triggerLabel {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+.triggerIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.triggerText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+.triggerBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 800;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.30);
+    color: #FCD34D;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+.triggerPlaceholder {
+    color: rgba(255, 255, 255, 0.40);
+}
+.chevron {
+    color: #A78BFA;
+    flex-shrink: 0;
+    transition: transform 200ms;
+}
+.chevronOpen { transform: rotate(180deg); }
+
+/* ── Menu ─────────────────────────────────────────────────────── */
+.menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: #1A1130;
+    border: 1px solid rgba(167, 139, 250, 0.20);
+    border-radius: 11px;
+    padding: 5px;
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.55),
+        0 4px 12px rgba(0, 0, 0, 0.30),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    max-height: 280px;
+    overflow-y: auto;
+    animation: menuIn 0.16s ease-out;
+}
+
+/* When rendered through a portal we anchor with position:fixed against the
+   viewport, so the modal's overflow:hidden/auto can't clip the menu. */
+.menuPortaled {
+    position: fixed;
+    z-index: 500;  /* above SetupDMModal overlay (250) */
+}
+@keyframes menuIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+}
+
+.option {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: background 120ms;
+    position: relative;
+}
+.option:hover:not(:disabled) {
+    background: rgba(124, 58, 237, 0.18);
+    color: #FFFFFF;
+}
+.optionSelected {
+    background: rgba(124, 58, 237, 0.16);
+    border-color: rgba(167, 139, 250, 0.30);
+    color: #FFFFFF;
+}
+.optionDisabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.optionMain {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding-right: 22px;
+}
+.optionIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.optionText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+.optionBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 800;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.30);
+    color: #FCD34D;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+.optionDesc {
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.45);
+    line-height: 1.4;
+    padding-right: 22px;
+}
+.optionCheck {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #A78BFA;
+}

@@ -2,25 +2,37 @@ import { NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { sendAutomatedDM } from '@/lib/send-dm';
 import { getDmLimit, getEffectivePlan } from '@/lib/plans';
+import { getMonthlyDmCount } from '@/lib/plan-server';
 
 /**
  * GET /api/cron/process-queue
  * Drains the dm_queue at a controlled pace.
- * Runs every 5 minutes via Vercel cron.
+ * Runs every 1 minute via the external scheduler.
  *
  * Per-account rate limiting:
  *   - Reads connected_accounts.rate_limit_per_hour (default 200)
- *   - Per 5-minute window budget = floor(rate_limit_per_hour / 12)
+ *   - Per 1-minute window budget = max(1, floor(rate_limit_per_hour / 60))
  *   - Counts items we've sent FOR THIS ACCOUNT in this cron run as the window counter
- *     (avoids an expensive cross-join query; good enough for the 5-min window)
+ *     (avoids an expensive cross-join query; good enough for a 1-min window)
+ *
+ * Note: story-mention DMs are sent synchronously in the webhook and do NOT
+ * pass through this queue, so the rate limit does not apply to them. Story
+ * mentions are low-volume in practice and bounded by Meta's own per-account
+ * messaging caps.
  *
  * Processing order: priority ASC, created_at ASC (lower number = processed first)
  * Priority values: overflow=5, upsell=7, backfill=8
  */
 
-const WINDOW_MINUTES = 5;
+const WINDOW_MINUTES = 1;
 const MAX_ITEMS_PER_RUN = 200;
 const MAX_ATTEMPTS = 3;
+
+// Rows stuck in 'processing' for longer than this are assumed to be from a
+// crashed / killed cron run and get reset to 'pending' on the next sweep.
+// `attempts` was already incremented when locking, so we don't bump it again
+// — the row keeps its remaining retries.
+const STUCK_PROCESSING_MINUTES = 5;
 
 function db() {
     return createServiceClient(
@@ -32,17 +44,39 @@ function db() {
 export const maxDuration = 60;
 
 export async function GET(request) {
-    const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret) {
+        console.error('[ProcessQueue] CRON_SECRET not configured');
+        return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${cronSecret}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = db();
     const now = new Date();
-    const results = { processed: 0, sent: 0, failed: 0, skipped: 0, rateLimited: 0 };
+    const results = { processed: 0, sent: 0, failed: 0, skipped: 0, rateLimited: 0, recovered: 0 };
 
     try {
+        // ── Recover stuck 'processing' rows from a crashed prior run ──────
+        // Healthy rows leave 'processing' within seconds. Anything stuck
+        // there for several minutes is from a killed cron lambda. We use
+        // created_at as a coarse proxy since dm_queue has no updated_at
+        // column — this is fine because rows freshly created and immediately
+        // locked will still pass this filter on a later sweep.
+        const stuckCutoff = new Date(now.getTime() - STUCK_PROCESSING_MINUTES * 60_000).toISOString();
+        const { data: recovered } = await supabase
+            .from('dm_queue')
+            .update({ status: 'pending' })
+            .eq('status', 'processing')
+            .lt('created_at', stuckCutoff)
+            .select('id');
+        if (recovered?.length) {
+            results.recovered = recovered.length;
+            console.log(`[Queue] Recovered ${recovered.length} stuck 'processing' rows`);
+        }
+
         // ── Fetch pending items ready to process ──────────────────────────
         const { data: items, error: fetchErr } = await supabase
             .from('dm_queue')
@@ -61,6 +95,35 @@ export async function GET(request) {
 
         console.log(`[Queue] Processing ${items.length} pending items`);
 
+        // ── Pre-fetch flow-step flags for all automations in this batch ──
+        // The previous code ran a SELECT on `dm_automations` per successfully
+        // sent overflow item just to read `settings_config.flowSteps` and
+        // decide if `flow_step` should be 0. On a 200-item batch with mixed
+        // automations that's up to 200 round-trips. Single batched lookup
+        // here, served by the existing PK-on-id index → one query, O(distinct
+        // automation count). Result is a Set of automation IDs that have
+        // flow steps configured; lookup inside the loop is now O(1).
+        const flowAutoIds = new Set();
+        const overflowAutoIds = [
+            ...new Set(
+                items
+                    .filter((it) => it.queue_reason === 'overflow' && it.automation_id)
+                    .map((it) => it.automation_id),
+            ),
+        ];
+        if (overflowAutoIds.length > 0) {
+            try {
+                const { data: autos } = await supabase
+                    .from('dm_automations')
+                    .select('id, settings_config')
+                    .in('id', overflowAutoIds);
+                for (const a of (autos || [])) {
+                    const steps = a.settings_config?.flowSteps;
+                    if (Array.isArray(steps) && steps.length > 0) flowAutoIds.add(a.id);
+                }
+            } catch { /* non-fatal — fall through and items just won't get flow_step=0 */ }
+        }
+
         // ── Group by account ──────────────────────────────────────────────
         const byAccount = {};
         for (const item of items) {
@@ -71,7 +134,7 @@ export async function GET(request) {
         for (const [accountId, accountItems] of Object.entries(byAccount)) {
             const account      = accountItems[0].connected_accounts;
             const ratePerHour  = account.rate_limit_per_hour || 200;
-            const windowsPerHour = 60 / WINDOW_MINUTES; // = 12
+            const windowsPerHour = 60 / WINDOW_MINUTES; // = 60
             const budgetThisWindow = Math.max(1, Math.floor(ratePerHour / windowsPerHour));
 
             // ── Monthly billing limit — plan from user_plans ───────────────
@@ -83,37 +146,7 @@ export async function GET(request) {
             let monthlyUsed = 0;
 
             if (dmLimit !== null) {
-                const startOfMonth = new Date();
-                startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
-
-                // Count by joining through dm_automations to scope to this account's user
-                // Approximation: count by account_id directly on dm_queue (sent items this month)
-                const { count } = await supabase
-                    .from('dm_queue')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('account_id', accountId)
-                    .eq('status', 'sent')
-                    .gte('processed_at', startOfMonth.toISOString());
-
-                // Also count dm_sent_log for this account's automations
-                const { data: accountAutomations } = await supabase
-                    .from('dm_automations')
-                    .select('id')
-                    .eq('user_id', accountItems[0].user_id);
-                const autoIds = (accountAutomations || []).map((a) => a.id);
-
-                let logCount = 0;
-                if (autoIds.length > 0) {
-                    const { count: c } = await supabase
-                        .from('dm_sent_log')
-                        .select('id', { count: 'exact', head: true })
-                        .in('automation_id', autoIds)
-                        .eq('status', 'sent')
-                        .gte('sent_at', startOfMonth.toISOString());
-                    logCount = c || 0;
-                }
-
-                monthlyUsed = Math.max((count || 0), logCount);
+                monthlyUsed = await getMonthlyDmCount(supabase, accountItems[0].user_id);
 
                 if (monthlyUsed >= dmLimit) {
                     console.log(`[Queue] Monthly limit reached for account ${accountId} — skipping all`);
@@ -134,8 +167,13 @@ export async function GET(request) {
             const token    = account.fb_page_access_token || account.access_token;
             // Instagram Business Login tokens must use graph.instagram.com for DM sending
             const useIgApi = !account.fb_page_access_token;
-            
-            console.log(`[Queue:debug] account=${accountId} ig_user_id=${account.ig_user_id} fb_page_id=${account.fb_page_id || 'none'} has_fb_token=${!!account.fb_page_access_token} useIgApi=${useIgApi} token_prefix=${token?.slice(0, 12)}`);
+
+            // Debug-only routing trace — gated so the cron logs aren't
+            // noisy every minute. Set DEBUG_QUEUE=1 in env to re-enable
+            // when troubleshooting IG vs FB token routing.
+            if (process.env.DEBUG_QUEUE) {
+                console.log(`[Queue:debug] account=${accountId} ig_user_id=${account.ig_user_id} fb_page_id=${account.fb_page_id || 'none'} has_fb_token=${!!account.fb_page_access_token} useIgApi=${useIgApi}`);
+            }
 
             for (const item of toProcess) {
                 if (sentThisRun >= budgetThisWindow) {
@@ -172,9 +210,13 @@ export async function GET(request) {
                 try {
                     const fakeAutomation = { dm_type: item.dm_type, dm_config: item.dm_config };
                     const trackingMap    = item.tracking_map || {};
-                    const context        = {
-                        username:   item.recipient_ig_id,
-                        first_name: item.recipient_ig_id,
+                    // Use the captured username when available; fall back to a
+                    // friendly 'there' so we never substitute the numeric IGSID
+                    // into a user-facing message ("Hey 17841405...").
+                    const personal = item.recipient_username || 'there';
+                    const context  = {
+                        username:   personal,
+                        first_name: personal,
                         comment_id: item.comment_id || '',
                     };
 
@@ -183,8 +225,11 @@ export async function GET(request) {
                     const senderForItem = (item.platform === 'facebook' && account.fb_page_id)
                         ? account.fb_page_id
                         : account.ig_user_id;
-                    
-                    console.log(`[Queue:debug] sending → platform=${item.platform || 'instagram'} sender=${senderForItem} recipient=${item.recipient_ig_id} dm_type=${item.dm_type} useIgApi=${useIgApi}`);
+
+                    // Per-item routing trace — same DEBUG_QUEUE gate.
+                    if (process.env.DEBUG_QUEUE) {
+                        console.log(`[Queue:debug] sending → platform=${item.platform || 'instagram'} sender=${senderForItem} recipient=${item.recipient_ig_id} dm_type=${item.dm_type} useIgApi=${useIgApi}`);
+                    }
 
                     await sendAutomatedDM(
                         fakeAutomation,
@@ -204,27 +249,24 @@ export async function GET(request) {
                     // flow_step = null for non-flow automations
                     let flowStepValue = null;
                     if (item.queue_reason === 'overflow' && item.automation_id) {
-                        // Check if this automation has flow steps configured
-                        try {
-                            const { data: autoForFlow } = await supabase
-                                .from('dm_automations').select('settings_config')
-                                .eq('id', item.automation_id).maybeSingle();
-                            const steps = autoForFlow?.settings_config?.flowSteps;
-                            if (Array.isArray(steps) && steps.length > 0) flowStepValue = 0;
-                        } catch { /* non-fatal */ }
+                        // O(1) lookup against the Set we built once per batch
+                        // (replaces the per-item SELECT that was here before).
+                        if (flowAutoIds.has(item.automation_id)) flowStepValue = 0;
                     } else if (item.flow_step_index != null) {
                         flowStepValue = item.flow_step_index;
                     }
 
                     await supabase.from('dm_sent_log').insert({
-                        automation_id:   item.automation_id,
-                        post_id:         item.post_id,
-                        recipient_ig_id: item.recipient_ig_id,
-                        comment_id:      item.comment_id,
-                        comment_text:    item.comment_text,
-                        status:          'sent',
-                        flow_step:       flowStepValue,
-                        sent_at:         now.toISOString(),
+                        automation_id:      item.automation_id,
+                        post_id:            item.post_id,
+                        recipient_ig_id:    item.recipient_ig_id,
+                        recipient_username: item.recipient_username,
+                        comment_id:         item.comment_id,
+                        comment_text:       item.comment_text,
+                        status:             'sent',
+                        flow_step:          flowStepValue,
+                        platform:           item.platform || 'instagram',
+                        sent_at:            now.toISOString(),
                     });
 
                     // Mark queue item done

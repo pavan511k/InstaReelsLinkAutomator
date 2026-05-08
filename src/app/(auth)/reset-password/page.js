@@ -5,7 +5,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Lock, Loader2, Check, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
-import styles from './reset-password.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './reset-password.module.css';
+import lightStyles from './reset-password.light.module.css';
 
 const PASSWORD_MIN_LENGTH = 8;
 
@@ -31,6 +33,7 @@ const REQUIREMENTS = [
 ];
 
 export default function ResetPasswordPage() {
+    const styles = useStyles(darkStyles, lightStyles);
     const [password, setPassword]       = useState('');
     const [confirm, setConfirm]         = useState('');
     const [showPw, setShowPw]           = useState(false);

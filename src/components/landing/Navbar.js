@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Menu, X, ArrowRight } from 'lucide-react';
-import styles from './Navbar.module.css';
+import { useTheme } from 'next-themes';
+import { Menu, X, ArrowRight, Sun, Moon } from 'lucide-react';
+import { useStyles, useIsDark } from '@/lib/useStyles';
+import darkStyles from './Navbar.module.css';
+import lightStyles from './Navbar.light.module.css';
 
 const NAV_LINKS = [
   { label: 'How it works', href: '#how-it-works' },
@@ -13,6 +16,9 @@ const NAV_LINKS = [
 ];
 
 export default function Navbar() {
+  const styles = useStyles(darkStyles, lightStyles);
+  const isDark = useIsDark();
+  const { setTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -21,6 +27,8 @@ export default function Navbar() {
     window.addEventListener('scroll', handler, { passive: true });
     return () => window.removeEventListener('scroll', handler);
   }, []);
+
+  const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
 
   return (
     <header className={`${styles.header} ${scrolled ? styles.scrolled : ''}`}>
@@ -45,6 +53,15 @@ export default function Navbar() {
 
         {/* Desktop CTAs */}
         <div className={styles.ctas}>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={styles.themeToggle}
+            aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+            title={isDark ? 'Switch to light' : 'Switch to dark'}
+          >
+            {isDark ? <Sun size={16} strokeWidth={2} /> : <Moon size={16} strokeWidth={2} />}
+          </button>
           <Link href="/login" className={styles.loginBtn}>Sign in</Link>
           <Link href="/signup" className={styles.signupBtn}>
             Get started free
@@ -71,6 +88,14 @@ export default function Navbar() {
               {label}
             </a>
           ))}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={styles.mobileThemeToggle}
+          >
+            {isDark ? <Sun size={16} strokeWidth={2} /> : <Moon size={16} strokeWidth={2} />}
+            {isDark ? 'Switch to light' : 'Switch to dark'}
+          </button>
           <div className={styles.mobileCtas}>
             <Link href="/login"  className={styles.mobileLogin}>Sign in</Link>
             <Link href="/signup" className={styles.signupBtn}>Get started free</Link>

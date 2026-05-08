@@ -1,5 +1,9 @@
-/* Google Fonts — must be first @import */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+/* Google Fonts — must be first @import.
+   Inter stays for the dashboard (existing UI is built around it). The
+   landing brings its own pairing: Bricolage Grotesque (display, with
+   variable opticalSize) + Geist (body) — both characterful, both free.
+   The landing CSS opts in via --font-landing-* variables. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Geist:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -13,6 +17,10 @@
    Old names: --space-*, --radius-*, --font-size-*, etc. (aliases)
    ================================================================ */
 :root {
+  /* ── Landing typography (opt-in via these vars on landing CSS) ── */
+  --font-landing-display: 'Bricolage Grotesque', 'Söhne', 'Inter', system-ui, sans-serif;
+  --font-landing-body:    'Geist', 'Inter', system-ui, sans-serif;
+
   /* ── Brand (Violet) ─────────────────────────── */
   --brand-50:  #F5F3FF;
   --brand-100: #EDE9FE;
@@ -216,6 +224,12 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Use `overflow-x: clip` (not `hidden`). `hidden` forces overflow-y to
+     compute as `auto`, which makes <html>/<body> their own scroll container
+     and breaks `position: sticky` on the dashboard sidebar. `clip` hides
+     overflow without creating a scroll context — exactly the behavior we
+     want here. Supported in Chrome 90+, Firefox 81+, Safari 16+. */
+  overflow-x: clip;
 }
 body {
   font-family: var(--font);
@@ -224,6 +238,7 @@ body {
   line-height: var(--line-height-normal);
   color: var(--gray-900);
   background-color: #EAE5FF;
+  overflow-x: clip;
 }
 a    { color: inherit; text-decoration: none; }
 img  { max-width: 100%; height: auto; display: block; }

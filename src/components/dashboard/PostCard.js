@@ -49,7 +49,7 @@ export default function PostCard({ post, onSetupDM, onSkip }) {
                         className={styles.setupBtn}
                         onClick={() => onSetupDM?.(post)}
                     >
-                        <Pencil size={14} /> Configure AutoDM
+                        <Pencil size={14} /> Configure
                     </button>
                 )}
                 {post.status === 'active' && (

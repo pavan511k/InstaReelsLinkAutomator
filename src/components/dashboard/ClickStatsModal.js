@@ -5,6 +5,7 @@ import { X, MousePointerClick, Users, ExternalLink, RefreshCw, TrendingUp, Link2
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from './ClickStatsModal.module.css';
 import lightStyles from './ClickStatsModal.light.module.css';
+import Modal from '@/components/ui/Modal';
 
 /** Tiny sparkline SVG — 30 bars, height proportional to max */
 function Sparkline({ data, styles }) {
@@ -71,10 +72,18 @@ export default function ClickStatsModal({ automationId, postCaption, onClose }) 
     useEffect(() => { load(); }, [automationId]);
 
     return (
-        <div className={styles.overlay} onClick={onClose}>
-            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-
-                {/* Header */}
+        <Modal
+            open={true}
+            onClose={onClose}
+            size="lg"
+            ariaLabel="Click tracking stats"
+            showCloseButton={false}
+            noPadding
+            className={styles.modal}
+        >
+                {/* Header — kept inline so the icon-pill, refresh button, and
+                    border-bottom from ClickStatsModal.module.css are preserved.
+                    Modal primitive provides escape, focus trap, and backdrop. */}
                 <div className={styles.header}>
                     <div className={styles.headerLeft}>
                         <div className={styles.headerIcon}>
@@ -291,7 +300,6 @@ export default function ClickStatsModal({ automationId, postCaption, onClose }) 
 
                     </div>
                 ) : null}
-            </div>
-        </div>
+        </Modal>
     );
 }

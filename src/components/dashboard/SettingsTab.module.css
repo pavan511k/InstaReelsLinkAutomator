@@ -28,6 +28,52 @@
     padding: 10px 10px 6px;
 }
 
+/* Advanced disclosure for the niche Settings groups (delay, universal
+   trigger disable, flow automation, upsell). Matches the TriggerSetupTab
+   pattern. */
+.advancedToggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.65);
+    font-family: 'Inter', sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms, color 150ms;
+}
+.advancedToggle:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(167, 139, 250, 0.22);
+    color: rgba(255, 255, 255, 0.9);
+}
+.advancedActiveDot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #A78BFA;
+    margin-left: 8px;
+    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.20);
+    vertical-align: middle;
+}
+.advancedBody {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    animation: advancedFadeIn 180ms ease-out;
+}
+@keyframes advancedFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+}
+
 .checkboxLabel {
     display: flex;
     align-items: flex-start;
@@ -272,21 +318,6 @@
 }
 
 /* Comment reply card */
-.commentReplyCard {
-    padding: 10px;
-    border-radius: 10px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-.commentReplyHeader {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-}
-
 /* Pro badge */
 .proBadge {
     display: inline-flex;
@@ -299,4 +330,86 @@
     border: 1px solid rgba(245,158,11,0.25);
     color: #FCD34D;
     margin-left: 8px;
+}
+
+/* ── Flow step builder (Enable multi-step follow-up sequence) ─────── */
+.flowStepIndicator {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    background: rgba(139,92,246,0.20);
+    border: 1px solid rgba(139,92,246,0.40);
+    color: #C4B5FD;
+}
+.flowStepConnector {
+    width: 1px; flex: 1; min-height: 20px;
+    background: rgba(139,92,246,0.20);
+    margin: 4px 0;
+}
+.flowStepCard {
+    flex: 1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 12px;
+}
+.flowStepDelaySelect {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.85);
+    cursor: pointer;
+}
+.flowStepRemoveBtn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: rgba(239,68,68,0.7);
+    padding: 2px 4px;
+    border-radius: 4px;
+    display: flex; align-items: center;
+}
+.flowStepRemoveBtn:hover { color: rgba(239,68,68,0.95); }
+.flowStepAddBtn {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(139,92,246,0.08);
+    border: 1px dashed rgba(139,92,246,0.30);
+    border-radius: 8px;
+    padding: 7px 14px;
+    cursor: pointer;
+    color: #C4B5FD;
+    font-size: 12px;
+    font-weight: 500;
+}
+.flowStepAddBtn:hover {
+    background: rgba(139,92,246,0.14);
+    border-color: rgba(139,92,246,0.45);
+}
+
+/* ── Upsell delay pills (Send follow-up after) ────────────────────── */
+.delayPill {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: transparent;
+    color: rgba(255,255,255,0.78);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 150ms, border-color 150ms, color 150ms;
+}
+.delayPill:hover {
+    border-color: rgba(255,255,255,0.32);
+    color: #FFFFFF;
+}
+.delayPillActive {
+    border-color: rgba(139,92,246,0.80);
+    background: rgba(139,92,246,0.18);
+    color: #C4B5FD;
+}
+.delayPillActive:hover {
+    border-color: rgba(139,92,246,0.95);
+    color: #DDD6FE;
 }

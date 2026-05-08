@@ -10,12 +10,53 @@ export const FREE_DM_LIMIT = 3000;
 export const PRO_DM_LIMIT  = null; // unlimited
 
 export const TRIAL_DAYS    = 30;   // days of free Pro trial for new signups
-export const PRO_PRICE_INR = 299;  // monthly price in INR
+export const PRO_PRICE_INR = 299;  // monthly price in INR (kept for legacy refs)
 
 /**
  * Carousel slide caps per plan.
  */
 export const FREE_SLIDE_LIMIT = 3;
+
+/**
+ * Single source of truth for purchasable billing plans.
+ *
+ * Each entry is what users CAN BUY (the SKU). The `entitlement` field maps
+ * back to the value written to `user_plans.plan` — both monthly and yearly
+ * Pro purchases unlock the same `'pro'` feature set. The pricing page,
+ * Cashfree order creation, and the webhook + verify activation routes all
+ * read from this object so the price, duration, and label stay in sync.
+ *
+ * Adding a new tier (e.g. business): add an entry here + a UI card. No other
+ * code touches.
+ */
+export const BILLING_PLANS = {
+    pro: {
+        label:          'Pro Monthly',
+        priceInr:       299,
+        durationMonths: 1,
+        entitlement:    'pro',
+    },
+    pro_yearly: {
+        label:          'Pro Yearly',
+        priceInr:       2999,
+        durationMonths: 12,
+        entitlement:    'pro',
+        // Calculated savings shown in the UI: 12 × 299 − 2999 = 589 (≈16% off).
+        savingsLabel:   'Save ₹589 vs monthly',
+    },
+};
+
+/**
+ * Computes the new `plan_expires_at` for a given billing plan, used by
+ * activatePlan in webhook/verify.
+ */
+export function computePlanExpiresAt(billingPlanId, fromDate = new Date()) {
+    const plan = BILLING_PLANS[billingPlanId];
+    if (!plan) throw new Error(`Unknown billing plan: ${billingPlanId}`);
+    const next = new Date(fromDate);
+    next.setMonth(next.getMonth() + plan.durationMonths);
+    return next;
+}
 
 /**
  * Given a user_plans row (or any object with the same shape), returns the

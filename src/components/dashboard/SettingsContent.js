@@ -1,17 +1,53 @@
 'use client';
 
-import { useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
     Instagram, Facebook, LogOut, RefreshCw, Shield,
     Settings, UserCircle, Trash2, AlertTriangle, CheckCircle2,
-    Gauge, Save, Bell, Webhook, Mail, Send, AtSign,
+    Gauge, Save, Bell, Webhook, Mail, Send, AtSign, Sparkles, Lock,
 } from 'lucide-react';
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from './SettingsContent.module.css';
 import lightStyles from './SettingsContent.light.module.css';
 import DisconnectModal from './DisconnectModal';
+import Modal from '@/components/ui/Modal';
+
+/* Avatar with fallback + self-healing refresh — Meta's signed IG CDN
+   URLs expire. When the <img> fails to load, swap to the fallback icon
+   and hit /api/accounts/refresh-profile-pic in the background to pull
+   a fresh URL. Fresh URL replaces the stale one in local state so the
+   real photo reappears without a page reload. */
+function AccountAvatar({ account, fallback }) {
+    const [url, setUrl] = useState(account.ig_profile_picture_url || null);
+    const [errored, setErrored] = useState(false);
+    useEffect(() => {
+        setUrl(account.ig_profile_picture_url || null);
+        setErrored(false);
+    }, [account.ig_profile_picture_url]);
+
+    const handleError = async () => {
+        setErrored(true);
+        try {
+            const res = await fetch('/api/accounts/refresh-profile-pic', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId: account.id }),
+            });
+            const data = await res.json();
+            if (data?.refreshed && data?.profilePictureUrl && data.profilePictureUrl !== url) {
+                setUrl(data.profilePictureUrl);
+                setErrored(false);
+            }
+        } catch { /* non-fatal */ }
+    };
+
+    if (url && !errored) {
+        return <img src={url} alt="" onError={handleError} />;
+    }
+    return fallback;
+}
 
 const TABS = [
     { key: 'permissions',   label: 'Permissions',   icon: Shield     },
@@ -21,7 +57,8 @@ const TABS = [
 
 const RATE_LIMIT_OPTIONS = [50, 100, 200, 300, 400];
 
-export default function SettingsContent({ user, connectedAccounts = [] }) {
+export default function SettingsContent({ user, connectedAccounts = [], userPlan = 'free' }) {
+    const isPro = userPlan === 'pro' || userPlan === 'business' || userPlan === 'trial';
     const styles = useStyles(darkStyles, lightStyles);
     const router = useRouter();
     const [activeTab, setActiveTab]               = useState('permissions');
@@ -36,14 +73,18 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
     const [emailCopied, setEmailCopied]           = useState(false);
     const [savingConfig, setSavingConfig]         = useState(false);
     const [configMessage, setConfigMessage]       = useState('');
-    const [savingRateLimit, setSavingRateLimit]   = useState(false);
-    const [rateLimitMessage, setRateLimitMessage] = useState('');
+    const [savingRateLimitId, setSavingRateLimitId]   = useState(null);
+    const [rateLimitMessages, setRateLimitMessages]   = useState({});
 
     const activeAccounts   = connectedAccounts.filter((a) => a.is_active);
     const inactiveAccounts = connectedAccounts.filter((a) => !a.is_active);
     const firstActiveAccount = activeAccounts[0];
 
-    const [rateLimit, setRateLimit] = useState(firstActiveAccount?.rate_limit_per_hour || 200);
+    // Rate limit is per connected account — keyed by account id so users with
+    // both IG and FB connected can configure each independently.
+    const [rateLimits, setRateLimits] = useState(() =>
+        Object.fromEntries(activeAccounts.map((a) => [a.id, a.rate_limit_per_hour || 200]))
+    );
 
     // Alert preferences
     const [alertEmail,   setAlertEmail]   = useState('');
@@ -140,26 +181,29 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
         }
     };
 
-    const handleSaveRateLimit = async () => {
-        if (!firstActiveAccount) return;
-        setSavingRateLimit(true);
-        setRateLimitMessage('');
+    const handleSaveRateLimit = async (accountId) => {
+        if (!accountId) return;
+        const value = rateLimits[accountId];
+        if (typeof value !== 'number') return;
+        setSavingRateLimitId(accountId);
+        setRateLimitMessages((prev) => ({ ...prev, [accountId]: '' }));
         try {
             const res = await fetch('/api/accounts/rate-limit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ accountId: firstActiveAccount.id, rateLimitPerHour: rateLimit }),
+                body: JSON.stringify({ accountId, rateLimitPerHour: value }),
             });
+            const msg = res.ok ? '✅ Rate limit saved' : '❌ Failed to save';
+            setRateLimitMessages((prev) => ({ ...prev, [accountId]: msg }));
             if (res.ok) {
-                setRateLimitMessage('✅ Rate limit saved');
-                setTimeout(() => setRateLimitMessage(''), 3000);
-            } else {
-                setRateLimitMessage('❌ Failed to save');
+                setTimeout(() => {
+                    setRateLimitMessages((prev) => ({ ...prev, [accountId]: '' }));
+                }, 3000);
             }
         } catch {
-            setRateLimitMessage('❌ Failed to save');
+            setRateLimitMessages((prev) => ({ ...prev, [accountId]: '❌ Failed to save' }));
         } finally {
-            setSavingRateLimit(false);
+            setSavingRateLimitId(null);
         }
     };
 
@@ -315,9 +359,10 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                 <div key={account.id} className={styles.accountCard}>
                     <div className={styles.accountInfo}>
                         <div className={`${styles.accountAvatar} ${styles[`avatar_${account.platform}`]}`}>
-                            {account.ig_profile_picture_url
-                                ? <img src={account.ig_profile_picture_url} alt="" />
-                                : getPlatformIcon(account.platform)}
+                            <AccountAvatar
+                                account={account}
+                                fallback={getPlatformIcon(account.platform)}
+                            />
                         </div>
                         <div className={styles.accountDetails}>
                             <span className={styles.accountName}>
@@ -385,33 +430,54 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
     const renderConfiguration = () => (
         <div className={styles.tabContent}>
 
-            {/* Rate Limit */}
+            {/* Rate Limit — per active connected account */}
             <div className={styles.configSection}>
                 <h2 className={styles.sectionTitle}><Gauge size={20} /> AutoDM Rate Limit</h2>
                 <p className={styles.sectionDesc}>
-                    Set the maximum number of DMs sent per hour. Lower values are safer and reduce the risk
-                    of being flagged by Instagram/Facebook.
+                    Set the maximum number of DMs sent per hour, per connected account. Lower values are safer
+                    and reduce the risk of being flagged by Instagram/Facebook.
                 </p>
-                <div className={styles.rateLimitRow}>
-                    <select className={styles.rateLimitSelect} value={rateLimit}
-                        onChange={(e) => setRateLimit(Number(e.target.value))}>
-                        {RATE_LIMIT_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>{opt} DMs / hour</option>
-                        ))}
-                    </select>
-                    <button className={styles.saveBtn} onClick={handleSaveRateLimit}
-                        disabled={savingRateLimit || !firstActiveAccount}>
-                        <Save size={14} />
-                        {savingRateLimit ? 'Saving...' : 'Save'}
-                    </button>
-                    {rateLimitMessage && <span className={styles.saveMsg}>{rateLimitMessage}</span>}
-                </div>
-                {rateLimit >= 300 && (
-                    <div className={styles.rateLimitWarning}>
-                        <AlertTriangle size={14} />
-                        <span>High rate limits may trigger platform restrictions. Instagram recommends staying under 200/hr.</span>
-                    </div>
-                )}
+                {activeAccounts.length === 0 ? (
+                    <p className={styles.sectionDesc}>Connect an account first to configure rate limits.</p>
+                ) : activeAccounts.map((acc) => {
+                    const platformLabel = acc.platform === 'facebook' ? 'Facebook' : 'Instagram';
+                    const handle        = acc.platform === 'facebook'
+                        ? (acc.fb_page_name || acc.fb_page_id || '')
+                        : (acc.ig_username || '');
+                    const value         = rateLimits[acc.id] ?? (acc.rate_limit_per_hour || 200);
+                    const msg           = rateLimitMessages[acc.id];
+                    const PlatformIcon  = acc.platform === 'facebook' ? Facebook : Instagram;
+                    return (
+                        <div key={acc.id} className={styles.rateLimitAccount}>
+                            {activeAccounts.length > 1 && (
+                                <div className={styles.rateLimitAccountLabel}>
+                                    <PlatformIcon size={14} />
+                                    <span>{platformLabel}{handle ? ` · ${handle}` : ''}</span>
+                                </div>
+                            )}
+                            <div className={styles.rateLimitRow}>
+                                <select className={styles.rateLimitSelect} value={value}
+                                    onChange={(e) => setRateLimits((prev) => ({ ...prev, [acc.id]: Number(e.target.value) }))}>
+                                    {RATE_LIMIT_OPTIONS.map((opt) => (
+                                        <option key={opt} value={opt}>{opt} DMs / hour</option>
+                                    ))}
+                                </select>
+                                <button className={styles.saveBtn} onClick={() => handleSaveRateLimit(acc.id)}
+                                    disabled={savingRateLimitId === acc.id}>
+                                    <Save size={14} />
+                                    {savingRateLimitId === acc.id ? 'Saving...' : 'Save'}
+                                </button>
+                                {msg && <span className={styles.saveMsg}>{msg}</span>}
+                            </div>
+                            {value >= 300 && (
+                                <div className={styles.rateLimitWarning}>
+                                    <AlertTriangle size={14} />
+                                    <span>High rate limits may trigger platform restrictions. Instagram recommends staying under 200/hr.</span>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Default Configuration */}
@@ -496,12 +562,24 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
             <div className={styles.configSection} onClick={loadAlerts}>
                 <h2 className={styles.sectionTitle}><Bell size={18} /> Limit Alerts</h2>
                 <p className={styles.sectionDesc}>
-                    Get notified by email or webhook when your monthly DM usage crosses a threshold.
-                    Prevents surprise cutoffs — you&apos;ll know before you hit the wall.
+                    {currentUsage?.unlimited
+                        ? "You're on an unlimited plan — there's no monthly DM cap. Limit alerts don't apply to your plan."
+                        : "Get notified by email or webhook when your monthly DM usage crosses a threshold. Prevents surprise cutoffs — you'll know before you hit the wall."}
                 </p>
 
-                {currentUsage && (() => {
-                    const pct = Math.round((currentUsage.count / currentUsage.limit) * 100);
+                {/* Unlimited plan — show a friendly "Pro" indicator instead of the gauge.
+                   Free / cap-bearing plans show the gauge + the threshold marker. */}
+                {currentUsage?.unlimited ? (
+                    <div className={styles.usageGaugeUnlimited}>
+                        <span className={styles.usageGaugeUnlimitedBadge}>✨ {currentUsage.plan === 'trial' ? 'Trial' : 'Pro'}</span>
+                        <span className={styles.usageGaugeUnlimitedLabel}>
+                            <strong>{currentUsage.count.toLocaleString()}</strong> DMs sent this month · unlimited cap
+                        </span>
+                    </div>
+                ) : currentUsage ? (() => {
+                    const pct = currentUsage.limit > 0
+                        ? Math.round((currentUsage.count / currentUsage.limit) * 100)
+                        : 0;
                     const barColor = pct >= 90 ? '#EF4444' : pct >= 75 ? '#F59E0B' : '#10B981';
                     return (
                         <div className={styles.usageGauge}>
@@ -517,10 +595,19 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                                 <div className={styles.usageGaugeMarker}
                                     style={{ left: `${thresholdPct}%` }} title={`Alert at ${thresholdPct}%`} />
                             </div>
+                            {pct >= 80 && (
+                                <a href="/pricing" className={styles.usageGaugeUpgrade}>
+                                    Approaching limit — upgrade to Pro for unlimited DMs →
+                                </a>
+                            )}
                         </div>
                     );
-                })()}
+                })() : null}
 
+                {/* Threshold + email/webhook configuration only applies to capped plans.
+                    Unlimited (Pro/Trial/Business) users see no controls — there's no
+                    threshold to cross. */}
+                {!currentUsage?.unlimited && (
                 <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Alert threshold</label>
                     <div className={styles.thresholdRow}>
@@ -536,6 +623,8 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                         You&apos;ll receive an alert once per month when usage crosses this threshold.
                     </p>
                 </div>
+                )}
+                {!currentUsage?.unlimited && (<>
                 <div className={styles.formGroup}>
                     <label className={styles.formLabel}><Mail size={13} /> Alert email</label>
                     <input className={styles.formInput} type="email"
@@ -569,19 +658,39 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                     </button>
                     {alertsMsg && <span className={styles.saveMsg}>{alertsMsg}</span>}
                 </div>
+                </>)}
             </div>
 
-            {/* Story Mention Auto-DM */}
+            {/* Story Mention Auto-DM — Pro feature */}
             <div className={styles.configSection}>
                 <h2 className={styles.sectionTitle}><AtSign size={18} /> Story Mention Auto-DM</h2>
                 <p className={styles.sectionDesc}>
                     Automatically send a DM to anyone who tags your Instagram account in their Story.
                     Great for building relationships and rewarding fans who share your content.
                 </p>
-                <label className={styles.checkboxLabel} style={{ marginBottom: 16 }}>
+
+                {!isPro && (
+                    <div className={styles.proUpsellBanner}>
+                        <div className={styles.proUpsellIcon}>
+                            <Sparkles size={16} />
+                        </div>
+                        <div className={styles.proUpsellBody}>
+                            <p className={styles.proUpsellTitle}>Story Mention Auto-DM is a Pro feature</p>
+                            <p className={styles.proUpsellDesc}>
+                                Enable automatic DMs when fans tag your account in their stories. Available on Pro and Trial plans.
+                            </p>
+                        </div>
+                        <Link href="/pricing" className={styles.proUpsellBtn}>
+                            Upgrade to Pro
+                        </Link>
+                    </div>
+                )}
+
+                <label className={styles.checkboxLabel} style={{ marginBottom: 16, opacity: isPro ? 1 : 0.5, cursor: isPro ? 'pointer' : 'not-allowed' }}>
                     <input type="checkbox" className={styles.checkbox}
-                        checked={mentionEnabled}
-                        onChange={(e) => setMentionEnabled(e.target.checked)} />
+                        checked={isPro && mentionEnabled}
+                        disabled={!isPro}
+                        onChange={(e) => isPro && setMentionEnabled(e.target.checked)} />
                     <div>
                         <span className={styles.checkText}>Enable mention auto-DM</span>
                         <p className={styles.checkDesc}>
@@ -595,17 +704,25 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                         placeholder="Hey! Thanks for mentioning us 🙌 We saw your story and wanted to reach out!"
                         rows={3} value={mentionMessage}
                         onChange={(e) => setMentionMessage(e.target.value)}
-                        disabled={!mentionEnabled} />
+                        disabled={!isPro || !mentionEnabled} />
                     <p className={styles.fieldHint}>
                         Supports {'{username}'} and {'{first_name}'} variables.
                     </p>
                 </div>
                 <div className={styles.configSaveRow}>
-                    <button className={styles.saveBtn} onClick={handleSaveMentionConfig}
-                        disabled={savingConfig || !firstActiveAccount}>
-                        <Save size={14} />
-                        {savingConfig ? 'Saving...' : 'Save mention settings'}
-                    </button>
+                    {isPro ? (
+                        <button className={styles.saveBtn} onClick={handleSaveMentionConfig}
+                            disabled={savingConfig || !firstActiveAccount}>
+                            <Save size={14} />
+                            {savingConfig ? 'Saving...' : 'Save mention settings'}
+                        </button>
+                    ) : (
+                        <button className={styles.saveBtn} disabled
+                            style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                            title="Upgrade to Pro to enable Story Mention Auto-DM">
+                            <Lock size={14} /> Save mention settings
+                        </button>
+                    )}
                     {configMessage && <span className={styles.saveMsg}>{configMessage}</span>}
                 </div>
             </div>
@@ -645,68 +762,62 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                 </button>
             </div>
 
-            {showDeleteModal && createPortal(
-                <div className={styles.modalOverlay} onClick={() => setShowDeleteModal(false)}>
-                    <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-                        <div className={styles.modalIcon}><AlertTriangle size={32} /></div>
-                        <h3 className={styles.modalTitle}>Delete your account?</h3>
-                        <p className={styles.modalDesc}>
-                            This action <strong>cannot be undone</strong>. This will permanently delete your
-                            account and remove all associated data including:
-                        </p>
-                        <ul className={styles.deleteList}>
-                            <li>All connected Instagram/Facebook accounts</li>
-                            <li>All synced posts and stories</li>
-                            <li>All DM automations and analytics</li>
-                            <li>Your account and login credentials</li>
-                        </ul>
-                        <div className={styles.formGroup}>
-                            <label className={styles.modalFormLabel}>
-                                <span>Type your email to confirm</span>
-                                <span style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                                    fontFamily: 'monospace', fontSize: 12,
-                                    color: 'rgba(255,255,255,0.72)',
-                                    background: 'rgba(255,255,255,0.07)',
-                                    border: '1px solid rgba(255,255,255,0.12)',
-                                    borderRadius: 5, padding: '2px 8px',
-                                }}>
-                                    <strong style={{ fontFamily: 'monospace', fontWeight: 600 }}>{user?.email}</strong>
-                                    <button onClick={copyEmailToClipboard}
-                                        title={emailCopied ? 'Copied!' : 'Copy to clipboard'}
-                                        style={{
-                                            background: 'none', border: 'none', cursor: 'pointer',
-                                            padding: '1px 3px', borderRadius: 3,
-                                            color: emailCopied ? '#10B981' : 'rgba(255,255,255,0.45)',
-                                            fontSize: 11, display: 'flex', alignItems: 'center', gap: 3,
-                                            transition: 'color 150ms',
-                                        }}>
-                                        {emailCopied ? '✓ Copied' : '⧉ Copy'}
-                                    </button>
-                                </span>
-                            </label>
-                            <input className={styles.formInput} placeholder="your-email@example.com"
-                                value={deleteEmail} onChange={(e) => setDeleteEmail(e.target.value)} />
-                        </div>
-                        {deleteError && <p className={styles.deleteError}>{deleteError}</p>}
-                        <div className={styles.modalActions}>
-                            <button className={styles.cancelBtn} onClick={() => {
-                                setShowDeleteModal(false);
-                                setDeleteEmail('');
-                                setDeleteError('');
-                            }}>
-                                Cancel
+            <Modal
+                open={showDeleteModal}
+                onClose={() => {
+                    setShowDeleteModal(false);
+                    setDeleteEmail('');
+                    setDeleteError('');
+                }}
+                size="md"
+                closable={!isDeleting}
+                ariaLabel="Delete account"
+            >
+                <div className={styles.modalIcon}><AlertTriangle size={32} /></div>
+                <h3 className={styles.modalTitle}>Delete your account?</h3>
+                <p className={styles.modalDesc}>
+                    This action <strong>cannot be undone</strong>. This will permanently delete your
+                    account and remove all associated data including:
+                </p>
+                <ul className={styles.deleteList}>
+                    <li>All connected Instagram/Facebook accounts</li>
+                    <li>All synced posts and stories</li>
+                    <li>All DM automations and analytics</li>
+                    <li>Your account and login credentials</li>
+                </ul>
+                <div className={styles.formGroup}>
+                    <label className={styles.modalFormLabel}>
+                        <span>Type your email to confirm</span>
+                        <span className={styles.emailPill}>
+                            <strong>{user?.email}</strong>
+                            <button
+                                onClick={copyEmailToClipboard}
+                                title={emailCopied ? 'Copied!' : 'Copy to clipboard'}
+                                className={`${styles.emailPillCopyBtn} ${emailCopied ? styles.emailPillCopyBtnCopied : ''}`}
+                            >
+                                {emailCopied ? '✓ Copied' : '⧉ Copy'}
                             </button>
-                            <button className={styles.confirmDeleteBtn} onClick={handleDeleteAccount}
-                                disabled={isDeleting || deleteEmail !== user?.email}>
-                                <Trash2 size={14} />
-                                {isDeleting ? 'Deleting...' : 'Delete my account'}
-                            </button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
+                        </span>
+                    </label>
+                    <input className={styles.formInput} placeholder="your-email@example.com"
+                        value={deleteEmail} onChange={(e) => setDeleteEmail(e.target.value)} />
+                </div>
+                {deleteError && <p className={styles.deleteError}>{deleteError}</p>}
+                <div className={styles.modalActions}>
+                    <button className={styles.cancelBtn} onClick={() => {
+                        setShowDeleteModal(false);
+                        setDeleteEmail('');
+                        setDeleteError('');
+                    }} disabled={isDeleting}>
+                        Cancel
+                    </button>
+                    <button className={styles.confirmDeleteBtn} onClick={handleDeleteAccount}
+                        disabled={isDeleting || deleteEmail !== user?.email}>
+                        <Trash2 size={14} />
+                        {isDeleting ? 'Deleting...' : 'Delete my account'}
+                    </button>
+                </div>
+            </Modal>
         </div>
     );
 

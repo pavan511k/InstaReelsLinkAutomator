@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Mail, Lock, Loader2, ArrowRight, Zap, Users, TrendingUp, CheckCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
-import styles from './login.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './login.module.css';
+import lightStyles from './login.light.module.css';
 
 const STATS = [
     { icon: Zap,         value: '12K+',  label: 'DMs sent daily'      },
@@ -16,6 +18,7 @@ const STATS = [
 ];
 
 export default function LoginPage() {
+    const styles = useStyles(darkStyles, lightStyles);
     const [email, setEmail]         = useState('');
     const [password, setPassword]   = useState('');
     const [error, setError]         = useState('');

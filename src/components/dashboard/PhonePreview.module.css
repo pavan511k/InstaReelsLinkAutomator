@@ -234,6 +234,18 @@
     color: rgba(255, 255, 255, 0.35);
 }
 
+/* Multi-CTA message — free-form text, NO line-clamp so newlines render
+   like Instagram DMs do (full-height bubble with preserved breaks). */
+.cardMessage {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.4;
+    margin: 0 0 3px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 /* ── Card Button ──────────────────────────────────────────────── */
 .cardButton {
     text-align: center;
@@ -289,6 +301,10 @@
     color: #fff;
     line-height: 1.4;
     word-break: break-word;
+    /* Preserve user-typed newlines — Instagram DMs render line breaks as
+       actual breaks, so the preview should match. */
+    white-space: pre-wrap;
+    margin: 0;
 }
 
 .branding {
@@ -430,6 +446,10 @@
 
 /* Card title & subtitle */
 [data-theme="light"] .cardTitle {
+    color: #0f0f0f;
+}
+
+[data-theme="light"] .cardMessage {
     color: #0f0f0f;
 }
 

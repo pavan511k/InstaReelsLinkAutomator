@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
 
 /**
  * GET /api/global-automations
@@ -26,12 +27,20 @@ export async function GET() {
 
 /**
  * POST /api/global-automations
- * Create a new global automation — available on all plans
+ * Create a new global automation — Pro / Trial only.
+ *
+ * GET / PATCH / DELETE are intentionally NOT plan-gated so a user who
+ * downgrades from Pro can still pause or remove their existing globals.
+ * Runtime sends are blocked separately in the webhook (processGlobalTriggers).
  */
 export async function POST(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+
+    const plan = await getUserEffectivePlan(supabase, user.id);
+    const gate = requirePro(plan, 'Global Triggers require a Pro plan.');
+    if (gate) return gate;
 
     const body = await request.json();
     const {

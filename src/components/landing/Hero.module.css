@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
 .hero {
   position: relative;
   min-height: 100vh;
@@ -7,10 +5,14 @@
   align-items: center;
   padding: 120px 24px 80px;
   overflow: hidden;
-  font-family: 'Inter', sans-serif;
+  /* Body uses Geist; headlines override to Bricolage below. */
+  font-family: var(--font-landing-body);
 }
 
-/* Background */
+/* Background — dot grid + a single soft brand-violet glow.
+   Previous version stacked three orbs of different colors which
+   read as generic AI-SaaS-template default; one calmer glow does
+   the same work without the "rainbow soup" feel. */
 .bgGrid {
   position: absolute; inset: 0;
   background-image: radial-gradient(circle, rgba(255,255,255,0.065) 1px, transparent 1px);
@@ -19,41 +21,25 @@
   mask-image: radial-gradient(ellipse 85% 85% at 50% 40%, black 20%, transparent 100%);
   -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 40%, black 20%, transparent 100%);
 }
-.bgGlow1 {
+.bgGlow {
   position: absolute;
-  width: 800px; height: 800px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(124,58,237,0.22) 0%, transparent 65%);
-  top: -20%; left: -15%;
-  filter: blur(60px); pointer-events: none;
-  animation: glow 12s ease-in-out infinite alternate;
-}
-.bgGlow2 {
-  position: absolute;
-  width: 600px; height: 600px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(168,85,247,0.16) 0%, transparent 65%);
-  bottom: -10%; right: -10%;
-  filter: blur(70px); pointer-events: none;
-  animation: glow 16s ease-in-out 3s infinite alternate-reverse;
-}
-.bgGlow3 {
-  position: absolute;
-  width: 400px; height: 400px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 65%);
-  top: 60%; left: 55%;
-  filter: blur(60px); pointer-events: none;
-}
-@keyframes glow {
-  from { opacity: 0.7; transform: scale(1); }
-  to   { opacity: 1;   transform: scale(1.1); }
+  width: 720px; height: 720px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,58,237,0.16) 0%, transparent 60%);
+  top: -10%; left: 50%;
+  transform: translateX(-50%);
+  filter: blur(80px); pointer-events: none;
 }
 
-/* Layout */
+/* Layout — intentional 60/40 tilt toward the headline. The visual on
+   the right gets a smaller column but compensates with overflow-y room
+   so the phone + floating accents read as one composed scene rather
+   than a centered product shot. */
 .inner {
-  width: 100%; max-width: 1160px;
+  width: 100%; max-width: 1180px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+  column-gap: 80px;
   align-items: center;
   position: relative; z-index: 2;
 }
@@ -74,15 +60,28 @@
 }
 
 .headline {
-  font-size: clamp(2.4rem, 4.5vw, 3.4rem);
-  font-weight: 800;
+  /* Bricolage Grotesque carries the headline character — its variable
+     opticalSize is set high so glyph terminals stay confident at scale.
+     We pull weight back to 600 (away from the AI-default 800) and let
+     the type breathe with -0.035em tracking, not the cliché -0.05em.
+     text-wrap: balance prevents widow words on the second line. */
+  font-family: var(--font-landing-display);
+  font-size: clamp(2.4rem, 4.6vw, 3.6rem);
+  font-weight: 600;
+  font-variation-settings: 'opsz' 96;
   color: #FFFFFF;
-  letter-spacing: -0.04em;
-  line-height: 1.12;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+  text-wrap: balance;
   margin: 0 0 22px;
+  max-width: 600px;
 }
 
+/* Highlight phrase — gradient text fill matching the brand violet→pink
+   ramp. Per user feedback: cleaner than the marker underline. */
 .highlight {
+  display: inline-block;
+  white-space: nowrap;
   background: linear-gradient(120deg, #A78BFA 0%, #C084FC 45%, #F472B6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -145,178 +144,581 @@
 }
 .ctaSecondary:hover { color: rgba(255,255,255,0.85); border-color: rgba(255,255,255,0.45); }
 
-.socialProof {
+/* Trust strip — three concrete signals separated by hairline dots. The
+   numbers are intentionally specific (99.9% / 3.2M+ / GDPR) so visitors
+   can scan them in 1-2 seconds. Replaces the abstract avatar stack which
+   read as placeholder. */
+.trustStrip {
   display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  width: fit-content;
+  max-width: 100%;
 }
-.avatarStack { display: flex; }
-.avatar {
-  width: 30px; height: 30px; border-radius: 50%;
-  border: 2px solid #0A0915;
-  margin-left: -8px;
+.trustItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
-.avatarStack .avatar:first-child { margin-left: 0; }
-.proofText {
-  font-size: 0.84rem; color: rgba(255,255,255,0.42); font-weight: 400;
+.trustIcon { color: rgba(255, 255, 255, 0.55); flex-shrink: 0; }
+.trustVal {
+  font-family: var(--font-landing-display);
+  font-variation-settings: 'opsz' 24;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: -0.015em;
 }
-.proofText strong { color: rgba(255,255,255,0.75); font-weight: 600; }
+.trustLbl {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+}
+.trustDot {
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
+}
 
-/* ── RIGHT: Product visual ────────────────────────── */
+/* ── RIGHT: Hero banner — Instagram phone mockup ────────────────────── */
 .visual {
   position: relative;
-  height: 440px;
+  height: 560px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* Main dashboard card */
-.dashCard {
+/* Soft glow halo behind the phone */
+.heroGlow {
   position: absolute;
-  top: 0; left: 0; right: 0;
-  background: rgba(18,14,35,0.92);
-  border: 1px solid rgba(255,255,255,0.09);
-  border-radius: 16px;
-  padding: 20px;
-  backdrop-filter: blur(20px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 24px 64px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
-  animation: cardIn 0.7s cubic-bezier(0.22,1,0.36,1) both;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background:
+      radial-gradient(circle, rgba(167, 139, 250, 0.30) 0%, rgba(124, 58, 237, 0.12) 35%, transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+  animation: heroGlowPulse 5s ease-in-out infinite;
 }
-@keyframes cardIn {
+@keyframes heroGlowPulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.06); }
+}
+
+/* Phone frame */
+.phone {
+  position: relative;
+  width: 280px;
+  aspect-ratio: 9 / 17.5;
+  background: linear-gradient(160deg, #1A1430 0%, #0F0A1E 100%);
+  border-radius: 38px;
+  border: 2px solid rgba(255, 255, 255, 0.10);
+  padding: 18px 10px 12px;
+  box-shadow:
+      0 24px 60px rgba(0, 0, 0, 0.55),
+      0 8px 24px rgba(0, 0, 0, 0.30),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  animation: phoneIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  z-index: 1;
+}
+@keyframes phoneIn {
   from { opacity: 0; transform: translateY(24px) scale(0.97); }
   to   { opacity: 1; transform: none; }
 }
-
-.dashHeader {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-}
-.dashDots { display: flex; gap: 5px; }
-.dot { width: 10px; height: 10px; border-radius: 50%; }
-.dashTitle {
-  font-size: 12px; font-weight: 600;
-  color: rgba(255,255,255,0.35);
-  letter-spacing: 0.01em;
-  flex: 1; text-align: center;
-}
-
-/* Automation rows */
-.autoRow {
-  display: flex; align-items: center; gap: 12px;
-  padding: 11px 12px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 10px;
-  margin-bottom: 8px;
-}
-.autoIcon {
-  width: 30px; height: 30px; border-radius: 8px;
-  background: rgba(124,58,237,0.15);
-  border: 1px solid rgba(167,139,250,0.15);
-  display: flex; align-items: center; justify-content: center;
-  color: #A78BFA; flex-shrink: 0;
-}
-.autoInfo { flex: 1; }
-.autoName {
-  font-size: 12.5px; font-weight: 600;
-  color: rgba(255,255,255,0.85);
-  display: block; margin-bottom: 2px;
-}
-.autoStat {
-  font-size: 11px; font-weight: 400;
-  color: rgba(255,255,255,0.35);
-}
-.autoBadge {
-  font-size: 10px; font-weight: 700;
-  color: #10B981; background: rgba(16,185,129,0.12);
-  border: 1px solid rgba(16,185,129,0.2);
-  padding: 3px 8px; border-radius: 100px;
-  letter-spacing: 0.04em;
-}
-
-/* Mini bar chart */
-.chartRow {
-  display: flex; align-items: center; gap: 8px;
-  margin: 16px 0 10px; padding: 0 2px;
-}
-.chartLabel { font-size: 11px; font-weight: 500; color: rgba(255,255,255,0.35); flex: 1; }
-.chartVal   { font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.9); letter-spacing: -0.03em; }
-.chartUp    { font-size: 11px; font-weight: 600; color: #10B981; background: rgba(16,185,129,0.12); padding: 2px 7px; border-radius: 100px; }
-
-.bars {
-  display: flex; align-items: flex-end; gap: 5px;
-  height: 52px; padding: 0 2px;
-}
-.bar {
-  flex: 1; border-radius: 4px 4px 0 0;
-  background: linear-gradient(180deg, #A78BFA, #7C3AED);
-  transition: opacity 300ms;
-}
-
-/* Floating DM notification */
-.dmFloat {
+.phoneNotch {
   position: absolute;
-  bottom: 20px; right: -16px;
-  width: 250px;
-  display: flex; align-items: flex-start; gap: 10px;
-  background: rgba(20,16,40,0.95);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 14px; padding: 13px 14px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.07);
-  animation: floatUp 0.8s cubic-bezier(0.22,1,0.36,1) 0.3s both;
+  top: 8px; left: 50%;
+  transform: translateX(-50%);
+  width: 56px; height: 5px;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 100px;
 }
-@keyframes floatUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: none; }
+.phoneScreen {
+  width: 100%;
+  height: 100%;
+  background: #0A0815;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.dmAvatar {
-  width: 28px; height: 28px; border-radius: 8px;
-  background: linear-gradient(135deg, #7C3AED, #5B21B6);
+
+/* iOS-style status bar */
+.igStatusBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 14px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+}
+.igStatusIcons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.igSignal {
+  width: 12px; height: 7px;
+  background:
+      linear-gradient(to right,
+          rgba(255, 255, 255, 0.85) 0% 25%,
+          transparent 25% 35%,
+          rgba(255, 255, 255, 0.85) 35% 60%,
+          transparent 60% 70%,
+          rgba(255, 255, 255, 0.85) 70% 100%);
+  mask-image: linear-gradient(to top, black 30%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, black 30%, transparent 100%);
+}
+.igBattery {
+  width: 16px; height: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
+  position: relative;
+}
+.igBattery::after {
+  content: '';
+  position: absolute; inset: 1px; right: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 1px;
+}
+
+/* IG header */
+.igHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.igAvatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #F59E0B 0%, #DC2626 50%, #7C3AED 100%);
+  padding: 1.5px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.dmBody { flex: 1; min-width: 0; }
-.dmTop { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.dmFrom { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.9); }
-.dmTime  { font-size: 10px; font-weight: 400; color: rgba(255,255,255,0.35); }
-.dmMsg   { font-size: 11.5px; font-weight: 400; color: rgba(255,255,255,0.55); line-height: 1.5; margin: 0; }
-.dmBadge {
-  position: absolute; top: -6px; right: 10px;
-  width: 18px; height: 18px; border-radius: 50%;
-  background: #EF4444; color: #fff;
-  font-size: 10px; font-weight: 800;
-  display: flex; align-items: center; justify-content: center;
-  border: 2px solid #0A0915;
+.igAvatar > * {
+  background: #0A0815;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  padding: 4px;
+  box-sizing: border-box;
+}
+.igHeaderInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.igHandle {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: -0.01em;
+}
+.igLocation {
+  font-size: 9.5px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 500;
+}
+.igMore { color: rgba(255, 255, 255, 0.55); flex-shrink: 0; }
+
+/* IG post image — a clean monochrome surface that reads as
+   product imagery. (Replaced the previous violet+pink double
+   radial-gradient which felt template-y and AI-default.) */
+.igPost {
+  position: relative;
+  aspect-ratio: 1 / 1.15;
+  background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 100%),
+      linear-gradient(135deg, #14111F 0%, #1A152D 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.igPost::after {
+  /* Subtle vignette so the post block has implied depth without
+     looking like a generative-AI gradient. */
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 110%, rgba(124, 58, 237, 0.10) 0%, transparent 65%);
+  pointer-events: none;
+}
+.igPostOverlay {
+  position: absolute;
+  inset: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.igReelBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  border-radius: 100px;
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: 0.04em;
+}
+.igPostMeta {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
 }
 
-/* Floating stat pill */
+/* IG action row */
+.igActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 4px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.igActionsLeft {
+  display: flex;
+  gap: 12px;
+}
+.igBookmark { color: rgba(255, 255, 255, 0.85); }
+
+/* IG caption + comment */
+.igCaption {
+  font-size: 10px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+  padding: 4px 12px 8px;
+}
+.igCaption strong { font-weight: 700; color: rgba(255, 255, 255, 0.95); margin-right: 4px; }
+.igCaption em { font-style: normal; font-weight: 700; color: #C4B5FD; letter-spacing: 0.04em; }
+
+.igComment {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 2px 12px 10px;
+  padding: 7px 9px;
+  background: rgba(124, 58, 237, 0.10);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  border-radius: 10px;
+  animation: commentPulse 4s ease-in-out infinite;
+}
+@keyframes commentPulse {
+  0%, 70%, 100% { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.08); }
+  20%, 50%      { background: rgba(124, 58, 237, 0.16); border-color: rgba(167, 139, 250, 0.40); }
+}
+.igCommentAvatar {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #06B6D4, #2563EB);
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.igCommentBody { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.igCommentName {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+}
+.igCommentText {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.65);
+}
+.igCommentKw {
+  font-weight: 800;
+  color: #C4B5FD;
+  letter-spacing: 0.04em;
+}
+
+/* ── Floating accents around the phone ───────────────────────── */
+
+/* "Trigger matched" pill — top-left of phone */
+.triggerPill {
+  position: absolute;
+  top: 16%; left: -8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(20, 16, 40, 0.96);
+  border: 1px solid rgba(167, 139, 250, 0.30);
+  border-radius: 100px;
+  padding: 7px 14px 7px 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(124, 58, 237, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  animation: pillIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both;
+  backdrop-filter: blur(8px);
+  z-index: 2;
+}
+@keyframes pillIn {
+  from { opacity: 0; transform: translate(-12px, 4px) scale(0.95); }
+  to   { opacity: 1; transform: none; }
+}
+.triggerPillIcon {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7C3AED, #5B21B6);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.45);
+  flex-shrink: 0;
+  animation: iconPulse 2.4s ease-in-out infinite;
+}
+@keyframes iconPulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(124, 58, 237, 0.45); }
+  50%      { box-shadow: 0 2px 14px rgba(124, 58, 237, 0.75); }
+}
+.triggerPillBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.15;
+}
+.triggerPillTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: -0.01em;
+}
+.triggerPillTime {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #A78BFA;
+  letter-spacing: 0.01em;
+}
+
+/* DM push notification — bottom-right of phone, styled like a real iOS push */
+.dmFloat {
+  position: absolute;
+  bottom: 8%;
+  right: -16px;
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(28, 22, 50, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 16px;
+  padding: 10px 12px 12px;
+  box-shadow:
+      0 16px 40px rgba(0, 0, 0, 0.55),
+      0 4px 14px rgba(0, 0, 0, 0.30),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  animation: floatUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.9s both;
+  backdrop-filter: blur(12px);
+  z-index: 2;
+}
+@keyframes floatUp {
+  from { opacity: 0; transform: translateY(16px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+.dmHeaderRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.dmAppIcon {
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #F59E0B 0%, #DC2626 50%, #7C3AED 100%);
+  padding: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.dmAppIconInner {
+  width: 100%; height: 100%;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.10);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dmAppName {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex: 1;
+}
+.dmTime {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+}
+.dmContent { display: flex; flex-direction: column; gap: 3px; }
+.dmFrom {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  letter-spacing: -0.01em;
+}
+.dmMsg {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Stat pill — top-right of phone */
 .statFloat {
   position: absolute;
-  top: 20px; right: -20px;
-  display: flex; align-items: center; gap: 10px;
-  background: rgba(20,16,40,0.95);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 12px; padding: 10px 14px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.07);
-  animation: floatUp 0.8s cubic-bezier(0.22,1,0.36,1) 0.5s both;
+  top: 8%; right: -14px;
+  display: flex; align-items: center; gap: 9px;
+  background: rgba(20, 16, 40, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 9px 13px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: floatUp 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both;
+  backdrop-filter: blur(8px);
+  z-index: 2;
 }
 .statFloatIcon {
-  width: 28px; height: 28px; border-radius: 8px;
-  background: rgba(16,185,129,0.15);
-  border: 1px solid rgba(16,185,129,0.2);
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.25);
   display: flex; align-items: center; justify-content: center;
   color: #10B981;
 }
-.statFloatVal { font-size: 15px; font-weight: 800; color: #fff; letter-spacing: -0.03em; line-height: 1; }
-.statFloatLbl { font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.38); margin-top: 2px; }
-
-/* Responsive */
-@media (max-width: 900px) {
-  .inner { grid-template-columns: 1fr; gap: 48px; }
-  .hero  { padding: 100px 24px 64px; min-height: auto; }
-  .visual { height: 360px; }
-  .dmFloat, .statFloat { display: none; }
+.statFloatVal {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.03em;
+  line-height: 1;
 }
+.statFloatLbl {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.40);
+  margin-top: 2px;
+}
+
+/* ── Responsive ──────────────────────────────────────────
+   Goal at <=560px: the entire hero (badge → headline → sub → perks →
+   CTA → trust strip → phone visual) fits into a single mobile viewport
+   without scrolling. Every margin / padding / typesize / visual height
+   is dialled down to claw back vertical space. The .copy column gets
+   explicit min-width:0 to avoid grid overflow at narrow widths. */
+.copy { min-width: 0; }
+
+@media (max-width: 900px) {
+  .inner { grid-template-columns: 1fr; gap: 32px; column-gap: 0; }
+  .hero  { padding: 96px 24px 56px; min-height: auto; }
+  .visual { height: 480px; }
+  .heroGlow { width: 320px; height: 320px; }
+}
+/* ── Mobile spacing rhythm ─────────────────────────────────────
+   Strict 8 / 16 / 24 / 32 scale. Every margin / gap rounds to a
+   multiple of 8 so the hero reads as composed-not-cramped. The
+   phone visual is sized to actually CONTAIN the phone (previously
+   the .visual height was shorter than the phone's calculated
+   aspect-ratio height, causing the phone to overflow top + bottom
+   and the absolute-positioned floating accents to drift into
+   weird relative positions). */
 @media (max-width: 560px) {
-  .headline { font-size: 2rem; }
-  .ctaRow { flex-direction: column; align-items: flex-start; }
-  .visual { height: 300px; }
+  /* 88px top accounts for the 64px fixed navbar + 24px breathing room
+     so the badge doesn't sit flush against the navbar's bottom border.
+     Bottom 32px gives the trust strip a clean stop before LogoBar
+     starts. The whole hero now reads as one composed pane. */
+  .hero { padding: 88px 20px 32px; min-height: auto; }
+  .inner { gap: 28px; }
+  /* Hide the phone visual on mobile entirely. The hero becomes a
+     text-only conversion surface — headline + sub + perks + CTA +
+     trust strip — which fits comfortably in one screen. The phone
+     story is told in DemoFlow + Features just below, so no signal
+     is lost. Background glow also off so the section reads clean
+     and intentional, not "missing visual". */
+  .visual { display: none; }
+  .bgGlow { display: none; }
+  .badge { margin-bottom: 14px; padding: 5px 11px 5px 9px; font-size: 11px; }
+  .headline {
+    font-size: clamp(1.7rem, 6.8vw, 1.95rem);
+    line-height: 1.08;
+    margin: 0 0 14px;
+  }
+  .subtitle {
+    font-size: 0.92rem;
+    line-height: 1.5;
+    margin-bottom: 18px;
+    max-width: 100%;
+  }
+  .perks { gap: 7px; margin-bottom: 20px; }
+  .perk { font-size: 0.84rem; align-items: flex-start; line-height: 1.45; }
+  .perkCheck { margin-top: 2px; width: 18px; height: 18px; }
+  .ctaRow { flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 20px; }
+  .ctaPrimary { justify-content: center; width: 100%; height: 46px; }
+  .ctaSecondary { text-align: center; padding: 8px 4px; }
+
+  /* Trust strip — single horizontal row on mobile. Items separated
+     by gap, hairline dots hidden. Value + label inline so each
+     metric reads as one chip, not stacked rows. */
+  .trustStrip {
+    flex-direction: row; flex-wrap: wrap;
+    align-items: center; gap: 8px 16px;
+    padding: 12px 14px; border-radius: 12px;
+    width: 100%; box-sizing: border-box;
+  }
+  .trustDot { display: none; }
+  .trustVal { font-size: 0.84rem; }
+  .trustLbl { font-size: 0.74rem; }
+
+  /* Visual sized to fully contain the phone + floating accents.
+     Phone @ 200px width × (17.5/9) aspect = 389px tall. We give
+     16px breathing room top + bottom for the absolutely-positioned
+     floating accents (Trigger pill, DM push, Stat tile). */
+  .visual { height: 420px; }
+  .phone { width: 200px; }
+  .heroGlow { width: 260px; height: 260px; }
+  .triggerPill { left: -4px; padding: 6px 11px 6px 8px; top: 6%; }
+  .triggerPillIcon { width: 22px; height: 22px; }
+  .triggerPillTitle { font-size: 10px; }
+  .triggerPillTime { font-size: 9px; }
+  .dmFloat { right: -8px; width: 168px; padding: 8px 11px 10px; bottom: 4%; }
+  .dmFrom { font-size: 11px; }
+  .dmMsg { font-size: 10px; }
+  .statFloat { right: -4px; padding: 7px 11px; top: 2%; }
+  .statFloatIcon { width: 24px; height: 24px; }
+  .statFloatVal { font-size: 13px; }
+  .statFloatLbl { font-size: 9px; }
+}
+@media (max-width: 400px) {
+  .hero { padding: 56px 16px 24px; }
+  .inner { gap: 24px; }
+  .headline { font-size: 1.6rem; line-height: 1.08; }
+  .subtitle { font-size: 0.9rem; margin-bottom: 20px; }
+  .perks { margin-bottom: 20px; }
+  .ctaRow { margin-bottom: 20px; }
+
+  /* Visual: phone @ 184px × (17.5/9) = 358px tall + 16px top + 16px
+     bottom = 390px. */
+  .visual { height: 390px; }
+  .phone { width: 184px; }
+  .heroGlow { width: 220px; height: 220px; }
+  .dmFloat { width: 152px; }
 }

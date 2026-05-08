@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getEffectivePlan, isProOrTrial } from '@/lib/plans';
 
 function createServiceClient() {
     return createClient(
@@ -19,13 +20,15 @@ function createServiceClient() {
  * Secured by CRON_SECRET env variable when set.
  */
 export async function GET(request) {
-    // Verify cron secret if configured
+    // Verify cron secret — fail closed if not configured
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-        const auth = request.headers.get('authorization');
-        if (auth !== `Bearer ${cronSecret}`) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+    if (!cronSecret) {
+        console.error('[Activate] CRON_SECRET not configured');
+        return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
+    const auth = request.headers.get('authorization');
+    if (auth !== `Bearer ${cronSecret}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createServiceClient();
@@ -50,7 +53,41 @@ export async function GET(request) {
             return NextResponse.json({ activated: 0 });
         }
 
-        const readyIds = ready.map((a) => a.id);
+        // ── Runtime Pro gate ─────────────────────────────────────────────
+        // Schedule-start is a Pro feature. If a user was Pro when they saved
+        // the schedule and has since downgraded to Free, we must NOT auto-
+        // activate. We still clear scheduled_start_at on the row so the cron
+        // doesn't keep retrying — they can manually activate from the UI.
+        const userIds = [...new Set(ready.map((a) => a.user_id))];
+        const { data: plans } = await supabase
+            .from('user_plans')
+            .select('user_id, plan, plan_expires_at, trial_ends_at')
+            .in('user_id', userIds);
+        const planByUser = new Map((plans || []).map((p) => [p.user_id, getEffectivePlan(p)]));
+
+        const eligible = [];
+        const skipped  = [];
+        for (const row of ready) {
+            const plan = planByUser.get(row.user_id) || 'free';
+            if (isProOrTrial(plan)) eligible.push(row.id);
+            else skipped.push(row.id);
+        }
+
+        // Clear scheduled_start_at on skipped rows so the cron stops retrying
+        // them on every run — the user must take a manual action to enable.
+        if (skipped.length > 0) {
+            await supabase
+                .from('dm_automations')
+                .update({ scheduled_start_at: null, updated_at: now })
+                .in('id', skipped);
+            console.log(`[Activate Cron] Skipped ${skipped.length} non-Pro automation(s); cleared scheduled_start_at`);
+        }
+
+        if (eligible.length === 0) {
+            return NextResponse.json({ activated: 0, skipped: skipped.length });
+        }
+
+        const readyIds = eligible;
 
         // Activate them and clear scheduled_start_at to prevent re-activation
         // if the user later manually pauses the automation
@@ -68,8 +105,8 @@ export async function GET(request) {
             return NextResponse.json({ error: updateErr.message }, { status: 500 });
         }
 
-        console.log(`[Activate Cron] Activated ${ready.length} automation(s):`, readyIds);
-        return NextResponse.json({ activated: ready.length, ids: readyIds });
+        console.log(`[Activate Cron] Activated ${eligible.length} automation(s):`, readyIds);
+        return NextResponse.json({ activated: eligible.length, skipped: skipped.length, ids: readyIds });
 
     } catch (err) {
         console.error('[Activate Cron] Unexpected error:', err);

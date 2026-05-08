@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-
-const GRAPH_API_VERSION = 'v21.0';
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+import { fetchAllCommenters, parseKeywords } from '@/lib/broadcast-helpers';
 
 /**
  * GET /api/broadcast/start?postId=xxx
@@ -54,7 +52,8 @@ export async function POST(request) {
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     const body = await request.json();
-    const { postId, dmType, dmConfig, rateLimitPerMin = 20 } = body;
+    const { postId, dmType, dmConfig, rateLimitPerMin = 20, keywords: rawKeywords = '' } = body;
+    const keywords = parseKeywords(rawKeywords);
 
     if (!postId) return NextResponse.json({ error: 'postId is required' }, { status: 400 });
     if (!dmType) return NextResponse.json({ error: 'dmType is required' }, { status: 400 });
@@ -96,10 +95,13 @@ export async function POST(request) {
     }
 
     // ── Fetch all comments from Instagram Graph API ───────────────
-    const commenterIds = await fetchAllCommenters(post.ig_post_id, accessToken, igAccountId, useIgApi);
+    const commenterIds = await fetchAllCommenters(post.ig_post_id, accessToken, igAccountId, useIgApi, keywords);
 
     if (commenterIds.length === 0) {
-        return NextResponse.json({ error: 'No comments found on this post.' }, { status: 422 });
+        const msg = keywords.length > 0
+            ? `No comments matched the keyword filter "${keywords.join(', ')}".`
+            : 'No comments found on this post.';
+        return NextResponse.json({ error: msg }, { status: 422 });
     }
 
     // ── Get the automation ID for skip-check ──────────────────────
@@ -188,49 +190,3 @@ export async function POST(request) {
     });
 }
 
-// ── Helpers ────────────────────────────────────────────────────────
-
-/**
- * Paginate through all comments on an IG post and return unique commenter IDs.
- * Excludes the account owner's own ID.
- * Capped at 5,000 unique commenters for edge memory safety.
- */
-async function fetchAllCommenters(igMediaId, accessToken, ownerIgId, useIgApi = false) {
-    const seen = new Set();
-    const MAX  = 5_000;
-    
-    // Facebook posts are stored with a 'fb_' prefix (e.g. 'fb_615632..._122100...')
-    // Strip it before calling the Graph API — the prefix is our internal convention only.
-    const rawMediaId = igMediaId.startsWith('fb_') ? igMediaId.slice(3) : igMediaId;
-
-    // Instagram Business Login tokens must use graph.instagram.com.
-    // Facebook Page Access Tokens use graph.facebook.com.
-    const base = useIgApi ? 'https://graph.instagram.com/v21.0' : GRAPH_BASE;
-
-    let url = `${base}/${rawMediaId}/comments`
-        + `?fields=id,from`
-        + `&limit=100`
-        + `&access_token=${encodeURIComponent(accessToken)}`;
-
-    while (url && seen.size < MAX) {
-        let data;
-        try {
-            const res = await fetch(url);
-            if (!res.ok) break;
-            data = await res.json();
-        } catch {
-            break;
-        }
-
-        for (const comment of (data.data || [])) {
-            const fromId = comment.from?.id;
-            if (fromId && fromId !== ownerIgId) {
-                seen.add(fromId);
-            }
-        }
-
-        url = data.paging?.next || null;
-    }
-
-    return Array.from(seen);
-}

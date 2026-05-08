@@ -10,16 +10,20 @@
 /* ── Overlay ─────────────────────────────────────────────── */
 .overlay {
     position: fixed; inset: 0; z-index: 300;
-    background: rgba(30,21,53,0.35);
+    background: rgba(30,21,53,0.55);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     display: flex; align-items: center; justify-content: center;
-    padding: 16px;
+    padding: 16px 16px 16px calc(var(--sidebar-width, 260px) + 16px);
+    overflow: hidden;
+}
+@media (max-width: 768px) {
+    .overlay { padding: 16px; }
 }
 
 /* ── Modal ───────────────────────────────────────────────── */
 .modal {
-    width: 100%; max-width: 520px;
+    width: 100%; max-width: 640px;
     background: #FFFFFF;
     border: 1px solid rgba(124,58,237,0.12);
     border-radius: 20px;
@@ -120,6 +124,17 @@
     font-size: 12.5px; color: #DC2626; line-height: 1.5;
 }
 
+.throttleBox {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 10px 13px;
+    background: rgba(245,158,11,0.07);
+    border: 1px solid rgba(245,158,11,0.22);
+    border-radius: 9px;
+    font-size: 12.5px; color: #B45309; line-height: 1.55;
+}
+.throttleBox svg { flex-shrink: 0; color: #D97706; margin-top: 1px; }
+.throttleBox strong { color: #92400E; }
+
 .successBox {
     display: flex; align-items: center; gap: 8px;
     padding: 11px 14px;
@@ -139,6 +154,9 @@
 .limitNote {
     font-size: 10.5px; font-weight: 400;
     color: rgba(30,21,53,0.38); margin-left: 4px;
+}
+.fieldHint {
+    font-size: 11px; color: rgba(30,21,53,0.45); line-height: 1.5; margin-top: -2px;
 }
 
 .input {
@@ -233,6 +251,7 @@
     height: 42px; width: 100%;
     font-family: 'Inter', sans-serif; font-size: 0.875rem; font-weight: 700;
     color: #fff; background: #7C3AED; border: none; border-radius: 11px; cursor: pointer;
+    white-space: nowrap;
     box-shadow: 0 4px 16px rgba(124,58,237,0.28); transition: background 150ms;
 }
 .nextBtn:hover { background: #6D28D9; }
@@ -255,6 +274,12 @@
 }
 .confirmValue { color: rgba(30,21,53,0.78); font-weight: 500; text-align: right; }
 
+.previewLoading {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: rgba(30,21,53,0.42); font-size: 12px;
+}
+.previewNote { color: rgba(30,21,53,0.42); font-size: 12px; }
+
 .confirmActions { display: flex; gap: 10px; }
 .backBtn {
     height: 42px; padding: 0 18px; flex-shrink: 0;
@@ -271,10 +296,20 @@
     flex: 1; height: 42px; display: flex; align-items: center; justify-content: center; gap: 8px;
     font-family: 'Inter', sans-serif; font-size: 0.875rem; font-weight: 700;
     color: #fff; background: #DC2626; border: none; border-radius: 11px; cursor: pointer;
+    white-space: nowrap;
     box-shadow: 0 4px 16px rgba(220,38,38,0.22); transition: background 150ms;
 }
 .startBtn:hover:not(:disabled) { background: #B91C1C; }
 .startBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.undoBtn {
+    display: block; width: 100%; padding: 0;
+    background: none; border: none;
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500;
+    color: rgba(30,21,53,0.38); cursor: pointer;
+    text-align: center; transition: color 150ms;
+}
+.undoBtn:hover { color: #DC2626; }
 
 /* ── Running phase ───────────────────────────────────────── */
 .runningStatus {
@@ -354,3 +389,9 @@
 
 .spin { animation: spinAnim 0.75s linear infinite; }
 @keyframes spinAnim { to { transform: rotate(360deg); } }
+
+/* ── Narrow-screen polish ────────────────────────────────── */
+@media (max-width: 480px) {
+    .statGrid { grid-template-columns: repeat(2, 1fr); }
+    .rateGrid { grid-template-columns: 1fr; }
+}

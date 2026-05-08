@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-    Search, Download, RefreshCw, CheckCircle, XCircle,
-    MessageSquare, Send, AlertTriangle, FileDown, X,
+    Search, Download, RefreshCw, CheckCircle, XCircle, X,
+    MessageSquare, Send, AlertTriangle, Instagram, Facebook, Calendar,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useStyles } from '@/lib/useStyles';
+import Select from '@/components/ui/Select';
 import darkStyles from './LogsContent.module.css';
 import lightStyles from './LogsContent.light.module.css';
 
@@ -15,16 +18,17 @@ const STATUS_FILTERS = [
     { key: 'failed', label: 'Failed' },
 ];
 
+const PLATFORM_FILTERS = [
+    { key: 'all',       label: 'All' },
+    { key: 'instagram', label: 'Instagram' },
+    { key: 'facebook',  label: 'Facebook' },
+];
+
 const DATE_RANGES = [
     { key: 'today', label: 'Today' },
     { key: '7d',    label: 'Last 7 days' },
     { key: '30d',   label: 'Last 30 days' },
     { key: 'all',   label: 'All time' },
-];
-
-const SCOPE_OPTIONS = [
-    { key: 'filtered', label: 'Current filters' },
-    { key: 'all',      label: 'All time (everything)' },
 ];
 
 const DM_TYPE_LABELS = {
@@ -75,30 +79,65 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
     const [page,        setPage]        = useState(0);
     const [hasMore,     setHasMore]     = useState(false);
 
-    // Filter state
-    const [status,      setStatus]      = useState('all');
-    const [range,       setRange]       = useState('7d');
-    const [search,      setSearch]      = useState('');
-    const [searchInput, setSearchInput] = useState('');
+    /* Filter state lives in the URL (?status=&platform=&range=&search=) so
+       it survives navigating away (Posts, Stories) and back. Was local
+       useState before — clicking another nav item then returning would
+       blow away the user's hand-crafted filter selection. URL is the
+       single source of truth; we mirror to a tiny derived object on each
+       render and write back via router.replace on change. */
+    const router        = useRouter();
+    const pathname      = usePathname();
+    const searchParams  = useSearchParams();
+    const status     = searchParams.get('status')   || 'all';
+    const platform   = searchParams.get('platform') || 'all';
+    const range      = searchParams.get('range')    || '7d';
+    const search     = searchParams.get('search')   || '';
 
-    // Export panel state
-    const [showExport,   setShowExport]   = useState(false);
-    const [exportScope,  setExportScope]  = useState('filtered');
-    const [exporting,    setExporting]    = useState(false);
-    const [exportError,  setExportError]  = useState('');
-    const [exportToast,  setExportToast]  = useState(''); // success message
+    /* Update URL — uses router.replace (not push) so the filter changes
+       don't pollute browser history. Also passes scroll: false so the
+       page doesn't scroll to top on every filter click. */
+    const updateFilter = useCallback((key, value) => {
+        const params = new URLSearchParams(searchParams.toString());
+        // Default values get pruned from the URL — keeps URLs clean and
+        // means "no filter" reads the same as "explicit default".
+        const defaults = { status: 'all', platform: 'all', range: '7d', search: '' };
+        if (!value || value === defaults[key]) {
+            params.delete(key);
+        } else {
+            params.set(key, value);
+        }
+        const qs = params.toString();
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }, [pathname, router, searchParams]);
+
+    const setStatus   = (v) => updateFilter('status',   v);
+    const setPlatform = (v) => updateFilter('platform', v);
+    const setRange    = (v) => updateFilter('range',    v);
+    const setSearch   = (v) => updateFilter('search',   v);
+
+    /* Search has its own input state for the in-progress text — it's
+       debounced into the URL via the 400ms timer below. Initialize to
+       the URL value so reloading mid-search shows what was searched. */
+    const [searchInput, setSearchInput] = useState(search);
+    /* Keep the search text input synced if the URL changes via back/
+       forward navigation (browser-driven, not user-typed). */
+    useEffect(() => {
+        setSearchInput(search);
+    }, [search]);
+
+    // Export state — one-click flow, no panel.
+    const [exporting, setExporting] = useState(false);
 
     // Expanded row
     const [expandedRow, setExpandedRow] = useState(null);
 
-    const searchTimer  = useRef(null);
-    const toastTimer   = useRef(null);
+    const searchTimer = useRef(null);
 
     // ── Data fetching ─────────────────────────────────────────────
     const fetchLogs = useCallback(async (pg = 0, reset = true) => {
         if (pg === 0) setLoading(true); else setLoadingMore(true);
         try {
-            const params = new URLSearchParams({ status, range, page: pg, search });
+            const params = new URLSearchParams({ status, range, platform, page: pg, search });
             const res    = await fetch(`/api/logs?${params}`);
             if (!res.ok) throw new Error(await res.text());
             const data = await res.json();
@@ -113,7 +152,7 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [status, range, search]);
+    }, [status, range, platform, search]);
 
     useEffect(() => { fetchLogs(0, true); }, [fetchLogs]);
 
@@ -124,22 +163,22 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
     };
 
     // ── Export ────────────────────────────────────────────────────
-    const showToast = (msg) => {
-        setExportToast(msg);
-        clearTimeout(toastTimer.current);
-        toastTimer.current = setTimeout(() => setExportToast(''), 4000);
-    };
-
+    // One click → download the CSV for whatever filters are currently
+    // applied to the visible table (status / range / platform / search).
+    // The previous configuration panel only added an explicit "all" scope
+    // toggle — users who want everything can just clear the filters first.
     const handleExport = async () => {
+        if (exporting) return;
         setExporting(true);
-        setExportError('');
+        const toastId = toast.loading('Preparing your CSV…');
 
         try {
             const params = new URLSearchParams({
-                status: exportScope === 'all' ? 'all' : status,
-                range:  exportScope === 'all' ? 'all' : range,
-                search: exportScope === 'all' ? ''    : search,
-                scope:  exportScope,
+                status,
+                range,
+                search,
+                platform,
+                scope: 'filtered',
             });
 
             const res = await fetch(`/api/logs/export?${params}`);
@@ -149,23 +188,35 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
                 throw new Error(errText || `Export failed (${res.status})`);
             }
 
-            const blob        = await res.blob();
-            const rowCount    = parseInt(res.headers.get('X-Row-Count') || '0', 10);
-            const url         = URL.createObjectURL(blob);
-            const filename    = `autodm-logs-${new Date().toISOString().split('T')[0]}.csv`;
-            const a           = document.createElement('a');
-            a.href            = url;
-            a.download        = filename;
+            // X-Row-Count is set by /api/logs/export. Treat a missing header
+            // as "unknown" — never as zero — so older deployments don't
+            // false-warn while the new route is still rolling out.
+            const rowHeader = res.headers.get('X-Row-Count');
+            const rowCount  = rowHeader == null ? null : parseInt(rowHeader, 10);
+
+            if (rowCount === 0) {
+                toast.warning('No rows match the current filters', { id: toastId });
+                return;
+            }
+
+            const blob     = await res.blob();
+            const url      = URL.createObjectURL(blob);
+            const filename = `autodm-logs-${new Date().toISOString().split('T')[0]}.csv`;
+            const a        = document.createElement('a');
+            a.href         = url;
+            a.download     = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            setShowExport(false);
-            showToast(`✅ CSV downloaded successfully`);
+            const successMsg = rowCount == null
+                ? 'CSV downloaded'
+                : `Downloaded ${rowCount.toLocaleString()} row${rowCount !== 1 ? 's' : ''}`;
+            toast.success(successMsg, { id: toastId });
         } catch (err) {
             console.error('Export failed:', err);
-            setExportError(err.message || 'Export failed. Please try again.');
+            toast.error(err.message || 'Export failed. Please try again.', { id: toastId });
         } finally {
             setExporting(false);
         }
@@ -174,8 +225,6 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
     // ── Derived ───────────────────────────────────────────────────
     const totalAll = totalSent + totalFailed;
     const failRate = totalAll > 0 ? Math.round((totalFailed / totalAll) * 100) : 0;
-
-    const exportRowEstimate = exportScope === 'all' ? totalAll : total;
 
     return (
         <div className={styles.page}>
@@ -196,107 +245,18 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
                         <RefreshCw size={14} className={loading ? styles.spin : ''} />
                     </button>
                     <button
-                        className={`${styles.exportBtn} ${showExport ? styles.exportBtnActive : ''}`}
-                        onClick={() => { setShowExport(!showExport); setExportError(''); }}
-                        disabled={totalAll === 0}
+                        className={styles.exportBtn}
+                        onClick={handleExport}
+                        disabled={totalAll === 0 || exporting}
+                        title="Download CSV of the current filtered view"
                     >
-                        <Download size={14} />
-                        Export CSV
+                        {exporting
+                            ? <RefreshCw size={14} className={styles.spin} />
+                            : <Download size={14} />}
+                        {exporting ? 'Exporting…' : 'Export CSV'}
                     </button>
                 </div>
             </div>
-
-            {/* ── Export panel ─────────────────────────────────── */}
-            {showExport && (
-                <div className={styles.exportPanel}>
-                    <div className={styles.exportPanelHeader}>
-                        <div className={styles.exportPanelTitle}>
-                            <FileDown size={15} />
-                            Export DM Logs
-                        </div>
-                        <button className={styles.exportPanelClose} onClick={() => setShowExport(false)}>
-                            <X size={14} />
-                        </button>
-                    </div>
-
-                    {/* Scope picker */}
-                    <div className={styles.exportScopeRow}>
-                        {SCOPE_OPTIONS.map((opt) => (
-                            <button
-                                key={opt.key}
-                                className={`${styles.scopeBtn} ${exportScope === opt.key ? styles.scopeBtnActive : ''}`}
-                                onClick={() => setExportScope(opt.key)}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Preview of what will be exported */}
-                    <div className={styles.exportMeta}>
-                        <div className={styles.exportMetaRow}>
-                            <span className={styles.exportMetaLabel}>Rows to export</span>
-                            <span className={styles.exportMetaValue}>
-                                {exportRowEstimate > 0
-                                    ? <><strong>{exportRowEstimate.toLocaleString()}</strong> DM{exportRowEstimate !== 1 ? 's' : ''}</>
-                                    : <span style={{ color: 'rgba(255,255,255,0.25)' }}>None</span>}
-                            </span>
-                        </div>
-                        {exportScope === 'filtered' && (
-                            <>
-                                <div className={styles.exportMetaRow}>
-                                    <span className={styles.exportMetaLabel}>Status filter</span>
-                                    <span className={styles.exportMetaValue}>{STATUS_FILTERS.find(f => f.key === status)?.label || 'All'}</span>
-                                </div>
-                                <div className={styles.exportMetaRow}>
-                                    <span className={styles.exportMetaLabel}>Date range</span>
-                                    <span className={styles.exportMetaValue}>{DATE_RANGES.find(r => r.key === range)?.label || 'All time'}</span>
-                                </div>
-                                {search && (
-                                    <div className={styles.exportMetaRow}>
-                                        <span className={styles.exportMetaLabel}>Search filter</span>
-                                        <span className={styles.exportMetaValue}>&ldquo;{search}&rdquo;</span>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                        <div className={styles.exportMetaRow}>
-                            <span className={styles.exportMetaLabel}>Format</span>
-                            <span className={styles.exportMetaValue}>CSV (Excel-compatible, UTF-8)</span>
-                        </div>
-                        <div className={styles.exportMetaRow}>
-                            <span className={styles.exportMetaLabel}>Columns</span>
-                            <span className={styles.exportMetaValue}>Post · DM Type · Recipient · Comment · Status · Error · Sent At (UTC + IST)</span>
-                        </div>
-                    </div>
-
-                    {exportError && (
-                        <div className={styles.exportError}>
-                            <XCircle size={13} style={{ flexShrink: 0 }} />
-                            {exportError}
-                        </div>
-                    )}
-
-                    <button
-                        className={styles.exportDownloadBtn}
-                        onClick={handleExport}
-                        disabled={exporting || exportRowEstimate === 0}
-                    >
-                        {exporting ? (
-                            <><RefreshCw size={14} className={styles.spin} /> Preparing…</>
-                        ) : (
-                            <><FileDown size={14} /> Download {exportRowEstimate > 0 ? `${exportRowEstimate.toLocaleString()} rows` : ''}</>
-                        )}
-                    </button>
-                </div>
-            )}
-
-            {/* ── Success toast ─────────────────────────────────── */}
-            {exportToast && (
-                <div className={styles.exportToast}>
-                    {exportToast}
-                </div>
-            )}
 
             {/* ── Stats row ─────────────────────────────────────── */}
             <div className={styles.statsRow}>
@@ -355,15 +315,35 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
                                 </button>
                             ))}
                         </div>
-                        <select
-                            className={styles.rangeSelect}
-                            value={range}
-                            onChange={(e) => setRange(e.target.value)}
-                        >
-                            {DATE_RANGES.map((r) => (
-                                <option key={r.key} value={r.key}>{r.label}</option>
+
+                        <div className={styles.platformPills}>
+                            {PLATFORM_FILTERS.map((f) => (
+                                <button
+                                    key={f.key}
+                                    className={`${styles.platformPill} ${platform === f.key ? styles.platformPillActive : ''} ${f.key !== 'all' ? styles[`platformPill_${f.key}`] : ''}`}
+                                    onClick={() => setPlatform(f.key)}
+                                    title={`Show ${f.label} DMs`}
+                                >
+                                    {f.key === 'instagram' && <Instagram size={11} strokeWidth={2.4} />}
+                                    {f.key === 'facebook'  && <Facebook  size={11} strokeWidth={2.4} fill="currentColor" />}
+                                    {f.label}
+                                </button>
                             ))}
-                        </select>
+                        </div>
+
+                        <div className={styles.rangeWrap}>
+                            <Select
+                                value={range}
+                                size="sm"
+                                aria-label="Date range"
+                                onChange={(v) => setRange(v)}
+                                options={DATE_RANGES.map((r) => ({
+                                    value: r.key,
+                                    label: r.label,
+                                    icon: <Calendar size={13} />,
+                                }))}
+                            />
+                        </div>
                     </div>
 
                     <div className={styles.searchWrap}>
@@ -395,7 +375,8 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
                         {!loading && total > 0 && (
                             <button
                                 className={styles.quickExportLink}
-                                onClick={() => { setExportScope('filtered'); setShowExport(true); }}
+                                onClick={handleExport}
+                                disabled={exporting}
                             >
                                 <Download size={11} /> Export these {total.toLocaleString()}
                             </button>
@@ -425,6 +406,7 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
                             <thead>
                                 <tr>
                                     <th>Post</th>
+                                    <th className={styles.platformCol}>Platform</th>
                                     <th>Recipient</th>
                                     <th>Comment</th>
                                     <th>Status</th>
@@ -433,9 +415,8 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
                             </thead>
                             <tbody>
                                 {rows.map((row) => (
-                                    <>
+                                    <Fragment key={row.id}>
                                         <tr
-                                            key={row.id}
                                             className={`${styles.row} ${row.status === 'failed' ? styles.rowFailed : ''} ${expandedRow === row.id ? styles.rowExpanded : ''}`}
                                             onClick={() => setExpandedRow(expandedRow === row.id ? null : row.id)}
                                         >
@@ -450,6 +431,17 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
                                                         {row.post?.caption || 'Unknown post'}
                                                     </span>
                                                 </div>
+                                            </td>
+                                            <td className={styles.platformCol}>
+                                                {row.platform === 'facebook' ? (
+                                                    <span className={`${styles.platformBadge} ${styles.platformBadge_facebook}`} title="Facebook">
+                                                        <Facebook size={10} strokeWidth={2.4} fill="currentColor" /> FB
+                                                    </span>
+                                                ) : (
+                                                    <span className={`${styles.platformBadge} ${styles.platformBadge_instagram}`} title="Instagram">
+                                                        <Instagram size={10} strokeWidth={2.4} /> IG
+                                                    </span>
+                                                )}
                                             </td>
                                             <td>
                                                 <span className={styles.recipientId}>
@@ -475,7 +467,7 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
 
                                         {expandedRow === row.id && row.status === 'failed' && row.error_message && (
                                             <tr key={`${row.id}-err`} className={styles.errorRow}>
-                                                <td colSpan={5}>
+                                                <td colSpan={6}>
                                                     <div className={styles.errorDetail}>
                                                         <XCircle size={13} style={{ color: '#FCA5A5', flexShrink: 0 }} />
                                                         <span>{row.error_message}</span>
@@ -486,7 +478,7 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
 
                                         {expandedRow === row.id && row.status !== 'failed' && (
                                             <tr key={`${row.id}-detail`} className={styles.detailRow}>
-                                                <td colSpan={5}>
+                                                <td colSpan={6}>
                                                     <div className={styles.detailInner}>
                                                         <span className={styles.detailItem}>
                                                             <strong>Recipient ID:</strong> {row.recipient_ig_id}
@@ -501,7 +493,7 @@ export default function LogsContent({ automationPostMap, totalSent, totalFailed,
                                                 </td>
                                             </tr>
                                         )}
-                                    </>
+                                    </Fragment>
                                 ))}
                             </tbody>
                         </table>

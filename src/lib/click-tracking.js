@@ -125,3 +125,21 @@ export function applyTracking(url, trackingMap) {
     if (!trackingMap || !url) return url;
     return trackingMap[url] || url;
 }
+
+/**
+ * Append `?r=<recipientIgId>` to a tracked short URL (one whose host matches
+ * our app and path is /r/<code>). For non-tracked URLs (the user's own
+ * destination URL) we leave them alone — the recipient ID is internal and
+ * must not leak to third-party sites.
+ *
+ * The /r/[code] route reads `r` server-side, logs the click against the
+ * recipient, then redirects to the clean original_url so the destination
+ * site never sees the param.
+ */
+export function attachRecipient(url, recipientId, appUrl) {
+    if (!url || !recipientId || !appUrl) return url;
+    const base = appUrl.replace(/\/$/, '');
+    if (!url.startsWith(`${base}/r/`)) return url;  // not our short URL
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}r=${encodeURIComponent(recipientId)}`;
+}

@@ -1,16 +1,22 @@
 import { NextResponse, after } from 'next/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createHmac, timingSafeEqual } from 'crypto';
+import { graphBase } from '@/lib/meta-graph';
 import {
     sendAutomatedDM, sendFollowGateDM, checkUserIsFollower,
     resolveMessageVariables, replyToComment,
     sendTextDM, sendButtonTemplateDM, sendQuickReplyDM, sendMultiCtaDM,
+    applyBranding,
 } from '@/lib/send-dm';
 import { applyTracking } from '@/lib/click-tracking';
 import { fireAlerts } from '@/app/api/alerts/route';
 
 import { getDmLimit, getEffectivePlan } from '@/lib/plans';
+import { getMonthlyDmCount } from '@/lib/plan-server';
 
-const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'autodm_webhook_verify';
+// No hardcoded fallback — leaving a default would let anyone who knows the
+// literal pass Meta's challenge if the env var were ever missing.
+const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN;
 
 function createServiceClient() {
     return createSupabaseClient(
@@ -44,6 +50,10 @@ export async function GET(request) {
     const token     = searchParams.get('hub.verify_token');
     const challenge = searchParams.get('hub.challenge');
 
+    if (!WEBHOOK_VERIFY_TOKEN) {
+        console.error('[Webhook] WEBHOOK_VERIFY_TOKEN not configured');
+        return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
     if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
         console.log('[Webhook] Verification successful');
         return new NextResponse(challenge, { status: 200 });
@@ -56,7 +66,44 @@ export async function GET(request) {
 // ─── Receive ─────────────────────────────────────────────────────────────────
 
 export async function POST(request) {
-    const body = await request.json();
+    // Read raw body so we can verify Meta's HMAC over the exact bytes sent.
+    const rawBody = await request.text();
+
+    // ── Verify X-Hub-Signature-256 — fail closed ──────────────────
+    // Meta signs the raw body with the App Secret. Without this check, anyone
+    // can POST forged events here and trigger DMs. Reference:
+    // https://developers.facebook.com/docs/messenger-platform/webhooks#validate-payloads
+    const appSecret = process.env.META_APP_SECRET;
+    if (!appSecret) {
+        console.error('[Webhook] META_APP_SECRET not configured');
+        return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
+    const signatureHeader = request.headers.get('x-hub-signature-256') || '';
+    if (!signatureHeader.startsWith('sha256=')) {
+        console.warn('[Webhook] Missing or malformed X-Hub-Signature-256');
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+    const providedHex = signatureHeader.slice('sha256='.length);
+    const expectedHex = createHmac('sha256', appSecret).update(rawBody).digest('hex');
+    let signaturesMatch = false;
+    try {
+        const provided = Buffer.from(providedHex, 'hex');
+        const expected = Buffer.from(expectedHex, 'hex');
+        signaturesMatch = provided.length === expected.length && timingSafeEqual(provided, expected);
+    } catch {
+        signaturesMatch = false;
+    }
+    if (!signaturesMatch) {
+        console.warn('[Webhook] Invalid X-Hub-Signature-256 — rejecting');
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+
+    let body;
+    try {
+        body = JSON.parse(rawBody);
+    } catch {
+        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
 
     // Await fully — serverless runtimes kill unawaited promises once the
     // response is returned. Meta waits up to 20s so this is safe.
@@ -114,9 +161,37 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 
     console.log(`[Webhook] Incoming DM from ${senderId}: "${msgText}"`);
 
+    // ── Story reply ─────────────────────────────────────────
+    // When a viewer replies to a story, Meta delivers a normal `messages`
+    // webhook with `message.reply_to.story.id` set to the story's media ID.
+    // Stories don't generate `comments` events, so this is the only hook
+    // we get for "user reacted to my story". Try to dispatch via the
+    // story-reply handler first; if no automation matches, fall through
+    // so the existing follow-gate / email-collector logic still runs.
+    const replyToStoryId = messagingEvent.message?.reply_to?.story?.id;
+    if (replyToStoryId) {
+        console.log(`[Webhook] DM is a story reply → story_id=${replyToStoryId}`);
+        const handled = await handleStoryReplyEvent(supabase, igAccountId, {
+            senderId,
+            storyMediaId: replyToStoryId,
+            text: messagingEvent.message?.text || '',
+            mid: messagingEvent.message?.mid || null,
+        });
+        if (handled) return;
+    }
+
     // ── Ice breaker tap ─────────────────────────────────────
     if (msgPayload?.startsWith('ICE_BREAKER_')) {
         await handleIceBreakerResponse(supabase, igAccountId, senderId, msgPayload);
+        return;
+    }
+
+    // ── Quick-reply chip tap ────────────────────────────────
+    // The recipient just tapped one of the chips on a Quick Reply DM.
+    // Match the payload back to the original automation's config and send
+    // the configured response. Returns true if handled (so we don't fall
+    // through into follow-up / email-collector branches).
+    if (msgPayload && await handleQuickReplyTap(supabase, senderId, msgPayload)) {
         return;
     }
 
@@ -147,7 +222,10 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
         try {
             const declineMsg = queueEntry.decline_message ||
                 "No worries! Follow us first, then tap \u2705 Yes when you're ready! \ud83d\ude4c";
-            await sendFollowGateDM(igSender2, senderId, declineMsg, token2);
+            const useIgApi2 = !account2.fb_page_access_token;
+            // Plain text — re-prompting with YES/NO chips feels pushy.
+            // Queue stays open; if the user types 'yes' later, normal flow resumes.
+            await sendTextDM(igSender2, senderId, declineMsg, token2, useIgApi2);
         } catch (err) {
             console.warn('[Webhook] Failed to send no-response message:', err.message);
         }
@@ -190,9 +268,24 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
             if (autoForPlan?.user_id) rewardPlan = await getUserPlan(supabase, autoForPlan.user_id);
         } catch { /* defaults to free */ }
 
+        // Build the click-tracking map for this automation so reward-DM
+        // links route through /r/<code> for analytics. Without this, every
+        // click on a Follow Gate reward link is invisible to the dashboard.
+        let rewardTracking = {};
+        try {
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+            const { data: linkCodes } = await supabase
+                .from('dm_link_codes').select('code, original_url')
+                .eq('automation_id', queueEntry.automation_id)
+                .limit(500);
+            for (const row of (linkCodes || [])) {
+                rewardTracking[row.original_url] = `${appUrl}/r/${row.code}`;
+            }
+        } catch { /* non-fatal — reward will still send, just unmapped */ }
+
         try {
             await sendRewardDM(igSenderId, senderId, queueEntry.link_dm_type,
-                queueEntry.link_dm_config, accessToken, {}, rewardPlan, useIgApi);
+                queueEntry.link_dm_config, accessToken, rewardTracking, rewardPlan, useIgApi);
 
             await supabase.from('dm_followup_queue')
                 .update({ status: 'link_sent', updated_at: new Date().toISOString() })
@@ -205,6 +298,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
                 comment_id:      null,
                 comment_text:    msgText,
                 status:          'sent',
+                platform:        useIgApi ? 'instagram' : 'facebook',
                 sent_at:         new Date().toISOString(),
             });
 
@@ -234,12 +328,15 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
                 .update({ retry_count: newRetryCount, updated_at: new Date().toISOString() })
                 .eq('id', queueEntry.id);
             try {
+                // Use 'there' as a friendly placeholder fallback \u2014 the IGSID
+                // is meaningless to a recipient and dm_followup_queue doesn't
+                // currently capture the username.
                 const nudge = resolveMessageVariables(
                     queueEntry.nudge_message ||
                     "We couldn't verify your follow yet \ud83d\ude48 Make sure you're following, then tap \u2705 Yes!",
-                    { username: senderId },
+                    { username: 'there', first_name: 'there' },
                 );
-                await sendFollowGateDM(igSenderId, senderId, nudge, accessToken);
+                await sendFollowGateDM(igSenderId, senderId, nudge, accessToken, useIgApi);
             } catch (err) {
                 console.warn('[Webhook] Failed to send nudge DM:', err.message);
             }
@@ -247,17 +344,135 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
     }
 }
 
+// ─── Quick-reply chip-tap handler ────────────────────────────────────────────
+//
+// When a recipient taps one of the chips on a Quick Reply DM, Meta delivers a
+// `messaging` event whose `message.quick_reply.payload` matches the payload
+// we encoded at send time (chip.id). Our generated payloads for the legacy
+// title-derived format ("SEND_ME_THE_LINK") would never collide with the
+// guards above (ICE_BREAKER_*, follow-gate keywords) because they go through
+// the title-uppercase transform — so we just look up the most recent
+// quick_reply automation DM to this recipient and try to match.
+//
+// Returns true if the tap was matched and handled (so the caller can return
+// without falling through to follow-gate / email-collector branches).
+async function handleQuickReplyTap(supabase, senderId, msgPayload) {
+    // Find the most recent quick_reply DM sent to this user. We bound the
+    // window to 7 days to avoid matching a chip the user is "tapping" weeks
+    // after the conversation went stale (very rare in practice).
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: recent } = await supabase
+        .from('dm_sent_log')
+        .select(`
+            id, automation_id, recipient_username, platform, sent_at,
+            dm_automations!inner(
+                id, user_id, dm_type, dm_config,
+                connected_accounts!inner(id, access_token, fb_page_access_token, ig_user_id)
+            )
+        `)
+        .eq('recipient_ig_id', senderId)
+        .eq('status', 'sent')
+        .gte('sent_at', sevenDaysAgo)
+        .eq('dm_automations.dm_type', 'quick_reply')
+        .order('sent_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (!recent) return false;
+
+    const automation = recent.dm_automations;
+    const chips = automation?.dm_config?.quickReplies || [];
+
+    // Match by chip.id (preferred — set explicitly when sending) OR by the
+    // title-uppercase fallback that send-dm.js generates when payload is
+    // omitted. This makes the lookup robust to either format.
+    const titleToPayload = (t) => (t || '').trim().toUpperCase().replace(/\s+/g, '_');
+    const matched = chips.find((c) =>
+        c.id === msgPayload ||
+        c.payload === msgPayload ||
+        titleToPayload(c.title) === msgPayload
+    );
+
+    if (!matched || !matched.responseMessage?.trim()) return false;
+
+    const account = automation.connected_accounts;
+    const token   = account.fb_page_access_token || account.access_token;
+    const useIg   = !account.fb_page_access_token;
+    const platform = recent.platform || 'instagram';
+
+    const personal = recent.recipient_username || 'there';
+    const plan = await getUserPlan(supabase, automation.user_id);
+
+    // Substitute placeholders + apply branding so the response matches the
+    // way the original message_template / quick_reply DMs were sent.
+    let body = resolveMessageVariables(matched.responseMessage, {
+        username: personal,
+        first_name: personal,
+    });
+    // Inline branding logic — applyBranding lives in send-dm.js but isn't
+    // exported. We mirror its behaviour here: free → suffix with URL, Pro →
+    // respect dm_config.branding (custom or empty for unbrand).
+    const isPro = plan === 'pro' || plan === 'business' || plan === 'trial';
+    const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://autodm.pro').replace(/\/$/, '');
+    if (isPro) {
+        const custom = (automation.dm_config?.branding || '').trim();
+        if (custom && !body.trimEnd().endsWith(custom)) body = `${body.trimEnd()}\n\n— ${custom}`;
+    } else {
+        const suffix = `— Sent with AutoDM · ${APP_URL}`;
+        if (!body.trimEnd().endsWith(suffix)) body = `${body.trimEnd()}\n\n${suffix}`;
+    }
+
+    try {
+        await sendTextDM(account.ig_user_id, senderId, body, token, useIg);
+
+        await supabase.from('dm_sent_log').insert({
+            automation_id:      automation.id,
+            post_id:            null,
+            recipient_ig_id:    senderId,
+            recipient_username: recent.recipient_username,
+            comment_id:         null,
+            comment_text:       `[chip tap: ${matched.title}]`,
+            status:             'sent',
+            platform,
+            sent_at:            new Date().toISOString(),
+        });
+
+        console.log(`[Webhook/QR] ✅ Chip "${matched.title}" reply sent to ${senderId}`);
+    } catch (err) {
+        console.error(`[Webhook/QR] Failed to reply for chip tap "${matched.title}":`, err.message);
+        await supabase.from('dm_sent_log').insert({
+            automation_id:      automation.id,
+            post_id:            null,
+            recipient_ig_id:    senderId,
+            recipient_username: recent.recipient_username,
+            comment_id:         null,
+            comment_text:       `[chip tap: ${matched.title}]`,
+            status:             'failed',
+            error_message:      err.message,
+            platform,
+            sent_at:            new Date().toISOString(),
+        });
+    }
+    return true;
+}
+
 async function sendRewardDM(igSenderId, recipientId, dmType, dmConfig, accessToken, trackingMap = {}, plan = 'free', useIgApi = false) {
     switch (dmType) {
         case 'button_template':
-            return sendButtonTemplateDM(igSenderId, recipientId, dmConfig.slides || [], accessToken, trackingMap, plan, useIgApi);
-        case 'quick_reply':
-            return sendQuickReplyDM(igSenderId, recipientId, dmConfig.message || '', dmConfig.quickReplies || [], accessToken, useIgApi);
+            // Branding controlled by dmConfig.appendBranding (default true).
+            return sendButtonTemplateDM(igSenderId, recipientId, dmConfig.slides || [], accessToken, trackingMap, plan, useIgApi, dmConfig);
+        case 'quick_reply': {
+            const text = applyBranding(dmConfig.message || '', dmConfig, plan);
+            return sendQuickReplyDM(igSenderId, recipientId, text, dmConfig.quickReplies || [], accessToken, useIgApi);
+        }
         case 'multi_cta':
-            return sendMultiCtaDM(igSenderId, recipientId, dmConfig.message || '', dmConfig.buttons || [], accessToken, trackingMap, plan, useIgApi);
+            return sendMultiCtaDM(igSenderId, recipientId, dmConfig.message || '', dmConfig.buttons || [], accessToken, trackingMap, plan, useIgApi, dmConfig);
         case 'message_template':
-        default:
-            return sendTextDM(igSenderId, recipientId, dmConfig.message || '', accessToken, useIgApi);
+        default: {
+            const text = applyBranding(dmConfig.message || '', dmConfig, plan);
+            return sendTextDM(igSenderId, recipientId, text, accessToken, useIgApi);
+        }
     }
 }
 
@@ -271,7 +486,7 @@ async function handleInstagramCommentEvent(supabase, igAccountId, commentData) {
         return;
     }
 
-    console.log(`[Webhook] IG Comment on media ${media.id}: "${text}" from user ${from.id}`);
+    console.log(`[Webhook] IG Comment on media ${media.id}: "${text}" from user ${from.id} (@${from.username || '?'})`);
 
     const { data: post } = await supabase
         .from('instagram_posts')
@@ -279,9 +494,14 @@ async function handleInstagramCommentEvent(supabase, igAccountId, commentData) {
         .eq('ig_post_id', media.id)
         .single();
 
-    const perPostFired = await processAutomationForComment(supabase, post, text, from.id, commentId, 'instagram');
+    // from.username — Instagram includes the handle on comment webhook payloads.
+    // Captured here and propagated through the queue / sent_log so flow-step
+    // and upsell follow-ups can substitute {first_name} / {username}.
+    const commenterUsername = from.username || null;
+
+    const perPostFired = await processAutomationForComment(supabase, post, text, from.id, commentId, 'instagram', commenterUsername);
     if (post?.account_id) {
-        await processGlobalTriggers(supabase, post, text, from.id, commentId, 'instagram', perPostFired);
+        await processGlobalTriggers(supabase, post, text, from.id, commentId, 'instagram', perPostFired, commenterUsername);
     }
 }
 
@@ -301,15 +521,16 @@ async function handleFacebookCommentEvent(supabase, pageId, commentData) {
         .eq('ig_post_id', `fb_${post_id}`)
         .single();
 
-    const perPostFiredFb = await processAutomationForComment(supabase, post, message, from.id, comment_id, 'facebook');
+    const commenterUsername = from.name || from.username || null;
+    const perPostFiredFb = await processAutomationForComment(supabase, post, message, from.id, comment_id, 'facebook', commenterUsername);
     if (post?.account_id) {
-        await processGlobalTriggers(supabase, post, message, from.id, comment_id, 'facebook', perPostFiredFb);
+        await processGlobalTriggers(supabase, post, message, from.id, comment_id, 'facebook', perPostFiredFb, commenterUsername);
     }
 }
 
 // ─── Core Automation Logic ───────────────────────────────────────────────────
 
-async function processAutomationForComment(supabase, post, commentText, commenterId, commentId, platform) {
+async function processAutomationForComment(supabase, post, commentText, commenterId, commentId, platform, commenterUsername = null) {
     if (!post) {
         console.log('[Webhook] Post not found in DB');
         return;
@@ -375,14 +596,28 @@ async function processAutomationForComment(supabase, post, commentText, commente
 
         case 'keywords':
         default: {
+            const isExcludeMode = !!triggerConfig.excludeKeywords;
+
+            // Per-automation keywords are the user's source of truth for the
+            // match list. Globals (account.default_config.keywords) are
+            // *positive* default triggers — merging them into an exclude-mode
+            // automation would flip them into a blacklist, which is the
+            // opposite of the user's intent. So we only merge globals in
+            // positive (non-exclude) mode.
             let keywords = (triggerConfig.keywords || []).map((k) => k.toLowerCase());
-            if (!settingsConfig.disableUniversalTriggers) {
+            if (!isExcludeMode && !settingsConfig.disableUniversalTriggers) {
                 const globalKws = (account.default_config?.keywords || []).map((k) => k.toLowerCase());
                 keywords = [...new Set([...keywords, ...globalKws])];
             }
+
             if (keywords.length === 0) {
-                shouldSend = true;
-            } else if (triggerConfig.excludeKeywords) {
+                // Empty keyword list on a 'keywords' trigger means the user
+                // hasn't configured a match — don't fire. To send on every
+                // comment, the user should pick trigger type 'all_comments'.
+                // The fallback block below still handles cases where the
+                // account-level default trigger type is non-keyword.
+                shouldSend = false;
+            } else if (isExcludeMode) {
                 shouldSend = !keywords.some((kw) => lowerCommentText.includes(kw));
             } else {
                 shouldSend = keywords.some((kw) => lowerCommentText.includes(kw));
@@ -426,25 +661,16 @@ async function processAutomationForComment(supabase, post, commentText, commente
         return;
     }
 
-    // ── Billing gate — plan from user_plans ──────────────────────
+    // ── Billing gate — plan from user_plans, count from cached counter ──
     const userPlan = await getUserPlan(supabase, automation.user_id);
     const dmLimit  = getDmLimit(userPlan);
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
-
-    const { data: userAutomations } = await supabase
-        .from('dm_automations').select('id').eq('user_id', automation.user_id);
-    const allIds = (userAutomations || []).map((a) => a.id);
-
-    const { count: totalMonthly } = await supabase
-        .from('dm_sent_log').select('id', { count: 'exact', head: true })
-        .in('automation_id', allIds).eq('status', 'sent')
-        .gte('sent_at', startOfMonth.toISOString());
-
-    if (dmLimit !== null && (totalMonthly || 0) >= dmLimit) {
-        console.log(`[Webhook] Monthly limit (${dmLimit}) reached for ${userPlan} plan — skipping`);
-        return;
+    if (dmLimit !== null) {
+        const totalMonthly = await getMonthlyDmCount(supabase, automation.user_id);
+        if (totalMonthly >= dmLimit) {
+            console.log(`[Webhook] Monthly limit (${dmLimit}) reached for ${userPlan} plan — skipping`);
+            return;
+        }
     }
 
     // ── Idempotency: check sent log AND queue ─────────────────────
@@ -490,20 +716,24 @@ async function processAutomationForComment(supabase, post, commentText, commente
         ? Math.floor(Math.random() * 90_000) + 30_000
         : 0;
 
-    const context = { username: commenterId, first_name: commenterId, comment_id: commentId };
+    // Friendly fallback when Meta's webhook payload omits from.username —
+    // we never want to substitute the numeric IGSID into a public comment
+    // reply (it would surface "Hey 1784140123456789!" to the post).
+    const personalForReply = commenterUsername || 'there';
+    const context = {
+        username:   personalForReply,
+        first_name: personalForReply,
+        comment_id: commentId,
+    };
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
-    let trackingMap = {};
-    try {
-        const { data: linkCodes } = await supabase
-            .from('dm_link_codes').select('code, original_url')
-            .eq('automation_id', automation.id);
-        for (const row of (linkCodes || [])) {
-            trackingMap[row.original_url] = `${appUrl}/r/${row.code}`;
-        }
-    } catch { /* non-fatal */ }
 
-    // ── A/B variant selection ────────────────────────────────────
+    // ── A/B variant selection (must precede tracking map lookup) ──
+    // Selection happens against `dm_sent_log` aggregates and doesn't
+    // need `dm_link_codes`, so we resolve the variant first. Then we
+    // do a SINGLE link-code query below with an optional ab_variant
+    // filter — previously this was two queries, the first fetched all
+    // codes then was thrown away the moment A/B was enabled.
     let activeAutomation = automation;
     let abVariant = null;
 
@@ -523,65 +753,99 @@ async function processAutomationForComment(supabase, post, commentText, commente
         }
 
         const variantConfig = abVariant === 'A' ? automation.dm_config.variantA : automation.dm_config.variantB;
-
-        try {
-            const { data: variantLinkCodes } = await supabase
-                .from('dm_link_codes').select('code, original_url')
-                .eq('automation_id', automation.id).eq('ab_variant', abVariant);
-            trackingMap = {};
-            for (const row of (variantLinkCodes || [])) {
-                trackingMap[row.original_url] = `${appUrl}/r/${row.code}`;
-            }
-        } catch { /* non-fatal */ }
-
         activeAutomation = { ...automation, dm_type: variantConfig.type, dm_config: variantConfig };
         console.log(`[Webhook] A/B variant selected: ${abVariant}`);
     }
 
+    // ── Tracking map — one query, variant-aware. ────────────────
+    // For non-A/B automations: pulls all codes for the automation.
+    // For A/B automations: pulls only the active variant's codes.
+    // (The previous version did the all-codes fetch unconditionally
+    // and then a second variant-filtered fetch when A/B was on,
+    // throwing away the first result. Net: redundant query gone.)
+    let trackingMap = {};
+    try {
+        let q = supabase
+            .from('dm_link_codes').select('code, original_url')
+            .eq('automation_id', automation.id)
+            .limit(500);
+        if (abVariant) q = q.eq('ab_variant', abVariant);
+
+        const { data: linkCodes } = await q;
+        for (const row of (linkCodes || [])) {
+            trackingMap[row.original_url] = `${appUrl}/r/${row.code}`;
+        }
+    } catch { /* non-fatal */ }
+
     try {
         if (activeAutomation.dm_type === 'follow_up') {
-            await handleFollowUpAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token, trackingMap);
+            await handleFollowUpAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token, trackingMap, commenterUsername, platform);
             return true;
         }
 
         if (activeAutomation.dm_type === 'email_collector') {
-            await handleEmailCollectorAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token, useIgApi);
+            await handleEmailCollectorAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token, useIgApi, commenterUsername, platform);
             return true;
         }
 
-        // ── All other types — reply immediately, enqueue the DM ──────────
-        const DEFAULT_COMMENT_REPLY = 'Hey! Check your DM \u2764\ufe0f Didn\'t receive the link? Follow and comment again.';
-        const replyMsg = settingsConfig.replyMessage || settingsConfig.autoReplyText || DEFAULT_COMMENT_REPLY;
-        try {
-            await replyToComment(commentId, resolveMessageVariables(replyMsg, context), token, useIgApi);
-            console.log('[Webhook] Comment reply sent');
-        } catch (replyErr) {
-            console.warn('[Webhook] Comment reply failed (non-fatal):', replyErr.message);
+        // ── All other types — reply immediately (if enabled), enqueue the DM ──
+        // commentReplyEnabled defaults to true: undefined / null on legacy
+        // rows must keep the existing "always reply" behavior. The user has
+        // to explicitly set it to false to suppress the reply.
+        const commentReplyEnabled = settingsConfig.commentReplyEnabled !== false;
+        if (commentReplyEnabled) {
+            // Neutral default \u2014 works for keyword / all-comments / mentions /
+            // emoji automations alike. Users who specifically need
+            // follow-gate copy ("follow and comment again") can write it
+            // themselves on the SettingsTab textarea.
+            const DEFAULT_COMMENT_REPLY = 'Hey! Just sent you a DM \ud83d\udce9 \u2014 check your inbox.';
+            const replyMsg = settingsConfig.replyMessage || settingsConfig.autoReplyText || DEFAULT_COMMENT_REPLY;
+            try {
+                await replyToComment(commentId, resolveMessageVariables(replyMsg, context), token, useIgApi);
+                console.log('[Webhook] Comment reply sent');
+            } catch (replyErr) {
+                console.warn('[Webhook] Comment reply failed (non-fatal):', replyErr.message);
+            }
+        } else {
+            console.log('[Webhook] Comment reply skipped \u2014 disabled on this automation');
         }
 
-        await supabase.from('dm_queue').insert({
-            user_id:         automation.user_id,
-            account_id:      post.account_id,
-            automation_id:   automation.id,
-            post_id:         post.id,
-            recipient_ig_id: commenterId,
-            comment_id:      commentId,
-            comment_text:    commentText,
+        const { error: enqErr } = await supabase.from('dm_queue').insert({
+            user_id:            automation.user_id,
+            account_id:         post.account_id,
+            automation_id:      automation.id,
+            post_id:            post.id,
+            recipient_ig_id:    commenterId,
+            recipient_username: commenterUsername,
+            comment_id:         commentId,
+            comment_text:       commentText,
             platform,
-            dm_type:         activeAutomation.dm_type,
-            dm_config:       activeAutomation.dm_config,
-            tracking_map:    trackingMap,
-            user_plan:       userPlan,
-            queue_reason:    'overflow',
-            priority:        5,
-            status:          'pending',
-            scheduled_after: new Date(Date.now() + delayMs).toISOString(),
+            dm_type:            activeAutomation.dm_type,
+            dm_config:          activeAutomation.dm_config,
+            tracking_map:       trackingMap,
+            user_plan:          userPlan,
+            queue_reason:       'overflow',
+            priority:           5,
+            status:             'pending',
+            scheduled_after:    new Date(Date.now() + delayMs).toISOString(),
         });
+
+        // Concurrent webhook deliveries can both pass the existingQueue check
+        // and race here. The unique idx_dm_queue_dedup catches the duplicate
+        // (Postgres error 23505); treat that as "already queued, skip" rather
+        // than logging a misleading 'failed' row in dm_sent_log.
+        if (enqErr) {
+            if (enqErr.code === '23505') {
+                console.log(`[Webhook] DM already queued (dedup race) for ${commenterId} on comment ${commentId}`);
+                return true;
+            }
+            throw enqErr;
+        }
 
         console.log(`[Webhook] DM enqueued for ${commenterId}${abVariant ? ` (variant ${abVariant})` : ''}`);
 
         // Trigger immediate queue processing for non-delayed DMs so the DM
-        // goes out in ~1s instead of waiting up to 5 minutes for the cron.
+        // goes out in ~1s instead of waiting up to 1 minute for the next cron.
         if(!delayMs) {
             const cronSecret = process.env.CRON_SECRET || '';
             after( async () => {
@@ -596,8 +860,18 @@ async function processAutomationForComment(supabase, post, commentText, commente
             });
         }
 
-        checkAndFireLimitAlert(supabase, automation.user_id, (totalMonthly || 0) + 1)
+        checkAndFireLimitAlert(supabase, automation.user_id)
             .catch((e) => console.warn('[Webhook] Limit alert check failed (non-fatal):', e.message));
+
+        // Sample for A/B winner declaration. The function self-gates on the
+        // 50-send-per-variant threshold and on a 10% CTR delta, so most
+        // calls return after a single COUNT query. Fire-and-forget — once
+        // a winner is declared, dm_config.abWinner short-circuits future
+        // variant rotation in this same handler (line ~680).
+        if (abVariant) {
+            checkAndDeclareAbWinner(supabase, automation)
+                .catch((e) => console.warn('[Webhook] A/B winner check failed (non-fatal):', e.message));
+        }
 
         return true;
     } catch (err) {
@@ -611,12 +885,13 @@ async function processAutomationForComment(supabase, post, commentText, commente
             status:          'failed',
             error_message:   `enqueue failed: ${err.message}`,
             ab_variant:      abVariant,
+            platform,
             sent_at:         new Date().toISOString(),
         });
     }
 }
 
-async function checkAndFireLimitAlert(supabase, userId, currentCount) {
+async function checkAndFireLimitAlert(supabase, userId) {
     const { data: prefs } = await supabase
         .from('alert_preferences')
         .select('alert_email, webhook_url, threshold_pct, alerted_months')
@@ -630,6 +905,7 @@ async function checkAndFireLimitAlert(supabase, userId, currentCount) {
     const alertLimit = getDmLimit(alertPlan);
     if (alertLimit === null) return; // unlimited plan — no alerts needed
 
+    const currentCount = await getMonthlyDmCount(supabase, userId);
     const threshold    = prefs.threshold_pct ?? 80;
     const usagePct     = (currentCount / alertLimit) * 100;
     const currentMonth = new Date().toISOString().slice(0, 7);
@@ -695,7 +971,7 @@ async function checkAndDeclareAbWinner(supabase, automation) {
 
 // ─── Follow-Up Automation ─────────────────────────────────────────────────────
 
-async function handleFollowUpAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken, trackingMap = {}) {
+async function handleFollowUpAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken, trackingMap = {}, commenterUsername = null, platform = 'instagram') {
     const dmConfig = automation.dm_config;
 
     const { data: existing } = await supabase
@@ -708,9 +984,10 @@ async function handleFollowUpAutomation(supabase, automation, post, commenterId,
         return;
     }
 
+    const personalForGate = commenterUsername || 'there';
     const gateMessage = resolveMessageVariables(
         dmConfig.gateMessage || 'Hey! Follow our account and reply YES to get the link \ud83d\ude0a',
-        { username: commenterId, first_name: commenterId },
+        { username: personalForGate, first_name: personalForGate },
     );
 
     try {
@@ -731,27 +1008,32 @@ async function handleFollowUpAutomation(supabase, automation, post, commenterId,
         });
 
         await supabase.from('dm_sent_log').insert({
-            automation_id:   automation.id, post_id: post.id,
-            recipient_ig_id: commenterId,   comment_id: commentId,
-            comment_text:    commentText,   status: 'sent',
-            sent_at:         new Date().toISOString(),
+            automation_id:      automation.id, post_id: post.id,
+            recipient_ig_id:    commenterId,   recipient_username: commenterUsername,
+            comment_id:         commentId,
+            comment_text:       commentText,   status: 'sent',
+            platform,
+            sent_at:            new Date().toISOString(),
         });
 
         console.log(`[Webhook] Follow-gate DM sent and queued for ${commenterId}`);
     } catch (err) {
         console.error('[Webhook] Failed to send follow-gate DM:', err.message);
         await supabase.from('dm_sent_log').insert({
-            automation_id:   automation.id, post_id: post.id,
-            recipient_ig_id: commenterId,   comment_id: commentId,
-            comment_text:    commentText,   status: 'failed',
-            error_message:   err.message,   sent_at: new Date().toISOString(),
+            automation_id:      automation.id, post_id: post.id,
+            recipient_ig_id:    commenterId,   recipient_username: commenterUsername,
+            comment_id:         commentId,
+            comment_text:       commentText,   status: 'failed',
+            error_message:      err.message,
+            platform,
+            sent_at:            new Date().toISOString(),
         });
     }
 }
 
 // ─── Email Collector Comment Handler ─────────────────────────────────────────
 
-async function handleEmailCollectorAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken, useIgApi = false) {
+async function handleEmailCollectorAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken, useIgApi = false, commenterUsername = null, platform = 'instagram') {
     const dmConfig = automation.dm_config;
 
     const { data: existing } = await supabase
@@ -764,9 +1046,18 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
         return;
     }
 
-    const askMessage = resolveMessageVariables(
-        dmConfig.emailAskMessage || 'Hey! Could you share your email address? \ud83d\udce7',
-        { username: commenterId, first_name: commenterId },
+    const personalForAsk = commenterUsername || 'there';
+    // Resolve placeholders + apply branding so free users get the AutoDM
+    // footer and Pro users get their custom branding (or none if cleared) \u2014
+    // matching what every other DM type does.
+    const userPlanForAsk = await getUserPlan(supabase, automation.user_id);
+    const askMessage = applyBranding(
+        resolveMessageVariables(
+            dmConfig.emailAskMessage || 'Hey! Could you share your email address? \ud83d\udce7',
+            { username: personalForAsk, first_name: personalForAsk },
+        ),
+        dmConfig,
+        userPlanForAsk,
     );
 
     try {
@@ -782,20 +1073,25 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
         });
 
         await supabase.from('dm_sent_log').insert({
-            automation_id:   automation.id, post_id: post.id,
-            recipient_ig_id: commenterId,   comment_id: commentId,
-            comment_text:    commentText,   status: 'sent',
-            sent_at:         new Date().toISOString(),
+            automation_id:      automation.id, post_id: post.id,
+            recipient_ig_id:    commenterId,   recipient_username: commenterUsername,
+            comment_id:         commentId,
+            comment_text:       commentText,   status: 'sent',
+            platform,
+            sent_at:            new Date().toISOString(),
         });
 
         console.log(`[Webhook/Email] Email ask DM sent for ${commenterId}`);
     } catch (err) {
         console.error('[Webhook/Email] Failed to send email ask DM:', err.message);
         await supabase.from('dm_sent_log').insert({
-            automation_id:   automation.id, post_id: post.id,
-            recipient_ig_id: commenterId,   comment_id: commentId,
-            comment_text:    commentText,   status: 'failed',
-            error_message:   err.message,   sent_at: new Date().toISOString(),
+            automation_id:      automation.id, post_id: post.id,
+            recipient_ig_id:    commenterId,   recipient_username: commenterUsername,
+            comment_id:         commentId,
+            comment_text:       commentText,   status: 'failed',
+            error_message:      err.message,
+            platform,
+            sent_at:            new Date().toISOString(),
         });
     }
 }
@@ -841,10 +1137,25 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
             .from('dm_automations').select('user_id')
             .eq('id', queueEntry.automation_id).maybeSingle();
 
+        // Resolve owner — prefer dm_automations, fall back to connected_accounts.
+        // Without a user_id the row violates the email_leads RLS read policy
+        // (user_id = auth.uid()) and becomes invisible/orphaned.
+        let ownerUserId = automation?.user_id || null;
+        if (!ownerUserId && queueEntry.account_id) {
+            const { data: acc } = await supabase
+                .from('connected_accounts').select('user_id')
+                .eq('id', queueEntry.account_id).maybeSingle();
+            ownerUserId = acc?.user_id || null;
+        }
+        if (!ownerUserId) {
+            console.error(`[Webhook] Cannot resolve user_id for email lead from ${senderId} — skipping insert`);
+            return;
+        }
+
         await supabase.from('email_leads').upsert({
             automation_id:   queueEntry.automation_id,
             account_id:      queueEntry.account_id,
-            user_id:         automation?.user_id,
+            user_id:         ownerUserId,
             recipient_ig_id: senderId,
             email,
             confirmed_at:    new Date().toISOString(),
@@ -854,8 +1165,35 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
             .update({ status: 'email_captured', updated_at: new Date().toISOString() })
             .eq('id', queueEntry.id);
 
-        const confirmMsg = queueEntry.confirmation_message ||
-            `Thanks! \ud83c\udf89 We've saved your email (${email}) and will be in touch soon.`;
+        // Look up the captured username + Pro plan + dm_config for the confirm DM
+        // so it gets the same {first_name}/{username}/{email} substitution and
+        // branding behaviour as the rest of the DM types.
+        const { data: ownerAuto } = await supabase
+            .from('dm_automations').select('dm_config')
+            .eq('id', queueEntry.automation_id).maybeSingle();
+        const dmConfig = ownerAuto?.dm_config || {};
+        const ownerPlan = await getUserPlan(supabase, ownerUserId);
+
+        // recipient_username may have been captured on the original ask DM \u2014
+        // fall back to 'there' if missing (e.g. story-mention edge cases).
+        const { data: askLog } = await supabase
+            .from('dm_sent_log').select('recipient_username')
+            .eq('automation_id', queueEntry.automation_id)
+            .eq('recipient_ig_id', senderId)
+            .order('sent_at', { ascending: false }).limit(1).maybeSingle();
+        const personalForConfirm = askLog?.recipient_username || 'there';
+
+        const rawConfirm = queueEntry.confirmation_message ||
+            `Thanks! \ud83c\udf89 We've saved your email ({email}) and will be in touch soon.`;
+        const confirmMsg = applyBranding(
+            resolveMessageVariables(rawConfirm, {
+                username:   personalForConfirm,
+                first_name: personalForConfirm,
+                email,
+            }),
+            dmConfig,
+            ownerPlan,
+        );
         await sendTextDM(igSender, senderId, confirmMsg, token, replyUseIgApi);
 
         console.log(`[Webhook] Email lead captured for ${senderId}`);
@@ -864,7 +1202,76 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
     }
 }
 
+// ─── Story Reply Handler ──────────────────────────────────────────────────────
+// Triggered when a viewer replies to one of the user's stories. Stories don't
+// generate `comments` webhooks, so this is the only signal we get. Looks up
+// the corresponding post row by ig_post_id == reply_to.story.id and dispatches
+// to the same automation pipeline a normal comment would use, with a synthetic
+// commentId for idempotency.
+//
+// Returns true when an automation was attempted (handled or filtered),
+// false when no story-row / no active automation existed for this story —
+// the caller falls back to the legacy follow-gate / email-collector flow.
+async function handleStoryReplyEvent(supabase, igAccountId, { senderId, storyMediaId, text, mid }) {
+    if (!senderId || !storyMediaId || !text?.trim()) {
+        console.log('[Webhook/StoryReply] Missing required fields — skipping');
+        return false;
+    }
+
+    const { data: post } = await supabase
+        .from('instagram_posts')
+        .select('id, account_id, is_story')
+        .eq('ig_post_id', storyMediaId)
+        .maybeSingle();
+
+    if (!post) {
+        console.log(`[Webhook/StoryReply] No post row for story ${storyMediaId} — falling through`);
+        return false;
+    }
+    if (!post.is_story) {
+        console.log(`[Webhook/StoryReply] Post ${post.id} is not flagged is_story — falling through`);
+        return false;
+    }
+
+    const { data: automation } = await supabase
+        .from('dm_automations')
+        .select('id')
+        .eq('post_id', post.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+    if (!automation) {
+        console.log(`[Webhook/StoryReply] No active automation for story-post ${post.id} — falling through`);
+        return false;
+    }
+
+    // Synthetic comment_id keeps idempotency working — Meta's `mid` is the
+    // most-stable per-event identifier; fall back to story+sender so a
+    // resend without mid still dedups.
+    const syntheticCommentId = `story_reply:${mid || `${storyMediaId}:${senderId}`}`;
+
+    console.log(`[Webhook/StoryReply] Dispatching automation for story ${storyMediaId}, sender ${senderId}, dedup=${syntheticCommentId}`);
+
+    try {
+        const perPostFired = await processAutomationForComment(
+            supabase, post, text, senderId, syntheticCommentId, 'instagram', null,
+        );
+        if (post.account_id) {
+            await processGlobalTriggers(
+                supabase, post, text, senderId, syntheticCommentId, 'instagram', perPostFired, null,
+            );
+        }
+    } catch (err) {
+        console.error('[Webhook/StoryReply] Dispatch failed:', err);
+    }
+    return true;
+}
+
 // ─── Story Mention Handler ─────────────────────────────────────────────────────
+// Story-mention DMs are sent synchronously here and do NOT pass through
+// dm_queue. The per-account hourly rate limit (cron/process-queue) therefore
+// does not apply. Story mentions are low-volume and bounded by Meta's own
+// per-account messaging caps, so this is intentional rather than a bug.
 
 async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
     const { media_id } = mentionData;
@@ -882,9 +1289,18 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
     const mentionConfig = account.default_config?.mentionDm;
     if (!mentionConfig?.enabled || !mentionConfig?.message?.trim()) return;
 
+    // Runtime Pro gate — Story Mention Auto-DM is a Pro feature. If the user
+    // downgrades, any saved mentionDm config stops firing (they can still see
+    // and disable it via Settings → Configuration).
+    const mentionUserPlan = await getUserPlan(supabase, account.user_id);
+    if (mentionUserPlan !== 'pro' && mentionUserPlan !== 'business' && mentionUserPlan !== 'trial') {
+        console.log(`[Webhook/Mention] Skipping — user is on ${mentionUserPlan} plan`);
+        return;
+    }
+
     const mentionToken  = account.fb_page_access_token || account.access_token;
     const useIgApi      = !account.fb_page_access_token;
-    const mentionBase   = useIgApi ? 'https://graph.instagram.com/v21.0' : 'https://graph.facebook.com/v21.0';
+    const mentionBase   = graphBase(useIgApi);
 
     try {
         const mediaRes = await fetch(
@@ -892,8 +1308,9 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
         );
         if (!mediaRes.ok) return;
 
-        const mediaData   = await mediaRes.json();
-        const mentionerId = mediaData?.from?.id;
+        const mediaData       = await mediaRes.json();
+        const mentionerId     = mediaData?.from?.id;
+        const mentionerHandle = mediaData?.from?.username || null;
         if (!mentionerId) return;
 
         // Dedup via recipient + media_id
@@ -910,28 +1327,36 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
         const userPlan = await getUserPlan(supabase, account.user_id);
         const dmLimit  = getDmLimit(userPlan);
         if (dmLimit !== null) {
-            const startOfMonth = new Date();
-            startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
-            const { data: userAutos } = await supabase.from('dm_automations').select('id').eq('user_id', account.user_id);
-            const allIds = (userAutos || []).map((a) => a.id);
-            const { count: mc } = await supabase.from('dm_sent_log')
-                .select('id', { count: 'exact', head: true })
-                .in('automation_id', allIds).eq('status', 'sent').gte('sent_at', startOfMonth.toISOString());
-            if ((mc || 0) >= dmLimit) return;
+            const mc = await getMonthlyDmCount(supabase, account.user_id);
+            if (mc >= dmLimit) return;
         }
 
-        const message = mentionConfig.message
-            .replace('{username}', mentionerId).replace('{first_name}', mentionerId);
+        // Personalisation: never substitute the numeric IGSID into a
+        // user-facing message ("Hey 897716016649795!"). Use the captured
+        // handle from media.from.username when Meta returns it; otherwise
+        // fall back to the friendly default that the rest of the pipeline
+        // (process-queue, sendback, flow-steps) already uses.
+        const personal = mentionerHandle || 'there';
+        const message  = applyBranding(
+            resolveMessageVariables(mentionConfig.message, {
+                username:   personal,
+                first_name: personal,
+            }),
+            mentionConfig,
+            mentionUserPlan,
+        );
         await sendTextDM(account.ig_user_id, mentionerId, message, mentionToken, useIgApi);
 
         await supabase.from('dm_sent_log').insert({
-            automation_id:   null,
-            post_id:         null,
-            recipient_ig_id: mentionerId,
-            comment_id:      media_id,
-            comment_text:    '[story mention]',
-            status:          'sent',
-            sent_at:         new Date().toISOString(),
+            automation_id:      null,
+            post_id:            null,
+            recipient_ig_id:    mentionerId,
+            recipient_username: mentionerHandle,
+            comment_id:         media_id,
+            comment_text:       '[story mention]',
+            status:             'sent',
+            platform:           'instagram',  // Story mentions are Instagram-only
+            sent_at:             new Date().toISOString(),
         });
 
         console.log(`[Webhook/Mention] \u2705 DM sent to ${mentionerId}`);
@@ -942,7 +1367,7 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
 
 // ─── Global Triggers ─────────────────────────────────────────────────────────
 
-async function processGlobalTriggers(supabase, post, commentText, commenterId, commentId, platform, perPostFired = false) {
+async function processGlobalTriggers(supabase, post, commentText, commenterId, commentId, platform, perPostFired = false, commenterUsername = null) {
     const { data: globalAutomations } = await supabase
         .from('global_automations').select('*')
         .eq('account_id', post.account_id).eq('is_active', true);
@@ -958,6 +1383,14 @@ async function processGlobalTriggers(supabase, post, commentText, commenterId, c
     const lowerComment = commentText.toLowerCase().trim();
     // All global automations for the same account belong to the same user
     const userPlan     = await getUserPlan(supabase, globalAutomations[0]?.user_id || '');
+
+    // Runtime Pro gate: globals are a Pro feature. Existing rows from a
+    // previously-Pro account must not keep firing after the user downgrades.
+    // The user can still pause / delete them via the UI; they just don't send.
+    if (userPlan !== 'pro' && userPlan !== 'business' && userPlan !== 'trial') {
+        console.log(`[Global] Skipping ${globalAutomations.length} global(s) — user is on ${userPlan} plan`);
+        return;
+    }
 
     for (const ga of globalAutomations) {
         if (ga.skip_if_post_has_automation && perPostFired) {
@@ -975,9 +1408,14 @@ async function processGlobalTriggers(supabase, post, commentText, commenterId, c
             const EMOJI_RE = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu;
             const plain    = lowerComment.replace(EMOJI_RE, '').trim();
             matches = EMOJI_RE.test(commentText) && plain.replace(/[^a-z0-9]/g, '') === '';
+        } else if (triggerType === 'mentions_only') {
+            matches = /@\w+/.test(commentText);
         } else {
+            // 'keywords' (default). Empty keyword list means the user hasn't
+            // configured a match — don't fire. Parity with the per-automation
+            // path in processAutomationForComment.
             const kws = (tc.keywords || []).map((k) => k.toLowerCase());
-            matches = kws.length === 0 || kws.some((kw) => lowerComment.includes(kw));
+            matches = kws.length > 0 && kws.some((kw) => lowerComment.includes(kw));
         }
 
         if (!matches) continue;
@@ -994,33 +1432,28 @@ async function processGlobalTriggers(supabase, post, commentText, commenterId, c
 
         const dmLimit = getDmLimit(userPlan);
         if (dmLimit !== null) {
-            const startOfMonth = new Date();
-            startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
-            const { data: userAutos } = await supabase.from('dm_automations').select('id').eq('user_id', ga.user_id);
-            const allIds = (userAutos || []).map((a) => a.id);
-            const { count: monthly } = await supabase.from('dm_sent_log')
-                .select('id', { count: 'exact', head: true })
-                .in('automation_id', allIds).eq('status', 'sent').gte('sent_at', startOfMonth.toISOString());
-            if ((monthly || 0) >= dmLimit) break;
+            const monthly = await getMonthlyDmCount(supabase, ga.user_id);
+            if (monthly >= dmLimit) break;
         }
 
         try {
             await supabase.from('dm_queue').insert({
-                user_id:         ga.user_id,
-                account_id:      post.account_id,
-                automation_id:   ga.id,
-                post_id:         post.id,
-                recipient_ig_id: commenterId,
-                comment_id:      commentId,
-                comment_text:    commentText,
+                user_id:            ga.user_id,
+                account_id:         post.account_id,
+                automation_id:      ga.id,
+                post_id:            post.id,
+                recipient_ig_id:    commenterId,
+                recipient_username: commenterUsername,
+                comment_id:         commentId,
+                comment_text:       commentText,
                 platform,
-                dm_type:         ga.dm_type,
-                dm_config:       ga.dm_config,
-                tracking_map:    {},
-                user_plan:       userPlan,
-                queue_reason:    'overflow',
-                priority:        5,
-                status:          'pending',
+                dm_type:            ga.dm_type,
+                dm_config:          ga.dm_config,
+                tracking_map:       {},
+                user_plan:          userPlan,
+                queue_reason:       'overflow',
+                priority:           5,
+                status:             'pending',
                 scheduled_after: new Date().toISOString(),
             });
             console.log(`[Global] \u2705 "${ga.name}" enqueued for ${commenterId}`);
@@ -1037,9 +1470,18 @@ async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload
 
     const { data: account } = await supabase
         .from('connected_accounts')
-        .select('id, access_token, ig_user_id, default_config')
+        .select('id, user_id, access_token, ig_user_id, default_config')
         .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
     if (!account) return false;
+
+    // Runtime Pro gate — Welcome Openers is a Pro feature. If the user
+    // downgrades, their saved openers stop responding (they can still see
+    // and delete them via /welcome-openers).
+    const userPlan = await getUserPlan(supabase, account.user_id);
+    if (userPlan !== 'pro' && userPlan !== 'business' && userPlan !== 'trial') {
+        console.log(`[IceBreaker] Skipping — user is on ${userPlan} plan`);
+        return false;
+    }
 
     const iceBreakers = account.default_config?.iceBreakers || [];
     const matched = iceBreakers.find((ib) => ib.payload === payload);

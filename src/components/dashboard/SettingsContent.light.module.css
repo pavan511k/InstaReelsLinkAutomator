@@ -9,10 +9,10 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+/* Match dark — centered, outer padding lives on layout's <main>. */
 .settingsPage {
   max-width: 900px;
   margin: 0 auto;
-  padding: 32px 28px 64px;
   font-family: 'Inter', -apple-system, sans-serif;
   animation: fadeIn 0.35s ease both;
 }
@@ -341,6 +341,23 @@
 }
 
 /* Rate limit */
+.rateLimitAccount {
+  margin-bottom: 16px;
+}
+.rateLimitAccount:last-child {
+  margin-bottom: 0;
+}
+.rateLimitAccountLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.72);
+  margin-bottom: 8px;
+  letter-spacing: 0.01em;
+}
+
 .rateLimitRow {
   display: flex;
   align-items: center;
@@ -422,22 +439,23 @@
   padding: 10px 13px;
   font-family: 'Inter', sans-serif;
   font-size: 0.875rem;
-  color: rgba(30, 21, 53, 0.85);
+  color: #1E1535;
   background: #FFFFFF;
-  border: 1px solid rgba(30, 21, 53, 0.12);
+  border: 1px solid rgba(124, 58, 237, 0.20);
   border-radius: 8px;
   outline: none;
-  transition: border-color 150ms, background 150ms;
+  transition: border-color 150ms, box-shadow 150ms;
   resize: vertical;
+  box-sizing: border-box;
 }
 
 .formInput:focus {
-  border-color: rgba(124, 58, 237, 0.40);
-  background: #FFFFFF;
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
 }
 
 .formInput::placeholder {
-  color: rgba(30, 21, 53, 0.30);
+  color: rgba(30, 21, 53, 0.35);
 }
 
 select.formInput {
@@ -644,9 +662,10 @@ select.formInput option {
 .modalOverlay {
   position: fixed;
   inset: 0;
-  z-index: 200;
-  background: rgba(0, 0, 0, 0.65);
+  z-index: 250;
+  background: rgba(30, 21, 53, 0.55);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -655,13 +674,54 @@ select.formInput option {
 
 .modal {
   width: 100%;
-  max-width: 440px;
-  background: #16122A;
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  max-width: 560px;
+  background: #FFFFFF;
+  border: 1px solid rgba(124, 58, 237, 0.12);
   border-radius: 20px;
   padding: 32px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    0 24px 60px rgba(30, 21, 53, 0.18),
+    0 8px 22px rgba(30, 21, 53, 0.08);
   animation: modalIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Email confirmation pill shown next to "Type your email to confirm".
+   Light theme — dark text on subtle violet-tinted background. */
+.emailPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--gray-800, #2A2740);
+  background: rgba(124, 58, 237, 0.06);
+  border: 1px solid rgba(124, 58, 237, 0.18);
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+.emailPill strong {
+  font-family: monospace;
+  font-weight: 600;
+  color: var(--gray-900, #1A172E);
+}
+.emailPillCopyBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 3px;
+  color: var(--gray-500, #6E6B88);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  transition: color 150ms;
+}
+.emailPillCopyBtn:hover {
+  color: var(--gray-900, #1A172E);
+}
+.emailPillCopyBtnCopied {
+  color: #10B981;
 }
 
 @keyframes modalIn {
@@ -680,37 +740,35 @@ select.formInput option {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.20);
+  background: rgba(245, 158, 11, 0.10);
+  border: 1px solid rgba(245, 158, 11, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #F59E0B;
+  color: #B45309;
   margin-bottom: 18px;
 }
 
 .modalTitle {
   font-size: 1.1rem;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.92);
+  color: #1E1535;
   letter-spacing: -0.03em;
   margin: 0 0 10px;
 }
 
 .modalDesc {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(30, 21, 53, 0.55);
   line-height: 1.65;
   margin: 0 0 20px;
 }
 
-/* Label inside the dark modal — always white regardless of theme.
-   The modal is intentionally dark in both themes, so this label
-   must always use a light color, not the light-theme formLabel color. */
+/* Form label inside the light modal — dark text on white background. */
 .modalFormLabel {
   font-size: 0.82rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(30, 21, 53, 0.65);
   letter-spacing: -0.01em;
   display: flex;
   align-items: center;
@@ -729,7 +787,7 @@ select.formInput option {
 
 .deleteList li {
   font-size: 0.845rem;
-  color: rgba(255, 255, 255, 0.40);
+  color: rgba(30, 21, 53, 0.55);
   line-height: 1.5;
 }
 
@@ -749,23 +807,53 @@ select.formInput option {
   margin-top: 8px;
 }
 
+/* Primary action button used inside .modalActions — matches the Cancel
+   button's 42px height so the row is visually balanced. */
+.modalPrimaryBtn {
+  flex: 1;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #7C3AED, #5B21B6);
+  border: 1px solid rgba(124, 58, 237, 0.40);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.30);
+  transition: transform 100ms, box-shadow 150ms, opacity 150ms;
+}
+.modalPrimaryBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.42);
+}
+.modalPrimaryBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .cancelBtn {
   flex: 1;
   height: 42px;
   font-family: 'Inter', sans-serif;
   font-size: 0.875rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(30, 21, 53, 0.65);
+  background: #FFFFFF;
+  border: 1px solid rgba(124, 58, 237, 0.18);
   border-radius: 10px;
   cursor: pointer;
   transition: all 150ms;
 }
 
 .cancelBtn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.10);
-  color: rgba(255, 255, 255, 0.80);
+  background: rgba(124, 58, 237, 0.05);
+  border-color: rgba(124, 58, 237, 0.28);
+  color: #1E1535;
 }
 
 .cancelBtn:disabled {
@@ -869,6 +957,48 @@ select.formInput option {
   transform: translateX(-50%);
   cursor: help;
 }
+
+.usageGaugeUpgrade {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #B45309;
+  text-decoration: none;
+  transition: color 150ms;
+}
+.usageGaugeUpgrade:hover { color: #92400E; text-decoration: underline; }
+
+.usageGaugeUnlimited {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(124, 58, 237, 0.06));
+  border: 1px solid rgba(245, 158, 11, 0.30);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+.usageGaugeUnlimitedBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(245, 158, 11, 0.10);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  color: #92400E;
+  flex-shrink: 0;
+}
+.usageGaugeUnlimitedLabel {
+  font-size: 13px;
+  color: rgba(30, 21, 53, 0.72);
+  flex: 1;
+}
+.usageGaugeUnlimitedLabel strong { color: #1E1535; font-weight: 700; }
 
 /* Threshold button strip */
 .thresholdRow {
@@ -1043,6 +1173,55 @@ select.formInput option {
   margin: 0;
 }
 
+/* ── Pro upsell banner (Global Triggers gate) ───────────────── */
+.proUpsellBanner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  margin: 12px 0 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.10), rgba(217, 119, 6, 0.05));
+  border: 1px solid rgba(217, 119, 6, 0.28);
+  border-radius: 12px;
+}
+.proUpsellIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: rgba(217, 119, 6, 0.14);
+  color: rgba(180, 83, 9, 1);
+  flex-shrink: 0;
+}
+.proUpsellBody { flex: 1; min-width: 0; }
+.proUpsellTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(120, 53, 15, 1);
+  margin: 0 0 2px;
+}
+.proUpsellDesc {
+  font-size: 12px;
+  color: rgba(146, 64, 14, 0.85);
+  margin: 0;
+  line-height: 1.5;
+}
+.proUpsellBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  background: #b45309;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 150ms;
+  flex-shrink: 0;
+}
+.proUpsellBtn:hover { background: #92400e; }
+
 /* ── Info boxes — light theme uses dark text so it reads on a white background ── */
 .infoBox {
   display: flex;
@@ -1087,4 +1266,14 @@ select.formInput option {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+@media (max-width: 480px) {
+  .modalOverlay { padding: 16px; }
+  .modal { padding: 22px 20px; border-radius: 16px; }
+  .modalIcon { width: 48px; height: 48px; border-radius: 12px; margin-bottom: 14px; }
+  .modalTitle { font-size: 1rem; }
+  .modalDesc { font-size: 0.825rem; }
+  .modalActions { flex-direction: column-reverse; gap: 8px; }
+  .modalActions > * { width: 100%; }
 }

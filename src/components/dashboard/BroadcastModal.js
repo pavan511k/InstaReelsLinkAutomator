@@ -4,11 +4,13 @@ import { useState, useEffect, useRef } from 'react';
 import {
     X, Send, Users, Zap, AlertTriangle, CheckCircle,
     Pause, Play, XCircle, RefreshCw, MessageSquare,
-    MousePointerClick, ChevronRight, Radio,
+    MousePointerClick, ChevronRight, Radio, Filter,
 } from 'lucide-react';
 import { useStyles } from '@/lib/useStyles';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import darkStyles from './BroadcastModal.module.css';
 import lightStyles from './BroadcastModal.light.module.css';
+import Modal from '@/components/ui/Modal';
 
 const RATE_OPTIONS = [
     { value: 5,  label: '5 / min',  hint: 'Safest — low risk of rate limiting' },
@@ -42,6 +44,7 @@ function ProgressBar({ pct, status, styles }) {
 
 export default function BroadcastModal({ post, onClose }) {
     const styles = useStyles(darkStyles, lightStyles);
+    const { confirm } = useConfirm();
     // Phase: 'configure' | 'confirm' | 'running'
     const [phase, setPhase] = useState('configure');
 
@@ -50,6 +53,7 @@ export default function BroadcastModal({ post, onClose }) {
     const [message,        setMessage]         = useState('');
     const [ctaButtons,     setCtaButtons]      = useState([{ label: '', url: '' }]);
     const [rateLimit,      setRateLimit]       = useState(10);
+    const [keywords,       setKeywords]        = useState('');
     const [existingConfig, setExistingConfig]  = useState(null);
     const [loadingConfig,  setLoadingConfig]   = useState(true);
 
@@ -57,19 +61,36 @@ export default function BroadcastModal({ post, onClose }) {
     const [startLoading,   setStartLoading]    = useState(false);
     const [startError,     setStartError]      = useState('');
     const [recipientCount, setRecipientCount]  = useState(null);
+    const [preview,        setPreview]         = useState(null);  // { total, newCount, skippedCount }
+    const [previewLoading, setPreviewLoading]  = useState(false);
 
     // Running
     const [jobId,   setJobId]   = useState(null);
     const [jobData, setJobData] = useState(null);
     const pollRef = useRef(null);
 
-    // Derived: is an active job in flight (user must not be able to silently dismiss)
-    const isJobActive = phase === 'running' && ['running', 'paused'].includes(jobData?.status);
+    // Confirm — countdown grace period before firing the API
+    const [countdown, setCountdown] = useState(null);
+    /* Race guard for the countdown→0→handleStart sequence.
+       The countdown effect calls handleStart synchronously when it
+       hits 0 — if the modal is unmounting in the same tick, the
+       broadcast would still fire on the backend even though the UI is
+       gone. Tracking mounted state lets us swallow the start in that
+       narrow window. */
+    const isMountedRef = useRef(true);
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => { isMountedRef.current = false; };
+    }, []);
 
-    const handleOverlayClick = () => {
-        if (isJobActive) return; // swallow — job is running, close is disabled
-        onClose();
-    };
+    // Throttle retry countdown (seconds until Meta rate-limit lifts)
+    const [retryIn, setRetryIn] = useState(null);
+
+    // Derived: is an active job in flight (user must not be able to silently dismiss).
+    // The Modal primitive uses these flags to disable backdrop click, escape key,
+    // and the close button — replaces the old handleOverlayClick + portalReady wiring.
+    const isJobActive    = phase === 'running' && ['running', 'paused', 'throttled'].includes(jobData?.status);
+    const isCountingDown = countdown !== null;
 
     // ── On mount: check for an already-running job for this post ──
     // If found, jump straight to the running phase so the user can
@@ -119,6 +140,60 @@ export default function BroadcastModal({ post, onClose }) {
         init();
         return () => { cancelled = true; };
     }, [post?.id]);
+
+    // ── Fetch audience preview whenever the confirm phase is entered ─
+    useEffect(() => {
+        if (phase !== 'confirm' || !post?.id) return;
+        let cancelled = false;
+        setPreview(null);
+        setPreviewLoading(true);
+        setStartError(''); // clear any error left over from a previous attempt
+        fetch(`/api/broadcast/preview?postId=${post.id}&keywords=${encodeURIComponent(keywords)}`)
+            .then((r) => r.json())
+            .then((data) => { if (!cancelled) setPreview(data); })
+            .catch(() => {})
+            .finally(() => { if (!cancelled) setPreviewLoading(false); });
+        return () => { cancelled = true; };
+    }, [phase, post?.id]);
+
+    // ── Cancel an in-progress countdown if preview loads showing 0 recipients ─
+    useEffect(() => {
+        if (preview?.newCount === 0 && countdown !== null) {
+            setCountdown(null);
+        }
+    }, [preview?.newCount, countdown]);
+
+    // ── Countdown grace period — fires handleStart when it hits 0 ──
+    useEffect(() => {
+        if (countdown === null) return;
+        if (countdown === 0) {
+            setCountdown(null);
+            // Guard against the unmount race: if the user closed the
+            // modal in the same render cycle that countdown ticked to
+            // 0, swallow the start so we don't fire a broadcast for a
+            // window the user already dismissed.
+            if (!isMountedRef.current) return;
+            handleStart();
+            return;
+        }
+        const t = setTimeout(() => setCountdown((n) => n - 1), 1_000);
+        return () => clearTimeout(t);
+    }, [countdown]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── Throttle retry countdown ──────────────────────────────────
+    useEffect(() => {
+        if (jobData?.status !== 'throttled' || !jobData?.throttleUntil) {
+            setRetryIn(null);
+            return;
+        }
+        const tick = () => {
+            const secs = Math.max(0, Math.ceil((jobData.throttleUntil - Date.now()) / 1_000));
+            setRetryIn(secs > 0 ? secs : null);
+        };
+        tick();
+        const t = setInterval(tick, 1_000);
+        return () => clearInterval(t);
+    }, [jobData?.status, jobData?.throttleUntil]);
 
     // ── Poll running job ──────────────────────────────────────────
     useEffect(() => {
@@ -175,6 +250,7 @@ export default function BroadcastModal({ post, onClose }) {
                     dmType,
                     dmConfig:        buildDmConfig(),
                     rateLimitPerMin: rateLimit,
+                    keywords,
                 }),
             });
             const data = await res.json();
@@ -225,18 +301,36 @@ export default function BroadcastModal({ post, onClose }) {
         if (status === 'completed') return <CheckCircle size={18} style={{ color: '#10B981' }} />;
         if (status === 'failed')    return <XCircle     size={18} style={{ color: '#FCA5A5' }} />;
         if (status === 'paused')    return <Pause       size={18} style={{ color: '#FCD34D' }} />;
+        if (status === 'throttled') return <RefreshCw   size={18} style={{ color: '#FCD34D' }} />;
         return <RefreshCw size={18} className={styles.spin} style={{ color: '#A78BFA' }} />;
     };
 
     const statusLabel = (s) => ({
         running: 'Sending…', paused: 'Paused', completed: 'Completed', failed: 'Failed',
+        throttled: 'Rate limited…',
     })[s] || s;
 
-    return (
-        <div className={styles.overlay} onClick={handleOveralyClick}>
-            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+    const formatRetryIn = (secs) => {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    };
 
-                {/* Header */}
+    return (
+        <Modal
+            open={true}
+            onClose={onClose}
+            size={null}
+            closable={!isJobActive && !isCountingDown}
+            ariaLabel="Broadcast DM"
+            showCloseButton={false}
+            noPadding
+            className={styles.modal}
+        >
+                {/* Header — kept inline so the icon-pill, breadcrumb, and
+                    BroadcastModal.module.css typography are preserved exactly.
+                    Modal primitive handles portal, escape, focus trap, and
+                    backdrop guard around this content. */}
                 <div className={styles.header}>
                     <div className={styles.headerLeft}>
                         <div className={styles.headerIcon}>
@@ -251,11 +345,11 @@ export default function BroadcastModal({ post, onClose }) {
                             </p>
                         </div>
                     </div>
-                    <button 
-                    className={styles.closeBtn} 
-                    onClick={isJobActive ? undefined : onClose}
-                    disabled={isJobActive}
-                    title={isJobActive ? 'Pause or cancel the broadcas before closing' : 'Close'}
+                    <button
+                    className={styles.closeBtn}
+                    onClick={isJobActive || isCountingDown ? undefined : onClose}
+                    disabled={isJobActive || isCountingDown}
+                    title={isJobActive ? 'Pause or cancel the broadcast before closing' : isCountingDown ? 'Cancel the countdown first' : 'Close'}
                     >
                         <X size={15} />
                     </button>
@@ -384,6 +478,20 @@ export default function BroadcastModal({ post, onClose }) {
                                 </div>
                             </div>
 
+                            {/* Keyword filter */}
+                            <div className={styles.field}>
+                                <label className={styles.fieldLabel}>
+                                    <Filter size={12} /> Keyword filter <span className={styles.limitNote}>(optional)</span>
+                                </label>
+                                <input
+                                    className={styles.input}
+                                    placeholder="e.g. link, info, send me"
+                                    value={keywords}
+                                    onChange={(e) => setKeywords(e.target.value)}
+                                />
+                                <span className={styles.fieldHint}>Only DM commenters whose comment contains at least one of these keywords. Leave blank to DM everyone.</span>
+                            </div>
+
                             {startError && (
                                 <div className={styles.errorBox}>
                                     <AlertTriangle size={13} style={{ flexShrink: 0 }} />
@@ -406,7 +514,22 @@ export default function BroadcastModal({ post, onClose }) {
                             <div className={styles.confirmCard}>
                                 <div className={styles.confirmRow}>
                                     <span className={styles.confirmLabel}><Users size={13} /> Recipients</span>
-                                    <span className={styles.confirmValue}>All commenters (duplicates removed)</span>
+                                    <span className={styles.confirmValue}>
+                                        {previewLoading ? (
+                                            <span className={styles.previewLoading}>
+                                                <RefreshCw size={11} className={styles.spin} /> Calculating…
+                                            </span>
+                                        ) : preview ? (
+                                            <>
+                                                {preview.newCount.toLocaleString()} will receive this DM
+                                                {preview.skippedCount > 0 && (
+                                                    <span className={styles.previewNote}> · {preview.skippedCount.toLocaleString()} skipped</span>
+                                                )}
+                                            </>
+                                        ) : (
+                                            'All commenters (deduped)'
+                                        )}
+                                    </span>
                                 </div>
                                 <div className={styles.confirmRow}>
                                     <span className={styles.confirmLabel}><MessageSquare size={13} /> Type</span>
@@ -424,6 +547,14 @@ export default function BroadcastModal({ post, onClose }) {
                                         &ldquo;{message.slice(0, 80)}{message.length > 80 ? '…' : ''}&rdquo;
                                     </span>
                                 </div>
+                                {keywords.trim() && (
+                                    <div className={styles.confirmRow}>
+                                        <span className={styles.confirmLabel}><Filter size={13} /> Keywords</span>
+                                        <span className={styles.confirmValue} style={{ maxWidth: 220, textAlign: 'right', wordBreak: 'break-word' }}>
+                                            {keywords}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className={styles.warningBox}>
@@ -435,6 +566,13 @@ export default function BroadcastModal({ post, onClose }) {
                                 </span>
                             </div>
 
+                            {preview?.newCount === 0 && !previewLoading && (
+                                <div className={styles.errorBox}>
+                                    <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                                    Everyone who commented on this post has already received a DM. Nothing to send.
+                                </div>
+                            )}
+
                             {startError && (
                                 <div className={styles.errorBox}>
                                     <AlertTriangle size={13} style={{ flexShrink: 0 }} />
@@ -443,21 +581,32 @@ export default function BroadcastModal({ post, onClose }) {
                             )}
 
                             <div className={styles.confirmActions}>
-                                <button className={styles.backBtn} onClick={() => setPhase('configure')}>
+                                <button
+                                    className={styles.backBtn}
+                                    onClick={() => setPhase('configure')}
+                                    disabled={isCountingDown || startLoading}
+                                >
                                     ← Back
                                 </button>
                                 <button
                                     className={styles.startBtn}
-                                    onClick={handleStart}
-                                    disabled={startLoading}
+                                    onClick={isCountingDown || startLoading || preview?.newCount === 0 ? undefined : () => setCountdown(10)}
+                                    disabled={isCountingDown || startLoading || preview?.newCount === 0}
                                 >
                                     {startLoading ? (
                                         <><RefreshCw size={14} className={styles.spin} /> Starting…</>
+                                    ) : isCountingDown ? (
+                                        <><RefreshCw size={14} className={styles.spin} /> Sending in {countdown}s</>
                                     ) : (
                                         <><Send size={14} /> Start Broadcast</>
                                     )}
                                 </button>
                             </div>
+                            {isCountingDown && (
+                                <button className={styles.undoBtn} onClick={() => setCountdown(null)}>
+                                    Undo — cancel send
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -513,6 +662,20 @@ export default function BroadcastModal({ post, onClose }) {
                                 </p>
                             )}
 
+                            {/* Throttle banner */}
+                            {jobData?.status === 'throttled' && (
+                                <div className={styles.throttleBox}>
+                                    <RefreshCw size={13} />
+                                    <span>
+                                        Meta rate-limited this account
+                                        {jobData.throttleCount > 1 ? ` (${jobData.throttleCount}× today)` : ''}.{' '}
+                                        {retryIn != null
+                                            ? <>Auto-retrying in <strong>{formatRetryIn(retryIn)}</strong></>
+                                            : <>Retrying shortly…</>}
+                                    </span>
+                                </div>
+                            )}
+
                             {/* Error */}
                             {jobData?.error_message && jobData.status === 'failed' && (
                                 <div className={styles.errorBox}>
@@ -531,8 +694,10 @@ export default function BroadcastModal({ post, onClose }) {
 
                             {/* Lock hint - shown while job is active */}
                             {isJobActive && (
-                                <p className = {styles.lockHint}>
-                                    Pause or cancel to close the window
+                                <p className={styles.lockHint}>
+                                    {jobData?.status === 'throttled'
+                                        ? 'Cancel to close the window'
+                                        : 'Pause or cancel to close the window'}
                                 </p>
                             )}
 
@@ -548,9 +713,15 @@ export default function BroadcastModal({ post, onClose }) {
                                         <Play size={13} /> Resume
                                     </button>
                                 )}
-                                {['running', 'paused'].includes(jobData?.status) && (
-                                    <button className={styles.cancelBtn} onClick={() => {
-                                        if (confirm('Cancel this broadcast? This cannot be undone.')) handleAction('cancel');
+                                {['running', 'paused', 'throttled'].includes(jobData?.status) && (
+                                    <button className={styles.cancelBtn} onClick={async () => {
+                                        const ok = await confirm({
+                                            title: 'Cancel this broadcast?',
+                                            message: 'The broadcast will stop sending to remaining recipients. This cannot be undone.',
+                                            confirmText: 'Cancel broadcast',
+                                            cancelText: 'Keep running',
+                                        });
+                                        if (ok) handleAction('cancel');
                                     }}>
                                         <XCircle size={13} /> Cancel
                                     </button>
@@ -564,7 +735,6 @@ export default function BroadcastModal({ post, onClose }) {
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+        </Modal>
     );
 }

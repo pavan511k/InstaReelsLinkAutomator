@@ -248,3 +248,65 @@ export async function sendTrialExpiringEmail({ to, name, daysLeft, trialEndsAt }
         html,
     });
 }
+
+// ── 4. Pro subscription expiring soon (cron — 7 days before plan_expires_at) ──
+// Sent to users on PAID Pro whose subscription is within 7 days of expiry,
+// once per expiry value. Without this email, paid users hit free silently
+// when their period ends — main cause of involuntary churn for products
+// without auto-renewal.
+export async function sendProExpiringEmail({ to, name, daysLeft, expiresAt }) {
+    const firstName  = (name || to.split('@')[0]).split(' ')[0];
+    const expiryDate = new Date(expiresAt).toLocaleDateString('en-IN', {
+        day: 'numeric', month: 'long', year: 'numeric',
+    });
+
+    const html = layout(`
+        <div style="text-align:center;margin-bottom:28px;">
+            <div style="display:inline-block;padding:8px 20px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:100px;font-size:13px;font-weight:700;color:#FCD34D;margin-bottom:20px;">
+                ⏰ Pro expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}
+            </div>
+            <h1 style="margin:0 0 10px;font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.04em;">
+                Renew your Pro plan, ${firstName}
+            </h1>
+            <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.5);line-height:1.65;">
+                Your AutoDM Pro subscription ends on <strong style="color:rgba(255,255,255,0.7);">${expiryDate}</strong>.<br/>
+                Renew now to keep unlimited DMs, A/B testing, Follow Gate, and all Pro features active.
+            </p>
+        </div>
+
+        <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(167,139,250,0.2);border-radius:14px;padding:20px 24px;margin-bottom:28px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td style="vertical-align:top;">
+                        <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#fff;">AutoDM Pro</p>
+                        <p style="margin:0 0 14px;font-size:13px;color:rgba(255,255,255,0.45);">
+                            Unlimited DMs · Follow Gate · A/B testing · Priority support
+                        </p>
+                        <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.55);">
+                            <strong style="color:#A78BFA;">₹299/month</strong> &nbsp;·&nbsp; <strong style="color:#A78BFA;">₹2,999/year</strong> (save ₹589)
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="text-align:center;margin-bottom:28px;">
+            ${button('Renew Pro →', `${APP_URL}/pricing`)}
+        </div>
+
+        ${divider}
+
+        <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.32);text-align:center;line-height:1.6;">
+            We don't auto-renew, so if you do nothing your account will move to the free plan
+            (3,000 DMs/month) on ${expiryDate}.<br/>
+            All your automations and data stay intact — only the Pro feature set is paused.
+        </p>
+    `);
+
+    return getResend().emails.send({
+        from: FROM,
+        to,
+        subject: `⏰ Your AutoDM Pro expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`,
+        html,
+    });
+}

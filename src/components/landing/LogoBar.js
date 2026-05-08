@@ -1,4 +1,8 @@
-import styles from './LogoBar.module.css';
+'use client';
+
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './LogoBar.module.css';
+import lightStyles from './LogoBar.light.module.css';
 
 const LOGOS = [
   { name: 'Meta',      abbr: 'M'  },
@@ -9,6 +13,7 @@ const LOGOS = [
 ];
 
 export default function LogoBar() {
+  const styles = useStyles(darkStyles, lightStyles);
   return (
     <section className={styles.bar}>
       <div className={styles.inner}>

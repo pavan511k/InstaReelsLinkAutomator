@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, X, Zap, ArrowRight, Loader2, Crown } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Check, X, Zap, ArrowRight, Loader2, Crown, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from './pricing.module.css';
@@ -113,7 +113,11 @@ const FAQ = [
     },
     {
         q: 'Can I cancel anytime?',
-        a: "Yes. Cancel before your next billing date and you won't be charged again. You keep Pro access until the end of the period you paid for.",
+        a: "There's nothing to cancel — Pro is one payment per billing period (₹299 for a month, ₹2,999 for a year), and your subscription doesn't auto-renew. If you decide not to continue, just don't renew when the period ends. We'll email you 7 days before expiry as a reminder.",
+    },
+    {
+        q: 'Do you offer refunds?',
+        a: 'All payments are final. Your Pro access remains active until the end of the period you paid for. If you have a billing issue, email support@autodm.pro and we will look into it on a case-by-case basis.',
     },
 ];
 
@@ -147,8 +151,78 @@ function FeatureRow({ name, available, styles }) {
 }
 
 // ─── Plan card ────────────────────────────────────────────────────────────────
-function PlanCard({ plan, styles, loadingPlan, onUpgrade }) {
-    const isPro = plan.id === 'pro';
+// `plan.id` is null for the Free card. For Pro, the actual purchasable SKU
+// is computed from the page-level billing cycle ('pro' or 'pro_yearly').
+function PlanCard({ plan, styles, loadingPlan, onUpgrade, isCurrentlyPaidPro, paidProExpiresAt, billingCycle }) {
+    const isProTier = plan.id === 'pro';
+
+    // Map (tier, cycle) → the concrete SKU + display values.
+    // Headline price ALWAYS matches the actual charge amount — this avoids
+    // the "page said ₹250 but Cashfree charged ₹2,999" expectation mismatch.
+    // The per-month equivalent goes in the subtitle as a value-prop callout
+    // rather than as the headline (some SaaS products like Notion/Linear do
+    // it the other way; we prefer the truthful number up top for trust).
+    let purchaseSku  = null;
+    let priceLabel   = plan.price;
+    let periodLabel  = plan.period;
+    let priceSubtitle = null;
+    if (isProTier) {
+        if (billingCycle === 'yearly') {
+            purchaseSku   = 'pro_yearly';
+            priceLabel    = '₹2,999';
+            periodLabel   = 'per year';
+            priceSubtitle = '≈ ₹250/month · Save ₹589 vs monthly';
+        } else {
+            purchaseSku   = 'pro';
+            priceLabel    = '₹299';
+            periodLabel   = 'per month';
+            priceSubtitle = null;
+        }
+    }
+
+    // When the user already has an active paid Pro subscription, replace the
+    // upgrade CTA on Pro tiers with a "you're on Pro until X" state.
+    // Industry standard — Notion, Linear, Stripe etc. all block re-purchase
+    // and steer users to renewal/cancellation flows.
+    const blockUpgrade = isProTier && isCurrentlyPaidPro;
+
+    const renderCta = () => {
+        if (!plan.id) {
+            return (
+                <Link href={plan.ctaHref} className={`${styles.ctaBtn} ${styles.ctaBtnSecondary}`}>
+                    {plan.cta}
+                </Link>
+            );
+        }
+        if (blockUpgrade) {
+            const expiryStr = paidProExpiresAt
+                ? new Date(paidProExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+                : null;
+            return (
+                <button
+                    className={`${styles.ctaBtn} ${styles.ctaBtnSecondary}`}
+                    disabled
+                    title="You're already on Pro. You'll be able to renew when your current period is closer to ending."
+                >
+                    <ShieldCheck size={14} strokeWidth={2.5} />
+                    {expiryStr ? `Active until ${expiryStr}` : 'Pro is active'}
+                </button>
+            );
+        }
+        return (
+            <button
+                className={`${styles.ctaBtn} ${styles.ctaBtnPrimary}`}
+                onClick={() => onUpgrade(purchaseSku)}
+                disabled={loadingPlan === purchaseSku}
+            >
+                {loadingPlan === purchaseSku ? (
+                    <><Loader2 size={14} className={styles.spin} /> Processing…</>
+                ) : (
+                    <><Crown size={14} strokeWidth={2.5} /> {plan.ctaLabel || 'Upgrade to Pro'} <ArrowRight size={14} /></>
+                )}
+            </button>
+        );
+    };
 
     return (
         <div className={`${styles.planCard} ${plan.highlight ? styles.planHighlight : ''}`}>
@@ -157,30 +231,24 @@ function PlanCard({ plan, styles, loadingPlan, onUpgrade }) {
             <div className={styles.planHeader}>
                 <h2 className={styles.planName}>{plan.name}</h2>
                 <div className={styles.planPrice}>
-                    <span className={styles.priceAmount}>{plan.price}</span>
-                    <span className={styles.pricePeriod}>/{plan.period}</span>
+                    <span className={styles.priceAmount}>{priceLabel}</span>
+                    <span className={styles.pricePeriod}>/{periodLabel}</span>
                 </div>
+                {/* Always render the subtitle slot for Pro tiers so the
+                    Monthly and Yearly cards have identical vertical height
+                    — Yearly fills it with the per-month equivalent, Monthly
+                    fills it with a non-breaking space that just reserves the
+                    line. Skipped for Free since Free's longer description
+                    already pads its card to the same height. */}
+                {isProTier && (
+                    <p className={styles.priceSubtitle}>
+                        {priceSubtitle || ' '}
+                    </p>
+                )}
                 <p className={styles.planDesc}>{plan.desc}</p>
             </div>
 
-            {/* CTA */}
-            {plan.id ? (
-                <button
-                    className={`${styles.ctaBtn} ${styles.ctaBtnPrimary}`}
-                    onClick={() => onUpgrade(plan.id)}
-                    disabled={loadingPlan === plan.id}
-                >
-                    {loadingPlan === plan.id ? (
-                        <><Loader2 size={14} className={styles.spin} /> Processing…</>
-                    ) : (
-                        <><Crown size={14} strokeWidth={2.5} /> Upgrade to Pro <ArrowRight size={14} /></>
-                    )}
-                </button>
-            ) : (
-                <Link href={plan.ctaHref} className={`${styles.ctaBtn} ${styles.ctaBtnSecondary}`}>
-                    {plan.cta}
-                </Link>
-            )}
+            {renderCta()}
 
             <div className={styles.divider} />
 
@@ -194,7 +262,7 @@ function PlanCard({ plan, styles, loadingPlan, onUpgrade }) {
                                 <FeatureRow
                                     key={f.name}
                                     name={f.name}
-                                    available={isPro ? true : f.free}
+                                    available={isProTier ? true : f.free}
                                     styles={styles}
                                 />
                             ))}
@@ -211,6 +279,35 @@ export default function PricingPage() {
     const styles = useStyles(darkStyles, lightStyles);
     const [loadingPlan, setLoadingPlan] = useState(null);
     const [error, setError] = useState('');
+    // Default to yearly — same default as Notion / Slack / Linear since it's
+    // the higher-LTV path and the savings copy lives next to the toggle.
+    const [billingCycle, setBillingCycle] = useState('yearly');
+    // Current user plan + paid-pro expiry. Loaded on mount via /api/usage.
+    // While loading we render the cards in a "neutral" state (no Active-Until
+    // pill, no Upgrade) — flips into the right mode once we know the plan.
+    const [planState, setPlanState] = useState({ loaded: false, plan: 'free', planExpiresAt: null });
+
+    useEffect(() => {
+        let cancelled = false;
+        fetch('/api/usage')
+            .then((r) => r.json())
+            .then((d) => {
+                if (cancelled) return;
+                setPlanState({
+                    loaded:        true,
+                    plan:          d.plan || 'free',
+                    planExpiresAt: d.planExpiresAt || null,
+                });
+            })
+            .catch(() => { if (!cancelled) setPlanState((s) => ({ ...s, loaded: true })); });
+        return () => { cancelled = true; };
+    }, []);
+
+    const isCurrentlyPaidPro =
+        planState.loaded &&
+        planState.plan === 'pro' &&
+        planState.planExpiresAt &&
+        new Date(planState.planExpiresAt) > new Date();
 
     const handleUpgrade = async (planId) => {
         if (!planId) return;
@@ -225,15 +322,34 @@ export default function PricingPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to create order');
 
-            const { paymentSessionId } = data;
+            const { paymentSessionId, orderId } = data;
             const mode = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production' ? 'production' : 'sandbox';
             await loadCashfreeSDK();
             const cashfree = window.Cashfree({ mode });
+
+            // In `_modal` mode the SDK opens an iframe modal and resolves
+            // this promise when the modal closes. It does NOT auto-navigate
+            // the parent page on success — we must do it ourselves so the
+            // success page can verify with Cashfree and activate the plan.
             cashfree.checkout({ paymentSessionId, redirectTarget: '_modal' }).then((result) => {
-                if (result.error) {
+                if (result?.error) {
                     setError(result.error.message || 'Payment failed. Please try again.');
                     setLoadingPlan(null);
+                    return;
                 }
+                if (result?.paymentDetails || result?.redirect) {
+                    // Payment completed (or user redirected to a 3DS page).
+                    // Hand off to the success page which calls /api/payments/verify
+                    // → /api/payments/verify hits Cashfree to confirm and activates Pro.
+                    window.location.href = `/pricing/success?order_id=${encodeURIComponent(orderId)}&plan=${encodeURIComponent(planId)}`;
+                    return;
+                }
+                // Modal was closed without completing payment — reset so the
+                // user can try again instead of staring at a stuck spinner.
+                setLoadingPlan(null);
+            }).catch((err) => {
+                setError(err?.message || 'Payment was interrupted. Please try again.');
+                setLoadingPlan(null);
             });
         } catch (err) {
             setError(err.message || 'Something went wrong. Please try again.');
@@ -241,6 +357,9 @@ export default function PricingPage() {
         }
     };
 
+    // Tier-level definitions only. The Pro card's price/period/SKU are
+    // derived from `billingCycle` inside PlanCard so the toggle drives both
+    // the displayed price and the planId sent to /api/payments/create-order.
     const PLANS = [
         {
             id: null,
@@ -255,11 +374,11 @@ export default function PricingPage() {
         {
             id: 'pro',
             name: 'Pro',
-            price: '₹299',
-            period: 'per month',
-            desc: 'Unlimited DMs, advanced automation, and full analytics. Cancel anytime.',
+            // price/period overridden in PlanCard based on billingCycle
+            desc: 'Unlimited DMs, advanced automation, and full analytics.',
             highlight: true,
             badge: 'Most Popular',
+            ctaLabel: 'Upgrade to Pro',
         },
     ];
 
@@ -285,6 +404,35 @@ export default function PricingPage() {
                 <div className={styles.errorBanner}>⚠️ {error}</div>
             )}
 
+            {/* Billing-cycle toggle — only meaningful when the user can still
+                upgrade. For active Pro users we hide it since both options
+                are blocked anyway and the toggle would just be confusing. */}
+            {!isCurrentlyPaidPro && (
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <div className={styles.cycleToggle} role="tablist" aria-label="Billing cycle">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={billingCycle === 'monthly'}
+                            className={`${styles.cycleToggleBtn} ${billingCycle === 'monthly' ? styles.cycleToggleActive : ''}`}
+                            onClick={() => setBillingCycle('monthly')}
+                        >
+                            Monthly
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={billingCycle === 'yearly'}
+                            className={`${styles.cycleToggleBtn} ${billingCycle === 'yearly' ? styles.cycleToggleActive : ''}`}
+                            onClick={() => setBillingCycle('yearly')}
+                        >
+                            Yearly
+                            <span className={styles.cycleSavingsTag}>Save 16%</span>
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Plan cards */}
             <div className={styles.plans}>
                 {PLANS.map((plan) => (
@@ -294,6 +442,9 @@ export default function PricingPage() {
                         styles={styles}
                         loadingPlan={loadingPlan}
                         onUpgrade={handleUpgrade}
+                        isCurrentlyPaidPro={isCurrentlyPaidPro}
+                        paidProExpiresAt={planState.planExpiresAt}
+                        billingCycle={billingCycle}
                     />
                 ))}
             </div>

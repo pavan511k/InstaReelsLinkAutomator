@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS click_events (
     id              uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     code            text NOT NULL,                  -- references dm_link_codes.code
     automation_id   uuid REFERENCES dm_automations(id) ON DELETE CASCADE,
+    recipient_ig_id text,                           -- captured from ?r=<igsid> on the tracked URL; NULL on legacy rows
     ip_hash         text,                           -- SHA-256 of visitor IP (privacy-safe dedup)
     user_agent      text,
     referer         text,
@@ -56,6 +57,17 @@ CREATE INDEX IF NOT EXISTS idx_click_events_code
 
 CREATE INDEX IF NOT EXISTS idx_click_events_clicked_at
     ON click_events (clicked_at);
+
+-- Click stats list view: WHERE automation_id = ? ORDER BY clicked_at DESC
+CREATE INDEX IF NOT EXISTS idx_click_events_listing
+    ON click_events (automation_id, clicked_at DESC);
+
+-- For cron/upsell click-gating: "did this recipient click any link from
+-- this automation?" — partial index keeps it tiny since legacy rows have
+-- recipient_ig_id NULL.
+CREATE INDEX IF NOT EXISTS idx_click_events_recipient_automation
+    ON click_events (automation_id, recipient_ig_id)
+    WHERE recipient_ig_id IS NOT NULL;
 
 -- RLS: users read their own click events via automation ownership
 ALTER TABLE click_events ENABLE ROW LEVEL SECURITY;

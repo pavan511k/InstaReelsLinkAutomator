@@ -124,6 +124,50 @@
     padding: 10px 10px 6px;
 }
 
+/* Advanced disclosure toggle — light pair */
+.advancedToggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 4px;
+    padding: 10px 12px;
+    background: #FFFFFF;
+    border: 1px solid #E7E5E4;
+    border-radius: 8px;
+    color: #525252;
+    font-family: 'Inter', sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms, color 150ms;
+}
+.advancedToggle:hover {
+    background: #FAFAF9;
+    border-color: #C4B5FD;
+    color: #0A0A0A;
+}
+.advancedActiveDot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #6D28D9;
+    margin-left: 8px;
+    box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.18);
+    vertical-align: middle;
+}
+.advancedBody {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 4px;
+    animation: advancedFadeIn 180ms ease-out;
+}
+@keyframes advancedFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+}
+
 .checkboxLabel {
     display: flex; align-items: flex-start; gap: 12px;
     cursor: pointer; padding: 10px;
@@ -146,3 +190,45 @@
     font-size: 11.5px; color: rgba(30,21,53,0.48);
     line-height: 1.55;
 }
+
+/* ── Comment Auto-Reply card (relocated from SettingsTab) ─────── */
+.commentReplyCard {
+    margin-top: 18px;
+    padding: 10px; border-radius: 10px;
+    background: rgba(124,58,237,0.03);
+    border: 1px solid rgba(124,58,237,0.09);
+    display: flex; flex-direction: column; gap: 10px;
+}
+.commentReplyHeader { display: flex; align-items: flex-start; gap: 10px; }
+
+.toggle {
+    width: 36px; height: 20px; border-radius: 100px;
+    background: rgba(30,21,53,0.12);
+    border: 1px solid rgba(30,21,53,0.16);
+    position: relative; cursor: pointer; flex-shrink: 0;
+    transition: background 200ms, border-color 200ms;
+    margin-top: 2px;
+}
+.toggleOn { background: #7C3AED; border-color: #7C3AED; }
+.toggleThumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: rgba(255,255,255,0.85);
+    transition: transform 200ms, background 200ms;
+}
+.toggleOn .toggleThumb { transform: translateX(16px); background: #fff; }
+
+.textarea {
+    width: 100%; padding: 9px 13px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.845rem;
+    color: rgba(30,21,53,0.85);
+    background: #FFFFFF;
+    border: 1px solid rgba(30,21,53,0.12);
+    border-radius: 9px; outline: none;
+    resize: vertical; min-height: 64px; line-height: 1.6;
+    transition: border-color 150ms;
+    box-sizing: border-box;
+}
+.textarea:focus { border-color: rgba(124,58,237,0.40); }
+.textarea::placeholder { color: rgba(30,21,53,0.32); }

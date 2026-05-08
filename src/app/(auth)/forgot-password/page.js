@@ -5,9 +5,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Mail, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
-import styles from './forgot-password.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './forgot-password.module.css';
+import lightStyles from './forgot-password.light.module.css';
 
 export default function ForgotPasswordPage() {
+    const styles = useStyles(darkStyles, lightStyles);
     const [email, setEmail]       = useState('');
     const [error, setError]       = useState('');
     const [sent, setSent]         = useState(false);

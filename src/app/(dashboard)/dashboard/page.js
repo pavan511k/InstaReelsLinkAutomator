@@ -72,13 +72,19 @@ export default async function DashboardPage() {
             automationPostMap[a.id] = a.post_id;
         }
 
-        if (allAutomationIds.length > 0) {
+        // All count queries below filter by user_id directly. This is the
+        // single source of truth that matches the sidebar's cached counter
+        // and survives automation deletions (which used to undercount the
+        // dashboard but not the sidebar — see add-user-id-to-dm-sent-log).
+        // The `userAutomations` lookup above is still used further down for
+        // the "Top performing posts" chart that maps automations to posts.
+        {
             // All-time total
             const { count: sentCount } = await supabase
                 .from('dm_sent_log')
                 .select('id', { count: 'exact', head: true })
                 .eq('status', 'sent')
-                .in('automation_id', allAutomationIds);
+                .eq('user_id', user.id);
             totalSent = sentCount || 0;
 
             // This month
@@ -89,7 +95,7 @@ export default async function DashboardPage() {
                 .select('id', { count: 'exact', head: true })
                 .eq('status', 'sent')
                 .gte('sent_at', startOfMonth.toISOString())
-                .in('automation_id', allAutomationIds);
+                .eq('user_id', user.id);
             monthlySent = monthlyCount || 0;
 
             // This week vs last week
@@ -101,7 +107,7 @@ export default async function DashboardPage() {
                 .select('id', { count: 'exact', head: true })
                 .eq('status', 'sent')
                 .gte('sent_at', sevenDaysAgo.toISOString())
-                .in('automation_id', allAutomationIds);
+                .eq('user_id', user.id);
             weekSent = weekCount || 0;
 
             const { count: prevWeekCount } = await supabase
@@ -110,7 +116,7 @@ export default async function DashboardPage() {
                 .eq('status', 'sent')
                 .gte('sent_at', fourteenDaysAgo.toISOString())
                 .lt('sent_at', sevenDaysAgo.toISOString())
-                .in('automation_id', allAutomationIds);
+                .eq('user_id', user.id);
             prevWeekSent = prevWeekCount || 0;
 
             // 30-day daily breakdown for chart
@@ -120,16 +126,20 @@ export default async function DashboardPage() {
                 .select('sent_at')
                 .eq('status', 'sent')
                 .gte('sent_at', thirtyDaysAgo.toISOString())
-                .in('automation_id', allAutomationIds)
+                .eq('user_id', user.id)
                 .order('sent_at', { ascending: true });
             dailyDMData = aggregateDailyDMs(dmRows || [], thirtyDaysAgo);
 
-            // Top posts by DMs sent
+            // Top posts by DMs sent — keep filtering by automation_id here
+            // since we attribute clicks to specific posts. Rows with
+            // automation_id NULL (deleted automations / story mentions)
+            // simply don't have a post to attribute to.
             const { data: sentLogs } = await supabase
                 .from('dm_sent_log')
                 .select('automation_id')
                 .eq('status', 'sent')
-                .in('automation_id', allAutomationIds);
+                .eq('user_id', user.id)
+                .not('automation_id', 'is', null);
 
             const countByAutomation = {};
             for (const log of (sentLogs || [])) {
@@ -285,12 +295,6 @@ function getMotivationalQuote(totalSent) {
     if (totalSent < 1000) return `${totalSent.toLocaleString()} DMs sent \u2014 almost four figures, legend! 🌟`;
     if (totalSent < 5000) return `${totalSent.toLocaleString()} DMs sent \u2014 wow, it\'s absolutely rocking! 🤘`;
     return `${totalSent.toLocaleString()} DMs sent. You\'re an AutoDM powerhouse \u2014 absolutely legendary! 🏆`;
-}
-
-function daysUntilMonthEnd() {
-    const now     = new Date();
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    return lastDay.getDate() - now.getDate();
 }
 
 function aggregateDailyDMs(rows, startDate) {

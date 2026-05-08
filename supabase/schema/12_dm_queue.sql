@@ -2,7 +2,7 @@
 -- Table: dm_queue
 -- Controlled send pipeline. Instead of sending DMs inline
 -- on every webhook event, they are enqueued here and drained
--- by the process-queue cron every 5 minutes.
+-- by the process-queue cron (runs every 1 minute via cron-job.org).
 --
 -- Serves: overflow (rate-limit protection), backfill
 --         (previous comments), upsell follow-ups,
@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS dm_queue (
     -- Target
     post_id         uuid,           -- NULL ok (upsells have no post context)
     recipient_ig_id text NOT NULL,
+    recipient_username text DEFAULT NULL,  -- captured at enqueue when known; nullable
     comment_id      text,
     comment_text    text,
     platform        text NOT NULL DEFAULT 'instagram',
@@ -73,3 +74,14 @@ CREATE INDEX IF NOT EXISTS idx_dm_queue_scheduled
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dm_queue_dedup
     ON dm_queue (automation_id, recipient_ig_id, comment_id)
     WHERE status IN ('pending', 'processing') AND comment_id IS NOT NULL;
+
+-- Atomic dedup for flow-step and upsell enqueue. The cron loops do a
+-- check-then-insert (TOCTOU); two overlapping runs can both pass the
+-- in-flight guard and double-enqueue. This partial unique index makes
+-- the database refuse the duplicate; the cron catches the unique-violation
+-- error code (23505) and treats it as already-queued.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dm_queue_flow_upsell_dedup
+    ON dm_queue (source_log_id, queue_reason)
+    WHERE source_log_id IS NOT NULL
+      AND queue_reason IN ('flow_step', 'upsell')
+      AND status IN ('pending', 'processing', 'sent');

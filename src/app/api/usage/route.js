@@ -12,39 +12,20 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     try {
-        // Plan comes from user_plans — the single source of truth
+        // Plan + cached monthly counter live on the same row.
         const { data: userPlan } = await supabase
             .from('user_plans')
-            .select('plan, plan_expires_at, trial_ends_at')
+            .select('plan, plan_expires_at, trial_ends_at, monthly_dm_count, dm_count_month')
             .eq('user_id', user.id)
             .maybeSingle();
 
         const effectivePlan = getEffectivePlan(userPlan);
         const dmLimit       = getDmLimit(effectivePlan);
 
-        // All automation IDs for this user
-        const { data: userAutomations } = await supabase
-            .from('dm_automations')
-            .select('id')
-            .eq('user_id', user.id);
-
-        const allIds = (userAutomations || []).map((a) => a.id);
-
-        let count = 0;
-        if (allIds.length > 0) {
-            const startOfMonth = new Date();
-            startOfMonth.setDate(1);
-            startOfMonth.setHours(0, 0, 0, 0);
-
-            const { count: monthlyCount } = await supabase
-                .from('dm_sent_log')
-                .select('id', { count: 'exact', head: true })
-                .in('automation_id', allIds)
-                .eq('status', 'sent')
-                .gte('sent_at', startOfMonth.toISOString());
-
-            count = monthlyCount || 0;
-        }
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const count = userPlan?.dm_count_month === currentMonth
+            ? (userPlan.monthly_dm_count || 0)
+            : 0;
 
         const unlimited = dmLimit === null;
         const pct       = unlimited ? 0 : Math.round((count / dmLimit) * 100);
@@ -57,7 +38,11 @@ export async function GET() {
             remaining,
             pct,
             plan:      effectivePlan,
-            month:     new Date().toISOString().slice(0, 7),
+            // Raw paid-pro expiry (null when on free or trial). Used by the
+            // pricing page to disable re-purchase while a paid period is
+            // active and to display the active-until date.
+            planExpiresAt: userPlan?.plan_expires_at || null,
+            month:     currentMonth,
         });
     } catch (err) {
         return NextResponse.json({ error: err.message }, { status: 500 });

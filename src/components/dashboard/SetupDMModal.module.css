@@ -2,8 +2,8 @@
 
 /* ── Overlay ──────────────────────────────────────────────────── */
 .overlay {
-    position: fixed; inset: 0; z-index: 200;
-    background: rgba(0, 0, 0, 0.75);
+    position: fixed; inset: 0; z-index: 250;
+    background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     display: flex; align-items: center; justify-content: center;
@@ -12,25 +12,46 @@
     overflow: hidden;
 }
 
-/* ── Modal shell ──────────────────────────────────────────────── */
+/* ── Drawer panel — right-anchored slide-in ──────────────────────
+   Was a centered modal; switched to a side-drawer so the underlying
+   page (post grid, story tray, etc.) stays partly visible while the
+   user configures the automation. Less context-loss, more screen
+   space for the 23-field form.
+
+   The panel sits at the right edge of the viewport regardless of the
+   shared Modal primitive's flex centering: position:absolute escapes
+   the flex flow, and the negative top/right/bottom values negate the
+   primitive's overlay padding so the drawer is flush to all three
+   edges. Border-radius is left-only so the panel reads as a sliding
+   sheet, not a floating card. */
 .modal {
     background: #13102A;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    width: 96%;
-    max-width: 1100px;
-    height: 92vh;
-    max-height: 880px;
+    border-left: 1px solid rgba(167, 139, 250, 0.18);
+    border-radius: 20px 0 0 20px;
+    /* Right-anchored, with visible top/bottom breathing room on desktop.
+       The 16px positive offsets sit on top of the overlay's own 16px
+       padding → 32px of dark overlay visible above and below the drawer.
+       Right stays flush (right corners square via border-radius). */
+    position: absolute;
+    top: 0px;
+    right: -16px;
+    bottom: 0px;
+    width: 880px;
+    max-width: calc(100vw - var(--sidebar-width, 0px) - 80px);
+    height: auto;
+    max-height: none;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4);
+    box-shadow:
+        -24px 0 60px rgba(0, 0, 0, 0.50),
+        -8px 0 24px rgba(0, 0, 0, 0.30);
     overflow: hidden;
-    animation: modalUp 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    animation: drawerSlideIn 0.36s cubic-bezier(0.22, 1, 0.36, 1);
     font-family: 'Inter', sans-serif;
-    position: relative;
 }
-@keyframes modalUp {
-    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+@keyframes drawerSlideIn {
+    from { opacity: 0; transform: translateX(40px); }
     to   { opacity: 1; transform: none; }
 }
 
@@ -47,7 +68,10 @@
 /* ── Modal header ─────────────────────────────────────────────── */
 .modalHeader {
     display: flex; align-items: flex-start; justify-content: space-between;
-    padding: 16px 22px;
+    /* Bumped from 16px → 22px vertical so the header has visible
+       breathing room at the top of the drawer; horizontal kept at
+       22px to match the form panel below. */
+    padding: 22px 22px 16px;
     border-bottom: 1px solid rgba(255,255,255,0.07);
     flex-shrink: 0; gap: 12px;
 }
@@ -94,6 +118,24 @@
 .tab:hover { color: rgba(255,255,255,0.65); }
 .tabActive { color: #C4B5FD; font-weight: 600; border-bottom-color: #7C3AED; }
 
+/* Per-tab error indicator — small red dot to the right of the label.
+   Hidden on the active tab? No — keep it shown so the user remembers
+   they're standing on a tab that has unresolved fields. */
+.tabDot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #F87171;
+    margin-left: 8px;
+    box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.18);
+    animation: tabDotPulse 1.6s ease-in-out infinite;
+    flex-shrink: 0;
+}
+@keyframes tabDotPulse {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.16); }
+    50%      { box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.24); }
+}
+
 /* ── Split body ───────────────────────────────────────────────── */
 .body {
     display: grid;
@@ -118,7 +160,9 @@
 
 /* Form panel — scrollable content only, NO save bar here */
 .formPanel {
-    padding: 18px 22px;
+    /* Bumped from 18px → 24px so fields don't feel crammed against
+       the tabs above and the save bar below. */
+    padding: 24px 24px;
     overflow-y: auto;
     flex: 1;
     min-height: 0;
@@ -133,9 +177,10 @@
 .previewPanel {
     background: linear-gradient(160deg, #0F0A1E 0%, #160F2E 100%);
     display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 20px 10px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 10px 10px 14px;
     position: relative;
     overflow-y: auto;
     overflow-x: hidden;
@@ -150,11 +195,49 @@
     background: radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%);
     top: 40%; left: 50%; transform: translate(-50%, -50%);
     pointer-events: none;
+    z-index: 0;
+}
+/* "Live Preview" label — kept consistent with light theme */
+.previewPanel::after {
+    content: 'Live Preview';
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 10px 0 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(167, 139, 250, 0.45);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+}
+
+/* ── Upload progress bar — sits flush above the save bar ───────
+   Thin (3px) violet bar that grows left-to-right as each data-URL
+   image finishes uploading. Hidden by default; rendered conditionally
+   in JSX only while an upload is in flight. */
+.uploadProgress {
+    height: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.uploadProgressFill {
+    height: 100%;
+    background: linear-gradient(90deg, #7C3AED 0%, #A78BFA 100%);
+    box-shadow: 0 0 8px rgba(167, 139, 250, 0.55);
+    border-radius: 0 2px 2px 0;
+    transition: width 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ── Save bar — always pinned at bottom of left column ─────────── */
 .saveBar {
-    padding: 12px 22px;
+    /* Bumped from 12px → 16px vertical so the save action has
+       clearance from the bottom edge of the drawer. */
+    padding: 16px 24px;
     border-top: 1px solid rgba(255,255,255,0.07);
     display: flex; align-items: center; gap: 12px;
     flex-shrink: 0; /* never shrinks — always visible */
@@ -172,6 +255,80 @@
 }
 .saveBtn:hover:not(:disabled) { background: #6D28D9; }
 .saveBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* "Next →" button — shown on DM Setup and Trigger Setup tabs in place
+   of the save button. Visually quieter than save (it's a navigation
+   action, not a commit) but sized the same so the save bar layout
+   doesn't shift between tabs. */
+.nextBtn {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 38px; padding: 0 18px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.875rem; font-weight: 600;
+    color: #C4B5FD;
+    background: rgba(124, 58, 237, 0.16);
+    border: 1px solid rgba(167, 139, 250, 0.32);
+    border-radius: 9px; cursor: pointer;
+    transition: background 150ms, border-color 150ms, color 150ms;
+    flex-shrink: 0;
+}
+.nextBtn:hover {
+    background: rgba(124, 58, 237, 0.28);
+    border-color: rgba(167, 139, 250, 0.55);
+    color: #DDD6FE;
+}
+
+/* Preview toggle button — visible only on mobile */
+.previewToggleBtn {
+    display: none;
+    align-items: center; gap: 6px;
+    height: 38px; padding: 0 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.825rem; font-weight: 600;
+    color: rgba(255,255,255,0.78);
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 9px; cursor: pointer;
+    transition: background 150ms, color 150ms; flex-shrink: 0;
+}
+.previewToggleBtn:hover {
+    background: rgba(255,255,255,0.10);
+    color: #fff;
+}
+
+/* Mobile preview sheet */
+.mobilePreviewSheet {
+    display: none;
+    position: absolute; inset: 0;
+    background: #13102A;
+    z-index: 10;
+    flex-direction: column;
+    animation: sheetUp 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sheetUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: none; }
+}
+.mobilePreviewHeader {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    flex-shrink: 0;
+}
+.mobilePreviewTitle {
+    font-size: 0.9375rem; font-weight: 700;
+    color: rgba(255,255,255,0.92);
+    letter-spacing: -0.02em;
+}
+.mobilePreviewBody {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px 12px;
+    background: linear-gradient(160deg, #0F0A1E 0%, #160F2E 100%);
+}
 
 /* Scheduled campaign variant — blue tint */
 .saveBtnScheduled {
@@ -193,10 +350,55 @@
 .loadingConfig p { font-size: 0.875rem; color: rgba(255,255,255,0.35); margin: 0; }
 
 /* ── Responsive ───────────────────────────────────────────────── */
+/*
+ * <1100px: the drawer takes ~80% of the viewport — preview panel
+ * still fits comfortably alongside the form.
+ *
+ * <900px: collapse the inline preview panel (too narrow alongside
+ * the form) and let the drawer expand to nearly full-width. User
+ * opens the preview via the saveBar's "Preview" button.
+ *
+ * <480px: drawer is a full-screen sheet, no margins.
+ */
+@media (max-width: 1100px) {
+    .modal { width: calc(100vw - var(--sidebar-width, 0px) - 24px); }
+}
+
 @media (max-width: 900px) {
-    .modal { height: 96vh; max-height: none; }
-    .body  { grid-template-columns: 1fr; overflow-y: auto; }
-    .leftCol { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.07); }
-    .formPanel  { overflow-y: visible; flex: unset; }
-    .previewPanel { min-height: 400px; overflow-y: hidden; align-items: center; }
+    .modal {
+        width: calc(100vw - var(--sidebar-width, 0px) - 16px);
+        border-radius: 16px 0 0 16px;
+    }
+    .body  { grid-template-columns: 1fr; overflow: hidden; }
+    .leftCol { border-right: none; }
+    .formPanel { flex: 1; min-height: 0; overflow-y: auto; }
+    .previewPanel { display: none; }
+    .previewToggleBtn { display: inline-flex; }
+    .mobilePreviewSheet { display: flex; }
+}
+
+@media (max-width: 480px) {
+    /* The shared Modal overlay drops its 16px padding at this size, so
+       the drawer's negative top/right/bottom (which compensated for that
+       padding) would push the panel 16px past every edge. Reset to inset:0
+       so the drawer is flush against the viewport on mobile — full-screen
+       sheet, no bleed. */
+    .overlay { padding: 0; }
+    .modal {
+        position: absolute;
+        top: 0; right: 0; bottom: 0; left: 0;
+        width: auto;
+        max-width: none;
+        border-radius: 0;
+        border: none;
+    }
+    .modalHeader { padding: 16px 16px 12px; }
+    .modalTitle { font-size: 0.9rem; }
+    .postCaption { font-size: 0.75rem; max-width: 100%; }
+    .tabs { padding: 0 4px; }
+    .tab { padding: 0 12px; font-size: 0.8rem; }
+    .formPanel { padding: 14px 14px; }
+    .saveBar { padding: 10px 14px; gap: 8px; }
+    .saveBtn { padding: 0 14px; font-size: 0.825rem; }
+    .previewToggleBtn { padding: 0 10px; }
 }

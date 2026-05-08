@@ -1,0 +1,292 @@
+/* ================================================================
+   LIGHT THEME — Features
+   Section header + per-row copy column light. Phone mockups stay
+   dark inside (real phones look dark). expandFade switches to
+   warm-off-white so the "more below" hint blends with the light
+   page; expandBtn softens to a tinted-violet pill on white.
+   ================================================================ */
+
+.section {
+    padding: 96px 24px;
+    font-family: var(--font-landing-body);
+    /* Raised white surface with a faint warm tint at the top, fading
+       back to the page bg by mid-scroll. Gives Features a clean
+       "product zone" feel between the darker DemoFlow (page bg) and
+       the warm Testimonials below. Hairline borders above + below
+       cleanly separate Features from its neighbors. */
+    background: linear-gradient(180deg, #FFFFFF 0%, #FAFAF9 100%);
+    position: relative;
+    border-top: 1px solid #E7E5E4;
+    border-bottom: 1px solid #E7E5E4;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+.inner { max-width: 1160px; margin: 0 auto; }
+
+.header { text-align: center; margin-bottom: 72px; }
+.eyebrow {
+    display: inline-block;
+    font-size: 12px; font-weight: 700;
+    color: #6D28D9; letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 16px;
+}
+.title {
+    font-family: var(--font-landing-display);
+    font-variation-settings: 'opsz' 72;
+    font-size: clamp(2rem, 3.4vw, 2.8rem);
+    font-weight: 600;
+    color: #0A0A0A;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    margin: 0 0 16px;
+}
+.subtitle {
+    font-size: 1rem; color: #525252;
+    font-weight: 400; line-height: 1.7;
+    max-width: 520px; margin: 0 auto;
+}
+
+.rows { display: flex; flex-direction: column; gap: 96px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+.rowReverse { direction: rtl; }
+.rowReverse > * { direction: ltr; }
+
+.copy { display: flex; flex-direction: column; gap: 14px; max-width: 460px; }
+.iconWrap { width: 48px; height: 48px; border-radius: 13px; display: flex; align-items: center; justify-content: center; border: 1px solid; }
+.rowTitle {
+    font-family: var(--font-landing-display);
+    font-variation-settings: 'opsz' 48;
+    font-size: 1.65rem;
+    font-weight: 600;
+    color: #0A0A0A;
+    letter-spacing: -0.025em;
+    line-height: 1.12;
+    margin: 0;
+}
+.rowDesc {
+    font-size: 0.95rem;
+    color: #525252;
+    font-weight: 400;
+    line-height: 1.7;
+    margin: 0;
+}
+.rowAccent {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 0.825rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.previewSlot { position: relative; display: flex; justify-content: center; align-items: center; min-height: 460px; }
+.previewGlow { position: absolute; width: 360px; height: 360px; border-radius: 50%; filter: blur(20px); pointer-events: none; z-index: 0; animation: previewGlowPulse 5s ease-in-out infinite; opacity: 0.6; }
+@keyframes previewGlowPulse { 0%, 100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.05); } }
+
+/* Phone — kept dark inside the light page */
+.phone {
+    position: relative;
+    width: 240px;
+    aspect-ratio: 9 / 18;
+    background: linear-gradient(160deg, #1F1840 0%, #0E0820 100%);
+    border-radius: 32px;
+    border: 1.5px solid rgba(10, 10, 10, 0.10);
+    padding: 16px 9px 11px;
+    box-shadow:
+        0 24px 56px rgba(22, 18, 46, 0.22),
+        0 8px 22px rgba(22, 18, 46, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    z-index: 1;
+}
+.phoneNotch { position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 48px; height: 5px; background: rgba(0, 0, 0, 0.85); border-radius: 100px; }
+.phoneScreen { width: 100%; height: 100%; background: #0A0815; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; overflow: hidden; }
+.platformLabel { text-align: center; padding: 6px 0 4px; font-size: 9.5px; font-weight: 700; color: rgba(255, 255, 255, 0.55); border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+
+/* All phone interior styles — verbatim from dark module since the
+   phone screen itself is dark. */
+.igHeader { display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.igAvatar { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #F59E0B 0%, #DC2626 50%, #7C3AED 100%); color: #fff; font-size: 8.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.igHeaderInfo { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.igHandle { font-size: 10.5px; font-weight: 700; color: rgba(255, 255, 255, 0.95); }
+.igLocation { font-size: 9px; color: rgba(255, 255, 255, 0.4); font-weight: 500; }
+.igMore { color: rgba(255, 255, 255, 0.55); flex-shrink: 0; }
+
+.igPost { position: relative; aspect-ratio: 1 / 1; background: radial-gradient(ellipse at 30% 30%, rgba(167, 139, 250, 0.45) 0%, transparent 55%), radial-gradient(ellipse at 70% 70%, rgba(244, 114, 182, 0.40) 0%, transparent 55%), linear-gradient(135deg, #1F1242 0%, #2A1850 100%); }
+.igPostOverlay { position: absolute; inset: 0; padding: 9px; display: flex; flex-direction: column; justify-content: space-between; }
+.igReelBadge { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 3px 7px; background: rgba(0, 0, 0, 0.50); backdrop-filter: blur(4px); border-radius: 100px; font-size: 8.5px; font-weight: 700; color: rgba(255, 255, 255, 0.95); letter-spacing: 0.04em; }
+.igPostMeta { font-size: 0.95rem; font-weight: 800; color: rgba(255, 255, 255, 0.95); letter-spacing: 0.06em; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4); }
+.igActions { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px 4px; color: rgba(255, 255, 255, 0.85); }
+.igActionsLeft { display: flex; gap: 10px; }
+
+.igCommentRow { display: flex; align-items: center; gap: 7px; margin: 6px 10px 10px; padding: 6px 8px; border: 1px solid; border-radius: 9px; animation: igCommentBlink 5s ease-in-out infinite; }
+@keyframes igCommentBlink { 0%, 65%, 100% { opacity: 0.85; } 20%, 50% { opacity: 1; } }
+.igCommentAvatar { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #06B6D4, #2563EB); color: #fff; font-size: 8.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.igCommentBody { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.igCommentName { font-size: 9.5px; font-weight: 700; color: rgba(255, 255, 255, 0.85); }
+.igCommentText { font-size: 9.5px; color: rgba(255, 255, 255, 0.65); }
+.igCommentKw { font-weight: 800; letter-spacing: 0.04em; }
+.igCommentBadge { font-size: 8.5px; font-weight: 800; padding: 2px 7px; border-radius: 100px; letter-spacing: 0.04em; flex-shrink: 0; }
+
+.storyMeta { display: flex; align-items: center; gap: 7px; padding: 8px 10px 4px; }
+.storyRing { width: 28px; height: 28px; border-radius: 50%; padding: 1.5px; flex-shrink: 0; }
+.storyRingInner { width: 100%; height: 100%; border-radius: 50%; background: #1A1430; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.storyHandle { font-size: 10.5px; font-weight: 700; color: rgba(255, 255, 255, 0.92); flex: 1; min-width: 0; }
+.storyTime { font-size: 9px; color: rgba(255, 255, 255, 0.4); font-weight: 500; }
+.storyImage { position: relative; aspect-ratio: 1 / 1; margin: 4px 10px; border-radius: 9px; overflow: hidden; }
+.storyImageBlob { width: 100%; height: 100%; }
+.mentionTag { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(4px); border: 1px solid; border-radius: 100px; font-size: 10.5px; font-weight: 700; }
+.dmThreadMini { display: flex; flex-direction: column; gap: 5px; padding: 6px 10px 10px; }
+.bubble { align-self: flex-start; max-width: 90%; padding: 6px 10px; border-radius: 12px; font-size: 10px; line-height: 1.4; color: rgba(255, 255, 255, 0.88); border: 1px solid rgba(255, 255, 255, 0.04); }
+.dmRecv { border-radius: 12px 12px 12px 3px; }
+.dmSent { align-self: flex-end !important; border-radius: 12px 12px 3px 12px; font-weight: 600; animation: dmSentPop 4s ease-out infinite; }
+@keyframes dmSentPop { 0%, 35% { opacity: 0; transform: translateY(6px) scale(0.94); } 50%, 100% { opacity: 1; transform: none; } }
+.dmDelivered { align-self: flex-end; font-size: 8.5px; color: rgba(255, 255, 255, 0.32); margin-top: 2px; }
+
+.mentionFooter { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid rgba(255, 255, 255, 0.05); border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.mentionAvatar { width: 22px; height: 22px; border-radius: 50%; color: #fff; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mentionBody { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.mentionName { font-size: 10px; font-weight: 700; color: rgba(255, 255, 255, 0.92); }
+.mentionAction { font-size: 9px; color: rgba(255, 255, 255, 0.5); }
+.mentionPing { width: 7px; height: 7px; border-radius: 50%; animation: livePulse 1.6s ease-in-out infinite; }
+@keyframes livePulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.3); } }
+.dmSentBlock { margin: 8px 10px 10px; padding: 8px 10px; border: 1px solid; border-radius: 9px; font-size: 9.5px; line-height: 1.5; font-weight: 600; animation: dmSentPop 4s ease-out infinite; }
+
+.kwHeader { padding: 9px 10px 4px; font-size: 8.5px; font-weight: 700; color: rgba(255, 255, 255, 0.50); letter-spacing: 0.10em; }
+.kwField { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 10px 8px; padding: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; }
+.kwChip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 6px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; border: 1px solid; color: rgba(255, 255, 255, 0.55); }
+.kwX { font-size: 11px; font-weight: 400; opacity: 0.7; }
+.kwAdd { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 6px; font-size: 9px; color: rgba(255, 255, 255, 0.4); border: 1px dashed rgba(255, 255, 255, 0.18); }
+.kwRule { display: flex; align-items: center; gap: 7px; margin: 0 10px 4px; padding: 5px 9px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 7px; font-size: 9.5px; color: rgba(255, 255, 255, 0.65); font-weight: 500; }
+.kwRuleDot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.kwResult { margin: 6px 10px 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid; font-size: 10px; font-weight: 700; text-align: center; margin-top: auto; }
+
+.analyticsHeader { display: flex; align-items: center; gap: 7px; padding: 9px 12px 0; }
+.analyticsDot { width: 7px; height: 7px; border-radius: 50%; animation: livePulse 2s ease-in-out infinite; }
+.analyticsLabel { font-size: 9px; font-weight: 700; color: rgba(255, 255, 255, 0.55); letter-spacing: 0.08em; text-transform: uppercase; }
+.analyticsValue { font-size: 1.6rem; font-weight: 800; color: rgba(255, 255, 255, 0.96); letter-spacing: -0.04em; line-height: 1; padding: 4px 12px 0; }
+.analyticsSubLabel { font-size: 9.5px; color: rgba(255, 255, 255, 0.42); font-weight: 500; padding: 0 12px; }
+.analyticsBars { display: flex; align-items: flex-end; gap: 4px; height: 36px; padding: 12px 12px 4px; }
+.analyticsBar { flex: 1; border-radius: 2px 2px 0 0; }
+.analyticsRow { display: flex; gap: 6px; padding: 8px 10px 10px; margin-top: auto; }
+.analyticsTile { flex: 1; padding: 7px 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 8px; display: flex; flex-direction: column; gap: 2px; }
+.tileLabel { font-size: 8.5px; color: rgba(255, 255, 255, 0.4); font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+.tileVal { font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em; }
+
+.emailLeadPill { display: inline-flex; align-items: center; gap: 6px; align-self: center; margin-top: 6px; padding: 5px 10px 5px 8px; border-radius: 100px; border: 1px solid; font-size: 9.5px; font-weight: 600; letter-spacing: 0.005em; }
+
+.abTrack { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 4px; }
+.abCard { border: 1px solid; border-radius: 9px; padding: 7px 9px 8px; display: flex; flex-direction: column; gap: 6px; }
+.abCardTop { display: flex; align-items: center; gap: 6px; }
+.abLetter { width: 18px; height: 18px; border-radius: 5px; border: 1px solid; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; letter-spacing: -0.01em; flex-shrink: 0; }
+.abHeadline { flex: 1; min-width: 0; font-size: 9.5px; color: rgba(255, 255, 255, 0.78); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.abWinner { display: inline-flex; align-items: center; gap: 3px; font-size: 8.5px; font-weight: 700; letter-spacing: 0.02em; flex-shrink: 0; }
+.abMeter { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.abMeterFill { display: block; height: 100%; border-radius: 2px; transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1); }
+.abFooter { display: flex; align-items: baseline; justify-content: space-between; }
+.abFooterLabel { font-size: 8px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.4); }
+.abFooterValue { font-family: var(--font-landing-display); font-variation-settings: 'opsz' 24; font-size: 13px; font-weight: 700; letter-spacing: -0.02em; }
+.abFootnote { text-align: center; font-size: 9px; font-weight: 500; padding: 6px 10px 8px; line-height: 1.3; }
+
+/* Expand/collapse toggle — fade now blends into the warm-off-white
+   page; button gets a soft tinted-violet pill on white so it reads
+   without the dark-mode glow. */
+.expandWrap {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    margin-top: -32px;
+    padding-top: 64px;
+    pointer-events: none;
+}
+.expandWrap .expandBtn { pointer-events: auto; }
+.expandFade {
+    position: absolute;
+    top: -120px; left: 0; right: 0;
+    height: 160px;
+    background: linear-gradient(to bottom, transparent 0%, rgba(250, 250, 249, 0.85) 70%, rgba(250, 250, 249, 1) 100%);
+    pointer-events: none;
+    z-index: 0;
+}
+.collapseWrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 48px;
+}
+
+.expandBtn {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 22px;
+    border-radius: 100px;
+    background: #FFFFFF;
+    border: 1px solid #C4B5FD;
+    color: #6D28D9;
+    font-family: var(--font-landing-display);
+    font-variation-settings: 'opsz' 24;
+    font-size: 0.92rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms, transform 120ms;
+    box-shadow: 0 4px 12px rgba(109, 40, 217, 0.10);
+}
+.expandBtn:hover {
+    background: #F5F3FF;
+    border-color: #A78BFA;
+    color: #5B21B6;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(109, 40, 217, 0.16);
+}
+.expandBtn:active { transform: translateY(0); }
+
+@media (max-width: 860px) {
+    .row, .rowReverse { grid-template-columns: 1fr; gap: 32px; direction: ltr; }
+    .copy { max-width: none; text-align: center; align-items: center; }
+    .rowReverse .copy { order: -1; }
+    .previewSlot { min-height: 420px; padding: 0; }
+    .previewGlow { width: 260px; height: 260px; }
+    .header { padding: 0 8px; }
+    .subtitle { padding: 0 8px; }
+}
+@media (max-width: 560px) {
+    .section { padding: 72px 18px; }
+    .rows { gap: 56px; }
+    .rowTitle { font-size: 1.35rem; line-height: 1.18; }
+    .rowDesc { font-size: 0.92rem; padding: 0 4px; }
+    .phone { width: 218px; }
+    .previewSlot { min-height: 380px; }
+    .previewGlow { width: 240px; height: 240px; }
+}
+@media (max-width: 400px) {
+    .section { padding: 64px 16px; }
+    .rows { gap: 48px; }
+    .phone { width: 200px; }
+    .previewSlot { min-height: 360px; }
+}
+
+/* Carousel + Follow-Gate dark previews stay verbatim */
+.dmHeaderMini { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 8px; }
+.dmHeaderAvatar { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; flex-shrink: 0; }
+.dmHeaderName { font-size: 10.5px; font-weight: 600; color: rgba(255, 255, 255, 0.85); line-height: 1.2; }
+.dmHeaderSub { font-size: 8.5px; color: rgba(16, 185, 129, 0.7); margin-top: 1px; }
+
+.carouselTrack { display: flex; gap: 6px; padding: 6px 10px 4px; overflow: hidden; align-items: stretch; }
+.carouselCard { flex: 1; min-width: 0; border: 1px solid; border-radius: 8px; padding: 4px 4px 6px; display: flex; flex-direction: column; gap: 4px; transition: transform 200ms ease, border-color 200ms ease, background 200ms ease; }
+.carouselImg { height: 44px; border-radius: 6px; position: relative; overflow: hidden; }
+.carouselTag { position: absolute; top: 4px; left: 4px; font-size: 7px; font-weight: 700; letter-spacing: 0.04em; padding: 1.5px 5px; border-radius: 4px; border: 1px solid; }
+.carouselName { font-size: 9.5px; font-weight: 600; color: rgba(255, 255, 255, 0.85); text-align: center; line-height: 1.2; }
+.carouselBtn { font-size: 8.5px; font-weight: 700; text-align: center; padding: 4px 0; border-radius: 5px; letter-spacing: 0.01em; }
+.carouselNav { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 0 6px; color: rgba(255, 255, 255, 0.4); }
+.carouselDots { display: inline-flex; align-items: center; gap: 4px; }
+.carouselDot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255, 255, 255, 0.5); }
+
+.gateChips { display: flex; gap: 6px; padding: 4px 10px 6px; flex-wrap: wrap; }
+.gateChip { font-size: 9px; font-weight: 600; padding: 4px 9px; border-radius: 100px; border: 1px solid; background: rgba(255, 255, 255, 0.02); line-height: 1; }
+.gateDivider { display: flex; align-items: center; gap: 6px; padding: 4px 10px; font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255, 255, 255, 0.35); }
+.gateDivider span:first-child, .gateDivider span:last-child { flex: 1; height: 1px; background: rgba(255, 255, 255, 0.08); }
+
+.bubbleRecv { align-self: flex-start; max-width: calc(100% - 20px); margin: 0 10px; padding: 7px 10px; border-radius: 12px 12px 12px 3px; font-size: 10px; line-height: 1.4; color: rgba(255, 255, 255, 0.88); border: 1px solid rgba(255, 255, 255, 0.04); }
+.bubbleSent { align-self: flex-end; max-width: calc(100% - 20px); margin: 0 10px; padding: 7px 10px; border-radius: 12px 12px 3px 12px; font-size: 10px; line-height: 1.4; font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.04); animation: dmSentPop 4s ease-out infinite; }

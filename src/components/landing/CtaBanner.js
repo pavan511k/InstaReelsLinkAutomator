@@ -1,8 +1,13 @@
+'use client';
+
 import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
-import styles from './CtaBanner.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './CtaBanner.module.css';
+import lightStyles from './CtaBanner.light.module.css';
 
 export default function CtaBanner() {
+  const styles = useStyles(darkStyles, lightStyles);
   return (
     <section className={styles.section} id="pricing">
       <div className={styles.inner}>

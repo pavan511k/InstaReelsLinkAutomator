@@ -46,6 +46,27 @@ export async function getUserEffectivePlan(supabase, userId) {
  * @param {string} [message]
  * @returns {NextResponse|null}
  */
+/**
+ * Reads the cached monthly DM count for a user. Maintained by the
+ * tr_dm_sent_log_count Postgres trigger on dm_sent_log inserts. Returns 0 if
+ * the cached month doesn't match the current calendar month (counter hasn't
+ * been rolled forward yet — the next send will reset it).
+ *
+ * @param {object} supabase
+ * @param {string} userId
+ * @returns {Promise<number>}
+ */
+export async function getMonthlyDmCount(supabase, userId) {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const { data } = await supabase
+        .from('user_plans')
+        .select('monthly_dm_count, dm_count_month')
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (!data || data.dm_count_month !== currentMonth) return 0;
+    return data.monthly_dm_count || 0;
+}
+
 export function requirePro(effectivePlan, message = 'This feature requires a Pro plan.') {
     if (effectivePlan === 'pro' || effectivePlan === 'trial' || effectivePlan === 'business') {
         return null; // gate passes

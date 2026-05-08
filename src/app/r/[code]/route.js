@@ -48,9 +48,33 @@ export async function GET(request, { params }) {
         );
     }
 
+    // Defense against stored open-redirect payloads (e.g. javascript:, data:).
+    // Codes are upserted server-side from automation configs but we still
+    // refuse to bounce a browser to anything other than http(s).
+    let parsedDestination;
+    try {
+        parsedDestination = new URL(linkRow.original_url);
+    } catch {
+        return NextResponse.redirect(
+            process.env.NEXT_PUBLIC_APP_URL || 'https://autodm.app',
+        );
+    }
+    if (parsedDestination.protocol !== 'http:' && parsedDestination.protocol !== 'https:') {
+        return NextResponse.redirect(
+            process.env.NEXT_PUBLIC_APP_URL || 'https://autodm.app',
+        );
+    }
+
+    // Recipient attribution — captured server-side from the `?r=` query so
+    // the destination site never sees it. Used by cron/upsell to skip
+    // recipients who actually clicked. Legacy DMs without ?r=` log NULL,
+    // which the upsell cron treats as "unknown — fall through to time-based".
+    const reqUrl       = new URL(request.url);
+    const recipientIg  = reqUrl.searchParams.get('r') || null;
+
     // ── Log click (fire-and-forget) ───────────────────────────────
     // We don't await this — the user gets their redirect immediately.
-    logClick(supabase, code, linkRow.automation_id, request).catch((err) =>
+    logClick(supabase, code, linkRow.automation_id, recipientIg, request).catch((err) =>
         console.warn('[ClickTrack] Log error (non-fatal):', err.message),
     );
 
@@ -68,7 +92,7 @@ export async function GET(request, { params }) {
 }
 
 /** Log a single click event. Hashes the IP for privacy. */
-async function logClick(supabase, code, automationId, request) {
+async function logClick(supabase, code, automationId, recipientIg, request) {
     const ip        = request.headers.get('cf-connecting-ip')      // Cloudflare
                    || request.headers.get('x-forwarded-for')?.split(',')[0].trim()
                    || request.headers.get('x-real-ip')
@@ -82,11 +106,12 @@ async function logClick(supabase, code, automationId, request) {
 
     await supabase.from('click_events').insert({
         code,
-        automation_id: automationId,
-        ip_hash:       ipHash,
-        user_agent:    userAgent.slice(0, 512), // cap to avoid huge strings
-        referer:       referer.slice(0, 512),
-        clicked_at:    new Date().toISOString(),
+        automation_id:   automationId,
+        recipient_ig_id: recipientIg,
+        ip_hash:         ipHash,
+        user_agent:      userAgent.slice(0, 512), // cap to avoid huge strings
+        referer:         referer.slice(0, 512),
+        clicked_at:      new Date().toISOString(),
     });
 }
 

@@ -1,28 +1,42 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import {
     Globe, Save, Plus, Trash2, ToggleLeft, ToggleRight, Loader2,
+    Lock, Sparkles, Instagram, Facebook,
 } from 'lucide-react';
 import { useStyles } from '@/lib/useStyles';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { toast } from 'sonner';
+import Select from '@/components/ui/Select';
+import { isProOrTrial } from '@/lib/plans';
 import darkStyles from './SettingsContent.module.css';
 import lightStyles from './SettingsContent.light.module.css';
 
 const EMPTY_FORM = {
     name: '', triggerType: 'keywords', keywords: [], message: '',
     sendOncePerUser: true, skipIfPostHasAutomation: true,
+    accountId: '',
 };
 
-export default function GlobalAutomationsContent({ connectedAccounts = [] }) {
+const TRIGGER_TYPE_OPTIONS = [
+    { value: 'keywords',     label: 'Keywords',     desc: 'Match specific words or phrases' },
+    { value: 'all_comments', label: 'All Comments', desc: 'Fire on every new comment' },
+];
+
+export default function GlobalAutomationsContent({ connectedAccounts = [], userPlan = 'free' }) {
     const styles = useStyles(darkStyles, lightStyles);
-    const firstActiveAccount = connectedAccounts.find((a) => a.is_active) || null;
+    const { confirm } = useConfirm();
+    const activeAccounts = connectedAccounts.filter((a) => a.is_active);
+    const firstActiveAccount = activeAccounts[0] || null;
+    const isPro = isProOrTrial(userPlan);
 
     const [globalAutomations, setGlobalAutomations] = useState([]);
     const [globalLoaded, setGlobalLoaded]           = useState(false);
     const [globalLoading, setGlobalLoading]         = useState(false);
     const [showGlobalForm, setShowGlobalForm]       = useState(false);
     const [globalSaving, setGlobalSaving]           = useState(false);
-    const [globalMsg, setGlobalMsg]                 = useState('');
     const [globalForm, setGlobalForm]               = useState({ ...EMPTY_FORM });
     const [globalKwInput, setGlobalKwInput]         = useState('');
 
@@ -40,19 +54,20 @@ export default function GlobalAutomationsContent({ connectedAccounts = [] }) {
     if (!globalLoaded && !globalLoading) loadGlobal();
 
     const handleCreateGlobal = async () => {
-        if (!firstActiveAccount) return;
-        if (!globalForm.name.trim()) { setGlobalMsg('❌ Name is required'); return; }
+        const targetAccountId = globalForm.accountId || firstActiveAccount?.id;
+        if (!targetAccountId) { toast.warning('Pick an account'); return; }
+        if (!globalForm.name.trim()) { toast.warning('Name is required'); return; }
         if (globalForm.triggerType === 'keywords' && globalForm.keywords.length === 0) {
-            setGlobalMsg('❌ Add at least one keyword'); return;
+            toast.warning('Add at least one keyword'); return;
         }
-        if (!globalForm.message.trim()) { setGlobalMsg('❌ DM message is required'); return; }
-        setGlobalSaving(true); setGlobalMsg('');
+        if (!globalForm.message.trim()) { toast.warning('DM message is required'); return; }
+        setGlobalSaving(true);
         try {
             const res = await fetch('/api/global-automations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    accountId: firstActiveAccount.id,
+                    accountId: targetAccountId,
                     name: globalForm.name,
                     dmType: 'message_template',
                     dmConfig: { message: globalForm.message },
@@ -66,28 +81,59 @@ export default function GlobalAutomationsContent({ connectedAccounts = [] }) {
                 setGlobalAutomations((prev) => [...prev, data.automation]);
                 setGlobalForm({ ...EMPTY_FORM });
                 setShowGlobalForm(false);
-                setGlobalMsg('✅ Global trigger created');
-                setTimeout(() => setGlobalMsg(''), 3000);
+                toast.success('Global trigger created');
             } else {
-                setGlobalMsg(`❌ ${data.error}`);
+                toast.error(data.error || 'Could not create global trigger');
             }
-        } catch (e) { setGlobalMsg(`❌ ${e.message}`); }
-        finally { setGlobalSaving(false); }
+        } catch (e) {
+            toast.error(e.message || 'Could not create global trigger');
+        } finally {
+            setGlobalSaving(false);
+        }
     };
 
     const handleToggleGlobal = async (id, isActive) => {
-        await fetch('/api/global-automations', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, isActive: !isActive }),
-        });
+        // Optimistic UI: flip immediately so the toggle feels instant.
+        // If the server rejects, revert + surface an error toast.
         setGlobalAutomations((prev) => prev.map((g) => g.id === id ? { ...g, is_active: !isActive } : g));
+        try {
+            const res = await fetch('/api/global-automations', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, isActive: !isActive }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || `Toggle failed (${res.status})`);
+            }
+        } catch (err) {
+            // Roll back the optimistic flip — server didn't accept it.
+            setGlobalAutomations((prev) => prev.map((g) => g.id === id ? { ...g, is_active: isActive } : g));
+            toast.error(err.message || 'Could not update trigger');
+        }
     };
 
     const handleDeleteGlobal = async (id) => {
-        if (!confirm('Delete this global trigger?')) return;
-        await fetch(`/api/global-automations?id=${id}`, { method: 'DELETE' });
+        const ok = await confirm({
+            title: 'Delete global trigger?',
+            message: 'This trigger will stop firing on new comments. This action cannot be undone.',
+            confirmText: 'Delete',
+        });
+        if (!ok) return;
+        // Optimistic delete — UI removes the row immediately. Restore the
+        // row on failure so the user isn't left thinking deletion succeeded.
+        const removed = globalAutomations.find((g) => g.id === id);
         setGlobalAutomations((prev) => prev.filter((g) => g.id !== id));
+        try {
+            const res = await fetch(`/api/global-automations?id=${id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || `Delete failed (${res.status})`);
+            }
+        } catch (err) {
+            if (removed) setGlobalAutomations((prev) => [...prev, removed]);
+            toast.error(err.message || 'Could not delete trigger');
+        }
     };
 
     if (!firstActiveAccount) {
@@ -131,6 +177,23 @@ export default function GlobalAutomationsContent({ connectedAccounts = [] }) {
                             automation&quot; to avoid double DMs.
                         </div>
 
+                        {!isPro && (
+                            <div className={styles.proUpsellBanner}>
+                                <div className={styles.proUpsellIcon}>
+                                    <Sparkles size={16} />
+                                </div>
+                                <div className={styles.proUpsellBody}>
+                                    <p className={styles.proUpsellTitle}>Global Triggers is a Pro feature</p>
+                                    <p className={styles.proUpsellDesc}>
+                                        You can pause or delete existing triggers, but creating new ones requires a Pro plan.
+                                    </p>
+                                </div>
+                                <Link href="/pricing" className={styles.proUpsellBtn}>
+                                    Upgrade to Pro
+                                </Link>
+                            </div>
+                        )}
+
                         {globalLoading && (
                             <div className={styles.emptyState}>
                                 <Loader2 size={24} className={styles.spinning} />
@@ -145,11 +208,24 @@ export default function GlobalAutomationsContent({ connectedAccounts = [] }) {
                             </div>
                         )}
 
-                        {!globalLoading && globalAutomations.map((ga) => (
+                        {!globalLoading && globalAutomations.map((ga) => {
+                            const acc = activeAccounts.find((a) => a.id === ga.account_id);
+                            const accLabel = acc
+                                ? (acc.platform === 'facebook'
+                                    ? `Facebook · ${acc.fb_page_name || acc.fb_page_id || ''}`
+                                    : `Instagram · @${acc.ig_username || ''}`)
+                                : null;
+                            return (
                             <div key={ga.id} className={styles.accountCard} style={{ marginBottom: 10 }}>
                                 <div className={styles.accountInfo}>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                         <span className={styles.accountName}>{ga.name}</span>
+                                        {activeAccounts.length > 1 && accLabel && (
+                                            <span className={styles.accountPlatform} style={{ gap: 4, opacity: 0.7 }}>
+                                                {acc.platform === 'facebook' ? <Facebook size={11} /> : <Instagram size={11} />}
+                                                {accLabel}
+                                            </span>
+                                        )}
                                         <span className={styles.accountPlatform} style={{ gap: 6 }}>
                                             {ga.trigger_config?.type === 'all_comments'
                                                 ? 'All comments'
@@ -170,7 +246,8 @@ export default function GlobalAutomationsContent({ connectedAccounts = [] }) {
                                     </button>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
 
                         {showGlobalForm && (
                             <div className={styles.configSection} style={{ marginTop: 16 }}>
@@ -180,13 +257,30 @@ export default function GlobalAutomationsContent({ connectedAccounts = [] }) {
                                         value={globalForm.name}
                                         onChange={(e) => setGlobalForm((f) => ({ ...f, name: e.target.value }))} />
                                 </div>
+                                {activeAccounts.length > 1 && (
+                                    <div className={styles.formGroup}>
+                                        <label className={styles.formLabel}>Account</label>
+                                        <Select
+                                            value={globalForm.accountId || firstActiveAccount?.id || ''}
+                                            onChange={(value) => setGlobalForm((f) => ({ ...f, accountId: value }))}
+                                            options={activeAccounts.map((a) => ({
+                                                value: a.id,
+                                                label: a.platform === 'facebook'
+                                                    ? `Facebook · ${a.fb_page_name || a.fb_page_id || ''}`
+                                                    : `Instagram · @${a.ig_username || ''}`,
+                                            }))}
+                                            aria-label="Account"
+                                        />
+                                    </div>
+                                )}
                                 <div className={styles.formGroup}>
                                     <label className={styles.formLabel}>Trigger type</label>
-                                    <select className={styles.formInput} value={globalForm.triggerType}
-                                        onChange={(e) => setGlobalForm((f) => ({ ...f, triggerType: e.target.value }))}>
-                                        <option value='keywords'>Keywords</option>
-                                        <option value='all_comments'>All Comments</option>
-                                    </select>
+                                    <Select
+                                        value={globalForm.triggerType}
+                                        onChange={(value) => setGlobalForm((f) => ({ ...f, triggerType: value }))}
+                                        options={TRIGGER_TYPE_OPTIONS}
+                                        aria-label="Trigger type"
+                                    />
                                 </div>
                                 {globalForm.triggerType === 'keywords' && (
                                     <div className={styles.formGroup}>
@@ -257,11 +351,21 @@ export default function GlobalAutomationsContent({ connectedAccounts = [] }) {
                         )}
 
                         {!showGlobalForm && (
-                            <button className={styles.saveBtn} style={{ marginTop: 16 }} onClick={() => setShowGlobalForm(true)}>
-                                <Plus size={14} /> Add global trigger
-                            </button>
+                            isPro ? (
+                                <button className={styles.saveBtn} style={{ marginTop: 16 }} onClick={() => setShowGlobalForm(true)}>
+                                    <Plus size={14} /> Add global trigger
+                                </button>
+                            ) : (
+                                <button
+                                    className={styles.saveBtn}
+                                    style={{ marginTop: 16, opacity: 0.5, cursor: 'not-allowed' }}
+                                    disabled
+                                    title="Upgrade to Pro to create global triggers"
+                                >
+                                    <Lock size={14} /> Add global trigger
+                                </button>
+                            )
                         )}
-                        {globalMsg && <p className={styles.saveMsg} style={{ marginTop: 10 }}>{globalMsg}</p>}
                     </div>
                 </div>
             </div>

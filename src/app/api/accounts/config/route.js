@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { getUserEffectivePlan } from '@/lib/plan-server';
+import { isProOrTrial } from '@/lib/plans';
 
 /**
  * GET /api/accounts/config
@@ -47,6 +49,20 @@ export async function POST(request) {
 
     if (!accountId || !config) {
         return NextResponse.json({ error: 'Account ID and config are required' }, { status: 400 });
+    }
+
+    // Field-level Pro gate. The endpoint is shared between Free-tier universal
+    // triggers and the Pro-tier Story Mention Auto-DM, so we can't lock the
+    // whole route. Only block save when a non-Pro user is enabling
+    // mentionDm — any other config change is fine.
+    if (config?.mentionDm?.enabled) {
+        const plan = await getUserEffectivePlan(supabase, user.id);
+        if (!isProOrTrial(plan)) {
+            return NextResponse.json(
+                { error: 'Story Mention Auto-DM requires a Pro plan.', upgradeRequired: true },
+                { status: 403 }
+            );
+        }
     }
 
     try {

@@ -1,0 +1,119 @@
+/* ================================================================
+   LIGHT THEME — CtaBanner
+   Pre-footer call to action. White-on-violet inverted card so the
+   CTA stands out against the warm off-white page. (The dark version
+   uses a violet-tinted dark card; light keeps the same shape but
+   inverts to a saturated brand block.)
+   ================================================================ */
+
+.section { padding: 96px 24px; font-family: var(--font-landing-body); }
+.inner {
+  max-width: 960px; margin: 0 auto;
+  position: relative;
+  background: linear-gradient(160deg, #6D28D9 0%, #5B21B6 100%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 24px;
+  padding: 72px 64px;
+  overflow: hidden;
+  text-align: center;
+  box-shadow:
+      0 24px 60px rgba(109, 40, 217, 0.25),
+      0 8px 24px rgba(22, 18, 46, 0.10);
+}
+.bgGlow {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+.bgGrid {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.10) 1px, transparent 1px);
+  background-size: 24px 24px; pointer-events: none;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+}
+.content { position: relative; z-index: 2; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 14px; border-radius: 100px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: 12px; font-weight: 600; color: #FFFFFF;
+  margin-bottom: 28px;
+}
+.title {
+  font-family: var(--font-landing-display);
+  font-variation-settings: 'opsz' 80;
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 600; color: #FFFFFF;
+  letter-spacing: -0.03em; line-height: 1.06; margin: 0 0 18px;
+  max-width: 640px; margin-left: auto; margin-right: auto;
+}
+.subtitle {
+  font-size: 1rem; color: rgba(255, 255, 255, 0.78);
+  font-weight: 400; line-height: 1.7;
+  max-width: 480px; margin: 0 auto 32px;
+}
+
+.perks {
+  list-style: none;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px 24px; max-width: 480px;
+  margin: 0 auto 40px; text-align: left;
+}
+.perk {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 0.875rem; font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+.perkCheck {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  display: flex; align-items: center; justify-content: center;
+  color: #FFFFFF; flex-shrink: 0;
+}
+
+.ctas { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 50px; padding: 0 28px;
+  background: #FFFFFF; color: #5B21B6; text-decoration: none;
+  font-size: 0.95rem; font-weight: 700; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  box-shadow:
+      0 1px 3px rgba(10, 10, 10, 0.18),
+      0 6px 20px rgba(10, 10, 10, 0.12);
+  transition: background 150ms, color 150ms, box-shadow 150ms, transform 120ms;
+}
+.primary:hover {
+  background: #FAFAF9;
+  color: #4C1D95;
+  transform: translateY(-1px);
+  box-shadow:
+      0 1px 3px rgba(10, 10, 10, 0.20),
+      0 10px 28px rgba(10, 10, 10, 0.18);
+}
+.secondary {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: none;
+  transition: color 150ms;
+}
+.secondary:hover { color: #FFFFFF; }
+
+@media (max-width: 680px) {
+  .section { padding: 72px 18px; }
+  .inner { padding: 48px 24px; }
+  .perks { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .section { padding: 64px 14px; }
+  .inner { padding: 40px 20px; border-radius: 18px; }
+  .title { font-size: clamp(1.55rem, 7vw, 2rem); }
+  .subtitle { font-size: 0.95rem; }
+  .ctas { flex-direction: column; gap: 12px; }
+  .primary { width: 100%; justify-content: center; }
+}

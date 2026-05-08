@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { extractUrlsFromConfig, buildTrackingMap } from '@/lib/click-tracking';
 import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
-import { isProOrTrial } from '@/lib/plans';
+import { isProOrTrial, FREE_SLIDE_LIMIT } from '@/lib/plans';
+import { runBackfill } from '@/lib/backfill';
 
 /**
  * Validate a single DM variant config.
@@ -119,10 +120,61 @@ export async function POST(request) {
             { status: 403 }
         );
     }
+    // Content validation: every enabled flow step needs a non-empty message,
+    // otherwise the cron silently skips it and the user sees no DM go out.
+    if (settingsConfig?.flowAutomation && Array.isArray(settingsConfig?.flowSteps)) {
+        const emptyStepIdx = settingsConfig.flowSteps.findIndex((s) => !s?.message?.trim());
+        if (emptyStepIdx !== -1) {
+            return NextResponse.json(
+                { error: `Flow step ${emptyStepIdx + 1} needs a message before you can save.` },
+                { status: 400 }
+            );
+        }
+    }
     if (settingsConfig?.upsell?.enabled && !isPro) {
         return NextResponse.json(
             { error: 'Upsell follow-up requires a Pro plan.', upgradeRequired: true },
             { status: 403 }
+        );
+    }
+
+    // Schedule start time is Pro-only — free users save automations active
+    // immediately. Expiry date is free for all plans.
+    if (settingsConfig?.scheduledStartEnabled && settingsConfig?.scheduledStartAt && !isPro) {
+        return NextResponse.json(
+            { error: 'Scheduling a start time requires a Pro plan.', upgradeRequired: true },
+            { status: 403 }
+        );
+    }
+
+    // Carousel slide caps. Free users hit FREE_SLIDE_LIMIT first; everyone
+    // (including Pro) is bounded by Meta's hard limit of 10 cards per
+    // Generic Template payload.
+    const META_MAX_CARDS = 10;
+    const slidesOverPlanLimit = (cfg) =>
+        cfg?.type === 'button_template' && (cfg?.slides || []).length > FREE_SLIDE_LIMIT;
+    const slidesOverMetaCap = (cfg) =>
+        cfg?.type === 'button_template' && (cfg?.slides || []).length > META_MAX_CARDS;
+
+    if (!isPro && (
+        slidesOverPlanLimit(dmConfig) ||
+        slidesOverPlanLimit(dmConfig?.variantA) ||
+        slidesOverPlanLimit(dmConfig?.variantB)
+    )) {
+        return NextResponse.json(
+            { error: `Free plan supports up to ${FREE_SLIDE_LIMIT} carousel slides. Upgrade to Pro for more.`, upgradeRequired: true },
+            { status: 403 }
+        );
+    }
+
+    if (
+        slidesOverMetaCap(dmConfig) ||
+        slidesOverMetaCap(dmConfig?.variantA) ||
+        slidesOverMetaCap(dmConfig?.variantB)
+    ) {
+        return NextResponse.json(
+            { error: `Instagram supports up to ${META_MAX_CARDS} cards per carousel.` },
+            { status: 400 }
         );
     }
 
@@ -211,14 +263,21 @@ export async function POST(request) {
         }
 
         // ── Trigger backfill if sendToPreviousComments is enabled ──────────
-        // Fire-and-forget: don't block the save response
+        // Run the backfill IN-PROCESS via `after()` so:
+        //   1. The save response returns immediately (non-blocking).
+        //   2. The work runs after the response is sent but the function
+        //      stays alive until backfill completes — survives serverless
+        //      suspension that would otherwise kill a fire-and-forget fetch.
+        //   3. No HTTP round-trip → no NEXT_PUBLIC_APP_URL dependency, no
+        //      shared-secret header dance.
         if (dmConfig.sendToPreviousComments || settingsConfig?.sendToPreviousComments) {
-            const backfillUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/automations/backfill`;
-            fetch(backfillUrl, {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json', 'x-backfill-internal': '1' },
-                body:    JSON.stringify({ automationId: automation.id, postId }),
-            }).catch((e) => console.warn('[Automations] Backfill trigger failed (non-fatal):', e.message));
+            after(async () => {
+                try {
+                    await runBackfill({ automationId: automation.id, postId });
+                } catch (err) {
+                    console.warn('[Automations] Backfill failed (non-fatal):', err.message);
+                }
+            });
         }
 
         return NextResponse.json({

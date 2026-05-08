@@ -1,8 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
 .footer {
   background: #07060F;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-landing-body);
   position: relative;
 }
 
@@ -154,7 +152,7 @@
   padding: 0 14px;
   background: none;
   border: none;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-landing-body);
   font-size: 0.845rem;
   font-weight: 400;
   color: rgba(255,255,255,0.8);

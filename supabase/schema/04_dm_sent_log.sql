@@ -8,12 +8,27 @@
 CREATE TABLE IF NOT EXISTS dm_sent_log (
     id              uuid DEFAULT gen_random_uuid() PRIMARY KEY,
 
+    -- Direct user attribution. Survives automation deletion (which would
+    -- otherwise NULL out automation_id and orphan the row from the user).
+    -- Auto-populated by tr_dm_sent_log_set_user_id when callers don't
+    -- provide it — gradually being filled in at all insert sites.
+    user_id         uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+
     -- automation_id is NULL for story-mention DMs (no linked automation)
     automation_id   uuid REFERENCES dm_automations(id) ON DELETE SET NULL,
     post_id         uuid REFERENCES instagram_posts(id) ON DELETE SET NULL,
 
     -- Recipient
     recipient_ig_id text NOT NULL,
+    -- recipient_username — captured at initial send (when available in the
+    -- inbound webhook payload). Used by flow-steps / upsell to personalise
+    -- follow-up DMs ({first_name}, {username} placeholders). Nullable because
+    -- some events (e.g. story mentions) may not include the handle.
+    recipient_username text DEFAULT NULL,
+    -- platform — 'instagram' | 'facebook'. Captured at insert time so the
+    -- DM Logs page can filter by platform without fragile joins through
+    -- automation → post → connected_account.
+    platform        text NOT NULL DEFAULT 'instagram',
     comment_id      text,
     comment_text    text,
 
@@ -44,16 +59,14 @@ CREATE TABLE IF NOT EXISTS dm_sent_log (
     -- N     = flowSteps[N-1] has been enqueued; flowSteps[N] is next
 );
 
--- RLS: users view their own logs (via automation ownership)
+-- RLS: users view their own logs via direct user_id match.
+-- (Old policy filtered by automation ownership which hid rows whose
+-- automation had been deleted — see add-user-id-to-dm-sent-log.sql.)
 ALTER TABLE dm_sent_log ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users view own DM logs"
     ON dm_sent_log FOR SELECT
-    USING (
-        automation_id IN (
-            SELECT id FROM dm_automations WHERE user_id = auth.uid()
-        )
-    );
+    USING (user_id = auth.uid());
 
 -- Deduplication: prevent sending twice for same (automation, recipient)
 CREATE INDEX IF NOT EXISTS idx_dm_sent_log_dedup
@@ -88,3 +101,49 @@ CREATE INDEX IF NOT EXISTS idx_dm_sent_log_ab_variant
 CREATE INDEX IF NOT EXISTS idx_dm_sent_log_global_dedup
     ON dm_sent_log (automation_id, recipient_ig_id)
     WHERE status = 'sent';
+
+-- DM Logs platform-filter chip
+CREATE INDEX IF NOT EXISTS idx_dm_sent_log_platform
+    ON dm_sent_log (platform);
+
+-- DM Logs page list view: WHERE automation_id IN (...) ORDER BY sent_at DESC
+CREATE INDEX IF NOT EXISTS idx_dm_sent_log_listing
+    ON dm_sent_log (automation_id, sent_at DESC);
+
+-- Dashboard / Logs page user-scoped queries: WHERE user_id = ? ORDER BY sent_at DESC
+CREATE INDEX IF NOT EXISTS idx_dm_sent_log_user_listing
+    ON dm_sent_log (user_id, sent_at DESC);
+
+-- Auto-populate user_id when callers don't provide it. Lets us migrate
+-- the ~12 insert sites gradually instead of needing a flag day. Looks
+-- through automation first, falls back to post → connected_account
+-- (covers story-mention rows that have automation_id NULL by design).
+CREATE OR REPLACE FUNCTION trigger_dm_sent_log_set_user_id()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.user_id IS NOT NULL THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.automation_id IS NOT NULL THEN
+        SELECT user_id INTO NEW.user_id
+        FROM dm_automations
+        WHERE id = NEW.automation_id;
+    END IF;
+
+    IF NEW.user_id IS NULL AND NEW.post_id IS NOT NULL THEN
+        SELECT ca.user_id INTO NEW.user_id
+        FROM instagram_posts p
+        JOIN connected_accounts ca ON ca.id = p.account_id
+        WHERE p.id = NEW.post_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_dm_sent_log_set_user_id ON dm_sent_log;
+CREATE TRIGGER tr_dm_sent_log_set_user_id
+    BEFORE INSERT ON dm_sent_log
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_dm_sent_log_set_user_id();

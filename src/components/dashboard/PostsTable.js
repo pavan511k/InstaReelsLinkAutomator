@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { RefreshCw, Download, Edit3, Pause, Play, Trash2, Instagram, Facebook, AlertTriangle, ScrollText, Copy, Timer, MousePointerClick, CalendarClock, Radio } from 'lucide-react';
+import { toast } from 'sonner';
 import Link from 'next/link';
 import PostCard from './PostCard';
 import SetupDMModal from './SetupDMModal';
@@ -10,9 +11,13 @@ import DuplicateModal from './DuplicateModal';
 import ClickStatsModal from './ClickStatsModal';
 import BroadcastModal from './BroadcastModal';
 import { useStyles } from '@/lib/useStyles';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import Modal from '@/components/ui/Modal';
+import Pagination, { paginate } from '@/components/ui/Pagination';
 import darkStyles from './PostsTable.module.css';
 import lightStyles from './PostsTable.light.module.css';
-import settingsStyles from './SettingsContent.module.css';
+import settingsStylesDark from './SettingsContent.module.css';
+import settingsStylesLight from './SettingsContent.light.module.css';
 
 const STATUS_FILTERS = [
     { key: 'all',       label: 'All' },
@@ -54,13 +59,17 @@ function formatExpiry(isoString) {
 export default function PostsTable({ posts = [], onSetupDM, isConnected = false, connectedAccounts = [], userPlan = 'free' }) {
     const isPro = userPlan === 'pro' || userPlan === 'trial' || userPlan === 'business';
     const styles = useStyles(darkStyles, lightStyles);
+    // Theme-aware settings styles for the embedded delete-automation modal.
+    // Previously this only imported the dark module which made the modal
+    // appear with dark colors in light theme.
+    const settingsStyles = useStyles(settingsStylesDark, settingsStylesLight);
+    const { alert } = useConfirm();
     const router = useRouter();
     const [activeStatusFilter, setActiveStatusFilter] = useState('all');
     const [activePlatformFilter, setActivePlatformFilter] = useState('all');
     const [visibleCardCount, setVisibleCardCount] = useState(INITIAL_CARDS);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
-    const [syncMessage, setSyncMessage] = useState('');
     const [showSetupModal, setShowSetupModal] = useState(false);
     const [selectedPost, setSelectedPost] = useState(null);
     const [postToDelete,   setPostToDelete]   = useState(null);
@@ -78,6 +87,14 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
     const filteredPosts = activeStatusFilter === 'all'
         ? platformFiltered
         : platformFiltered.filter((post) => post.status === activeStatusFilter);
+
+    // ── All Posts pagination ──────────────────────────────────────
+    const [postsPage, setPostsPage]         = useState(1);
+    const [postsPageSize, setPostsPageSize] = useState(20);
+    // Reset to page 1 whenever the filter set changes — otherwise a user
+    // on page 5 of "all" who switches to "Active" sees a blank page.
+    useEffect(() => { setPostsPage(1); }, [activeStatusFilter, activePlatformFilter, postsPageSize]);
+    const paginatedPosts = paginate(filteredPosts, postsPage, postsPageSize);
 
     // Cards: show only setup posts from platform filter
     const setupPosts = platformFiltered.filter((p) => p.status === 'setup');
@@ -110,18 +127,18 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
 
     const handleCheckForNewPosts = async () => {
         setIsSyncing(true);
-        setSyncMessage('');
+        const toastId = toast.loading('Checking for new posts…');
         try {
             const res = await fetch('/api/posts/sync', { method: 'POST' });
             const data = await res.json();
             if (res.ok) {
-                setSyncMessage(`✅ Synced ${data.synced} posts`);
+                toast.success(`Synced ${data.synced} posts`, { id: toastId });
                 router.refresh();
             } else {
-                setSyncMessage(`❌ ${data.error}`);
+                toast.error(data.error || 'Sync failed', { id: toastId });
             }
         } catch (err) {
-            setSyncMessage(`❌ Sync failed: ${err.message}`);
+            toast.error(`Sync failed: ${err.message}`, { id: toastId });
         } finally {
             setIsSyncing(false);
         }
@@ -148,7 +165,7 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
             if (res.ok) {
                 router.refresh();
             } else {
-                alert('Failed to update status');
+                await alert({ title: 'Update failed', message: 'Could not update the status. Please try again.', danger: true });
             }
         } catch (err) {
             console.error('Status update failed', err);
@@ -174,7 +191,7 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                 setPostToDelete(null);
                 router.refresh();
             } else {
-                alert('Failed to delete automation');
+                await alert({ title: 'Delete failed', message: 'Could not delete the automation. Please try again.', danger: true });
             }
         } catch (err) {
             console.error('Delete automation failed', err);
@@ -196,7 +213,7 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
             case 'setup':
                 return (
                     <button className={styles.setupBadge} onClick={() => handleSetupDM(post)}>
-                        <span className={styles.pulseDot} /> Configure AutoDM
+                        <span className={styles.pulseDot} /> Configure
                     </button>
                 );
             case 'paused':
@@ -233,7 +250,6 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                         <RefreshCw size={14} className={isSyncing ? styles.spinning : ''} />
                         {isSyncing ? 'Syncing...' : 'Check for new posts'}
                     </button>
-                    {syncMessage && <span className={styles.syncTime}>{syncMessage}</span>}
                 </div>
             </div>
 
@@ -357,7 +373,7 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredPosts.map((post) => (
+                                    {paginatedPosts.map((post) => (
                                         <tr key={post.id} className={styles.postRow}>
                                             <td>
                                                 <div className={styles.postCell}>
@@ -501,6 +517,13 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                                 </tbody>
                             </table>
                         </div>
+                        <Pagination
+                            totalItems={filteredPosts.length}
+                            currentPage={postsPage}
+                            pageSize={postsPageSize}
+                            onPageChange={setPostsPage}
+                            onPageSizeChange={setPostsPageSize}
+                        />
                     </div>
                 </>
             )}
@@ -527,6 +550,7 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                     onClose={handleCloseModal}
                     postId={selectedPost?.id}
                     postCaption={selectedPost?.caption || ''}
+                    platform={selectedPost?.platform || 'instagram'}
                 />
             )}
 
@@ -558,9 +582,15 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
             )}
 
             {/* Delete Automation Confirmation Modal */}
-            {postToDelete && (
-                <div className={settingsStyles.modalOverlay} onClick={handleCancelDelete}>
-                    <div className={settingsStyles.modal} onClick={(e) => e.stopPropagation()}>
+            <Modal
+                open={!!postToDelete}
+                onClose={handleCancelDelete}
+                size="md"
+                closable={!isDeleting}
+                ariaLabel="Delete automation"
+            >
+                {postToDelete && (
+                    <>
                         <div className={settingsStyles.modalIcon}>
                             <AlertTriangle size={32} />
                         </div>
@@ -587,9 +617,9 @@ export default function PostsTable({ posts = [], onSetupDM, isConnected = false,
                                 {isDeleting ? 'Deleting...' : 'Yes, delete'}
                             </button>
                         </div>
-                    </div>
-                </div>
-            )}
+                    </>
+                )}
+            </Modal>
         </div>
     );
 }

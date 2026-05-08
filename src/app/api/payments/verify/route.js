@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { BILLING_PLANS, computePlanExpiresAt } from '@/lib/plans';
 
 const CASHFREE_BASE = process.env.CASHFREE_ENV === 'production'
     ? 'https://api.cashfree.com/pg'
@@ -18,6 +19,10 @@ async function activatePlan(supabase, userId, planId, expiresAt) {
                 user_id:         userId,
                 plan:            planId,
                 plan_expires_at: expiresAt.toISOString(),
+                // Mirrors the webhook's activatePlan: clear trial once paid so
+                // the row is semantically clean. getEffectivePlan() already
+                // prefers paid Pro over trial, so this is purely cosmetic.
+                trial_ends_at:   null,
                 updated_at:      new Date().toISOString(),
             },
             { onConflict: 'user_id' },
@@ -68,10 +73,13 @@ export async function GET(request) {
             const { data: { user } } = await authSupabase.auth.getUser();
 
             if (user) {
-                const planExpiresAt = new Date();
-                planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
+                // Look up the SKU and resolve entitlement + duration.
+                const billingPlan = BILLING_PLANS[planId] || BILLING_PLANS.pro;
+                const planExpiresAt = computePlanExpiresAt(
+                    BILLING_PLANS[planId] ? planId : 'pro',
+                );
 
-                await activatePlan(serviceSupabase, user.id, planId, planExpiresAt);
+                await activatePlan(serviceSupabase, user.id, billingPlan.entitlement, planExpiresAt);
 
                 await serviceSupabase
                     .from('payment_orders')

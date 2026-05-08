@@ -1,21 +1,64 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+/* ── Sidebar wrapper — owns sticky + positioning context ────── */
+.sidebarWrap {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    flex-shrink: 0;
+    width: 260px;
+    z-index: 10;
+    transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sidebarWrapCollapsed {
+    width: 64px;
+}
+
 /* ── Desktop sidebar ─────────────────────────────────────────── */
 .sidebar {
-    width: 260px;
-    flex-shrink: 0;
-    min-height: 100vh;
+    position: relative;
+    width: 100%;
+    height: 100%;
     background: var(--sidebar-bg);
     border-right: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     flex-direction: column;
     gap: 0;
     padding: 24px 16px 20px;
-    position: sticky;
-    top: 0;
-    height: 100vh;
     overflow-y: auto;
+    overflow-x: hidden;
     font-family: 'Inter', sans-serif;
+    transition: padding 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Collapsed state — shows just the icons. */
+.sidebarCollapsed {
+    padding: 24px 8px 16px;
+}
+
+/* ── Collapse toggle button ──────────────────────────────────── */
+.collapseBtn {
+    position: absolute;
+    top: 18px;
+    right: -14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--sidebar-bg);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 150ms, color 150ms, transform 150ms;
+    z-index: 20;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.collapseBtn:hover {
+    background: rgba(124, 58, 237, 0.30);
+    color: #C4B5FD;
+    transform: scale(1.12);
 }
 
 /* Top glow accent */
@@ -35,6 +78,10 @@
     text-decoration: none;
     margin-bottom: 20px;
     flex-shrink: 0;
+}
+.sidebarCollapsed .logo {
+    justify-content: center;
+    margin-bottom: 24px;
 }
 .logoMark {
     width: 30px; height: 30px;
@@ -127,6 +174,11 @@
     position: relative;
     border: 1px solid transparent;
 }
+.sidebarCollapsed .navItem {
+    justify-content: center;
+    padding: 10px 0;
+}
+.sidebarCollapsed .nav { gap: 4px; }
 .navItem:hover {
     background: rgba(255, 255, 255, 0.06);
     color: rgba(255, 255, 255, 0.85);
@@ -211,6 +263,11 @@
     margin-top: 8px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     flex-shrink: 0;
+}
+.userCollapsed {
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 0 8px;
 }
 .avatar {
     width: 32px; height: 32px;
@@ -380,6 +437,39 @@ a.userRole:hover {
     opacity: 1;
 }
 
+/* ── Quota chip — DM usage under plan badge for Free plan ──── */
+.quotaChip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    text-decoration: none;
+    cursor: pointer;
+}
+.quotaTrack {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+.quotaFill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #8B5CF6, #A78BFA);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+.quotaLabel {
+    font-size: 9.5px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.42);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.quotaChip:hover .quotaLabel { color: rgba(255, 255, 255, 0.7); }
+
 /* ── Mobile top bar (hidden on desktop) ─────────────────────── */
 .mobileBar {
     display: none;
@@ -401,7 +491,7 @@ a.userRole:hover {
 
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 768px) {
-    .sidebar { display: none; }
+    .sidebarWrap { display: none; }
 
     .mobileBar {
         display: flex;
@@ -415,6 +505,9 @@ a.userRole:hover {
         top: 0;
         z-index: 50;
     }
+    /* The desktop .logo has margin-bottom: 20px for the sidebar layout —
+       reset it here so the logo vertically centers inside the mobile bar. */
+    .mobileBar .logo { margin-bottom: 0; }
 
     .drawer {
         display: flex;

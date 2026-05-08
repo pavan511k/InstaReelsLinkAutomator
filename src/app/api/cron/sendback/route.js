@@ -2,11 +2,15 @@ import { NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { sendAutomatedDM } from '@/lib/send-dm';
 import { getDmLimit, getEffectivePlan } from '@/lib/plans';
+import { getMonthlyDmCount } from '@/lib/plan-server';
 
 /**
  * GET /api/cron/sendback
- * Vercel cron job — runs every 6 hours.
- * Retries DMs that failed on the first attempt.
+ * External cron (cron-job.org) — runs every 1 hour.
+ *
+ * Retries DMs that failed on the first attempt. Per-row backoff between
+ * retries: RETRY_BACKOFF_HOURS = [1, 4, 12] (hour granularity matches the
+ * cron interval).
  */
 
 const MAX_RETRIES         = 3;
@@ -20,9 +24,13 @@ function supabase() {
 }
 
 export async function GET(request) {
-    const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret) {
+        console.error('[Sendback] CRON_SECRET not configured');
+        return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
+    const authHeader = request.headers.get('authorization');
+    if (authHeader !== `Bearer ${cronSecret}`) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -36,7 +44,7 @@ export async function GET(request) {
 
         const { data: failedRows, error: fetchErr } = await db
             .from('dm_sent_log')
-            .select('id, automation_id, recipient_ig_id, comment_id, comment_text, retry_count, last_retry_at')
+            .select('id, automation_id, recipient_ig_id, recipient_username, comment_id, comment_text, retry_count, last_retry_at, platform')
             .eq('status', 'failed')
             .lt('retry_count', MAX_RETRIES)
             .or(`last_retry_at.is.null,last_retry_at.lt.${cutoff}`)
@@ -82,10 +90,12 @@ export async function GET(request) {
                     continue;
                 }
 
-                // Fetch automation + account credentials (no plan column)
+                // Fetch automation + account credentials (no plan column).
+                // platform column on connected_accounts is needed so we can
+                // route the retry through the correct API base + sender ID.
                 const { data: automation } = await db
                     .from('dm_automations')
-                    .select('*, connected_accounts!inner(access_token, fb_page_access_token, ig_user_id, fb_page_id)')
+                    .select('*, connected_accounts!inner(access_token, fb_page_access_token, ig_user_id, fb_page_id, platform)')
                     .eq('id', row.automation_id)
                     .eq('is_active', true)
                     .maybeSingle();
@@ -107,30 +117,40 @@ export async function GET(request) {
                 const dmLimit  = getDmLimit(userPlan);
 
                 if (dmLimit !== null) {
-                    const startOfMonth = new Date();
-                    startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
-
-                    const { data: userAutomations } = await db
-                        .from('dm_automations').select('id').eq('user_id', automation.user_id);
-                    const allIds = (userAutomations || []).map((a) => a.id);
-
-                    const { count: monthlyCount } = await db
-                        .from('dm_sent_log').select('id', { count: 'exact', head: true })
-                        .in('automation_id', allIds).eq('status', 'sent')
-                        .gte('sent_at', startOfMonth.toISOString());
-
-                    if ((monthlyCount || 0) >= dmLimit) {
+                    const monthlyCount = await getMonthlyDmCount(db, automation.user_id);
+                    if (monthlyCount >= dmLimit) {
                         console.log(`[SendBack] Monthly limit reached for user ${automation.user_id} — skipping`);
                         results.skipped++;
                         continue;
                     }
                 }
 
-                const token    = account.fb_page_access_token || account.access_token;
-                const senderId = account.ig_user_id;
+                const token = account.fb_page_access_token || account.access_token;
+
+                // Retry on the same platform as the original failed send.
+                // The platform column on dm_sent_log gives us this directly;
+                // pre-platform-column rows default to 'instagram'.
+                const retryPlatform = row.platform || 'instagram';
+
+                // Match process-queue's routing rules:
+                //   - useIgApi = true when account has only an IG Business
+                //     Login token; that token must hit graph.instagram.com.
+                //   - For Facebook DMs the sender must be the FB Page ID,
+                //     not the IG user ID — Meta returns 'invalid sender'
+                //     otherwise.
+                const useIgApi = !account.fb_page_access_token;
+                const senderId = (retryPlatform === 'facebook' && account.fb_page_id)
+                    ? account.fb_page_id
+                    : account.ig_user_id;
+
+                // Friendly fallback when recipient_username wasn't captured
+                // on the original send. Never use recipient_ig_id here — it's
+                // a numeric IGSID and would render as "Hey 178414012…!" in
+                // the message body.
+                const personal = row.recipient_username || 'there';
                 const context  = {
-                    username:   row.recipient_ig_id,
-                    first_name: row.recipient_ig_id,
+                    username:   personal,
+                    first_name: personal,
                     comment_id: row.comment_id || '',
                 };
 
@@ -140,9 +160,10 @@ export async function GET(request) {
                     token,
                     senderId,
                     context,
-                    'instagram',
+                    retryPlatform,
                     {},
                     userPlan,
+                    useIgApi,
                 );
 
                 await db.from('dm_sent_log').insert({
@@ -152,6 +173,7 @@ export async function GET(request) {
                     comment_id:      row.comment_id,
                     comment_text:    row.comment_text,
                     status:          'sent',
+                    platform:        retryPlatform,
                     sent_at:         now.toISOString(),
                 });
 

@@ -334,3 +334,66 @@
 @media (max-width: 640px) {
     .title { font-size: 1.4rem; }
 }
+
+/* ── Billing-cycle toggle — light theme ────────────────────────── */
+.cycleToggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 100px;
+    background: #FFFFFF;
+    border: 1px solid rgba(124, 58, 237, 0.18);
+    box-shadow: 0 2px 6px rgba(30, 21, 53, 0.04);
+    margin: 24px auto 8px;
+}
+.cycleToggleBtn {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: rgba(30, 21, 53, 0.70);
+    cursor: pointer;
+    padding: 8px 18px;
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 150ms, color 150ms;
+}
+.cycleToggleBtn:hover {
+    color: #1E1535;
+}
+.cycleToggleActive {
+    background: linear-gradient(135deg, #7C3AED, #5B21B6);
+    color: #FFFFFF;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.28);
+}
+.cycleToggleActive:hover {
+    color: #FFFFFF;
+}
+.cycleSavingsTag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 100px;
+    background: rgba(16, 185, 129, 0.10);
+    border: 1px solid rgba(16, 185, 129, 0.22);
+    color: #047857;
+    font-size: 10.5px;
+    font-weight: 700;
+    margin-left: 2px;
+}
+.cycleToggleActive .cycleSavingsTag {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #FFFFFF;
+}
+.priceSubtitle {
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: rgba(30, 21, 53, 0.60);
+    line-height: 1.4;
+}

@@ -37,6 +37,19 @@ CREATE TABLE IF NOT EXISTS user_plans (
     -- NULL = no trial started.
     trial_ends_at   timestamptz,
 
+    -- Materialised monthly DM counter. Maintained by tr_dm_sent_log_count
+    -- (defined below) so readers can skip the per-request COUNT(*) over
+    -- dm_sent_log. dm_count_month stores 'YYYY-MM'; readers must treat a
+    -- mismatch with the current month as 0.
+    monthly_dm_count integer NOT NULL DEFAULT 0,
+    dm_count_month   text DEFAULT NULL,
+
+    -- Tracks which plan_expires_at value the "Pro expiring soon" reminder
+    -- has already been sent for. Stores the value of plan_expires_at at
+    -- the time we emailed. If it differs from the current plan_expires_at
+    -- (user renewed → expiry moved forward), the cron re-sends.
+    expiring_soon_emailed_for_expiry timestamptz,
+
     created_at      timestamptz DEFAULT now(),
     updated_at      timestamptz DEFAULT now()
 );
@@ -64,3 +77,42 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trigger_user_plans_updated_at
     BEFORE UPDATE ON user_plans
     FOR EACH ROW EXECUTE FUNCTION update_user_plans_updated_at();
+
+-- ── Monthly DM counter trigger ─────────────────────────────────────────
+-- Increments user_plans.monthly_dm_count atomically when dm_sent_log
+-- receives a 'sent' row. Story-mention DMs (automation_id IS NULL) are
+-- skipped — they're not user-billable. See add-monthly-dm-count-cache.sql.
+-- Reads NEW.user_id directly. The BEFORE INSERT trigger on dm_sent_log
+-- (tr_dm_sent_log_set_user_id, defined in 04_dm_sent_log.sql below this
+-- run order conceptually — but actually added via migration) auto-fills
+-- user_id when callers don't, so by the time this AFTER trigger runs,
+-- user_id is reliably populated.
+CREATE OR REPLACE FUNCTION trigger_increment_user_dm_count()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_month text := to_char(NEW.sent_at, 'YYYY-MM');
+BEGIN
+    IF NEW.status != 'sent' THEN
+        RETURN NEW;
+    END IF;
+    IF NEW.user_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    UPDATE user_plans
+    SET monthly_dm_count = CASE
+            WHEN dm_count_month = v_month THEN monthly_dm_count + 1
+            ELSE 1
+        END,
+        dm_count_month = v_month
+    WHERE user_id = NEW.user_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_dm_sent_log_count ON dm_sent_log;
+CREATE TRIGGER tr_dm_sent_log_count
+    AFTER INSERT ON dm_sent_log
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_increment_user_dm_count();

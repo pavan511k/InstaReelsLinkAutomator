@@ -1,0 +1,102 @@
+/* ===========================================================
+   Pagination — shared footer for paginated tables.
+   Theme-aware via existing CSS vars (--card, --border,
+   --muted-foreground) on the global [data-theme] system.
+   =========================================================== */
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 16px;
+    border-top: 1px solid var(--border, rgba(255, 255, 255, 0.07));
+    font-family: 'Inter', sans-serif;
+}
+
+.info {
+    font-size: 12.5px;
+    color: var(--muted-foreground, rgba(255, 255, 255, 0.5));
+    font-weight: 500;
+}
+
+.controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--card, rgba(255, 255, 255, 0.04));
+    color: var(--card-foreground, rgba(255, 255, 255, 0.85));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+    border-radius: 7px;
+    padding: 5px 28px 5px 10px;
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    /* Custom dropdown arrow — uses currentColor so it follows text color
+       (which itself follows the theme). */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 9px center;
+    background-size: 10px;
+    transition: border-color 150ms;
+}
+.select:hover { border-color: rgba(124, 58, 237, 0.45); }
+.select:focus-visible {
+    outline: 2px solid var(--ring, #A78BFA);
+    outline-offset: 2px;
+}
+
+.navBtn {
+    appearance: none;
+    background: var(--card, rgba(255, 255, 255, 0.04));
+    color: var(--card-foreground, rgba(255, 255, 255, 0.85));
+    border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+    border-radius: 7px;
+    padding: 5px 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 150ms, border-color 150ms, color 150ms;
+}
+.navBtn:hover:not(:disabled) {
+    border-color: rgba(124, 58, 237, 0.45);
+    color: var(--card-foreground, #FFFFFF);
+}
+.navBtn:disabled {
+    opacity: 0.40;
+    cursor: not-allowed;
+}
+
+.pageNum {
+    font-size: 12.5px;
+    color: var(--muted-foreground, rgba(255, 255, 255, 0.5));
+    font-weight: 500;
+    padding: 0 4px;
+    user-select: none;
+}
+
+@media (max-width: 540px) {
+    .pagination {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    .controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .info {
+        text-align: center;
+    }
+}

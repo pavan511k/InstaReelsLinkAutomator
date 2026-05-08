@@ -15,34 +15,47 @@ const CONNECTION_OPTIONS = [
         description: 'Reply to comments and DMs from your Instagram business account.',
         features: [
             'AutoDM on post, reel & story comments',
-            'Inbox automation for Instagram DMs',
+            'Story replies & mentions',
+            'Welcome openers & follow gate',
+            'Email lead capture',
+            'A/B testing on every DM type',
         ],
         buttonLabel: 'Connect Instagram',
         buttonColor: '#E1306C',
+        badge: { text: 'Recommended', variant: 'recommended' },
     },
     {
         id: 'facebook',
         title: 'Facebook Page',
         iconBg: '#1877F2',
-        description: 'Reply to comments and DMs from your Facebook Page.',
+        // Honest list of what actually works on FB. Rich DM types fall back
+        // to plain text in send-dm.js, and Stories / Welcome Openers /
+        // Follow Gate are Instagram-only, so we don't promise them here.
+        description: 'Comment-triggered DMs from your Facebook Page (text replies only).',
         features: [
-            'AutoDM on post, reel & story comments',
-            'Inbox automation for Facebook DMs',
+            'Comment-triggered text DMs',
+            'Auto-reply on comments',
+            'Keyword & global triggers',
+            'A/B testing (text variants)',
         ],
         buttonLabel: 'Connect Facebook',
         buttonColor: '#1877F2',
+        badge: { text: 'Limited features', variant: 'limited' },
     },
     {
         id: 'both',
         title: 'Instagram + Facebook',
         iconBg: 'linear-gradient(135deg, #1E293B, #334155)',
-        description: 'Connect both for complete coverage and easier management.',
+        description: 'Connect both for complete coverage across platforms.',
         features: [
-            'AutoDM on Instagram and Facebook content',
-            'AutoDM on cross-posted content',
+            'Everything in Instagram + Facebook',
+            'Single dashboard for both inboxes',
+            'Cross-posted content auto-detection',
         ],
-        buttonLabel: 'Connect Both',
+        buttonLabel: 'Coming soon',
         buttonColor: '#1E293B',
+        badge: { text: 'Coming soon', variant: 'soon' },
+        disabled: true,
     },
 ];
 
@@ -130,7 +143,15 @@ export default function ConnectAccount() {
             {/* Platform Cards */}
             <div className={styles.cards}>
                 {CONNECTION_OPTIONS.map((option) => (
-                    <div key={option.id} className={styles.card}>
+                    <div
+                        key={option.id}
+                        className={`${styles.card} ${option.disabled ? styles.cardDisabled : ''}`}
+                    >
+                        {option.badge && (
+                            <span className={`${styles.cardBadge} ${styles[`cardBadge_${option.badge.variant}`]}`}>
+                                {option.badge.text}
+                            </span>
+                        )}
                         <div className={styles.cardHeader}>
                             <div
                                 className={styles.cardIcon}
@@ -160,9 +181,10 @@ export default function ConnectAccount() {
 
                         <button
                             className={styles.connectBtn}
-                            style={{ backgroundColor: option.buttonColor }}
-                            onClick={() => handleConnect(option.id)}
-                            disabled={!!isConnecting}
+                            style={option.disabled ? undefined : { backgroundColor: option.buttonColor }}
+                            onClick={() => !option.disabled && handleConnect(option.id)}
+                            disabled={!!isConnecting || option.disabled}
+                            title={option.disabled ? 'This option is not available yet' : undefined}
                         >
                             {isConnecting === option.id ? 'Connecting...' : option.buttonLabel}
                         </button>
@@ -174,7 +196,7 @@ export default function ConnectAccount() {
             <div className={styles.footer}>
                 <span className={styles.partnerText}>
                     <Shield size={14} />
-                    Official Meta Business Partner since 2024
+                    Official Meta Business Partner since 2026
                 </span>
                 <div className={styles.footerBadges}>
                     <div className={styles.badge}>

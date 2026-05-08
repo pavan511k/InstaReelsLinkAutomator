@@ -64,6 +64,7 @@ export default function PostCardsGrid({ posts = [], totalCount = 0 }) {
                     onClose={handleCloseModal}
                     postId={selectedPost?.id}
                     postCaption={selectedPost?.caption || ''}
+                    platform={selectedPost?.platform || 'instagram'}
                 />
             )}
         </div>

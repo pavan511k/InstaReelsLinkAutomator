@@ -18,13 +18,15 @@ function createServiceClient() {
  * Secured by CRON_SECRET env variable when set.
  */
 export async function GET(request) {
-    // Verify cron secret if configured
+    // Verify cron secret — fail closed if not configured
     const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-        const auth = request.headers.get('authorization');
-        if (auth !== `Bearer ${cronSecret}`) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+    if (!cronSecret) {
+        console.error('[Expire] CRON_SECRET not configured');
+        return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
+    const auth = request.headers.get('authorization');
+    if (auth !== `Bearer ${cronSecret}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const supabase = createServiceClient();
@@ -51,11 +53,15 @@ export async function GET(request) {
 
         const expiredIds = expired.map((a) => a.id);
 
-        // Pause all of them in one update
+        // Pause all of them in one update. Clear expires_at so the row
+        // doesn't get auto-paused again on the next hourly sweep if the
+        // user re-activates without updating the expiry date — mirrors
+        // how /automations/activate clears scheduled_start_at on activation.
         const { error: updateErr } = await supabase
             .from('dm_automations')
             .update({
                 is_active:  false,
+                expires_at: null,
                 updated_at: now,
             })
             .in('id', expiredIds);

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
-
-const GRAPH = 'https://graph.facebook.com/v21.0';
+import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
+import { GRAPH_FB_BASE as GRAPH, GRAPH_IG_BASE } from '@/lib/meta-graph';
 
 /**
  * GET /api/ice-breakers
@@ -49,6 +49,14 @@ export async function POST(request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
+    // Pro gate. GET / DELETE are intentionally ungated so a downgraded user
+    // can still view + remove their existing welcome openers; only saving new
+    // ones requires Pro. The webhook (handleIceBreakerResponse) also re-checks
+    // plan at send time so existing openers don't keep firing post-downgrade.
+    const plan = await getUserEffectivePlan(supabase, user.id);
+    const gate = requirePro(plan, 'Welcome Openers require a Pro plan.');
+    if (gate) return gate;
+
     const body = await request.json();
     const { accountId, iceBreakers = [] } = body;
 
@@ -68,7 +76,7 @@ export async function POST(request) {
 
         const token    = account.fb_page_access_token || account.access_token;
         const pageOrIg = account.fb_page_id || account.ig_user_id;
-        const iceBase  = account.fb_page_access_token ? GRAPH : 'https://graph.instagram.com/v21.0';
+        const iceBase  = account.fb_page_access_token ? GRAPH : GRAPH_IG_BASE;
 
         // Validate each ice breaker
         const validated = iceBreakers

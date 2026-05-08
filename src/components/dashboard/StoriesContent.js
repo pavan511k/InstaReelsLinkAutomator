@@ -1,26 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Instagram, Facebook, Clock, Search, Edit3, Pause, Play, Trash2, Film } from 'lucide-react';
+import { RefreshCw, Instagram, Facebook, Clock, Search, Edit3, Pause, Play, Trash2, Film, Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import SetupDMModal from '@/components/dashboard/SetupDMModal';
+import DuplicateModal from '@/components/dashboard/DuplicateModal';
 import { useStyles } from '@/lib/useStyles';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import Pagination, { paginate } from '@/components/ui/Pagination';
 import darkStyles from '../../app/(dashboard)/stories/stories.module.css';
 import lightStyles from '../../app/(dashboard)/stories/stories.light.module.css';
 
 export default function StoriesContent({ stories = [], isConnected = false, platform = 'instagram' }) {
     const styles = useStyles(darkStyles, lightStyles);
+    const { confirm } = useConfirm();
     const router = useRouter();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedStoryId, setSelectedStoryId] = useState(null);
     const [isSyncing, setIsSyncing] = useState(false);
-    const [syncMessage, setSyncMessage] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [skippingId, setSkippingId] = useState(null);
     const [togglingId, setTogglingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
+    const [duplicateStory, setDuplicateStory] = useState(null);
 
-    const recentStories = stories.filter((s) => !s.story_expires_at || new Date(s.story_expires_at) > new Date());
+    // Recent = known live: must have an expiry AND it must be in the future.
+    // Stories without `story_expires_at` are pre-backfill rows where we can't
+    // prove liveness, so we exclude them rather than risk showing expired ones.
+    const recentStories = stories.filter((s) => s.story_expires_at && new Date(s.story_expires_at) > new Date());
 
     const handleConnect = () => {
         window.location.href = '/api/auth/meta/connect?type=instagram';
@@ -28,18 +36,18 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
 
     const handleCheckForNewStories = async () => {
         setIsSyncing(true);
-        setSyncMessage('');
+        const toastId = toast.loading('Checking for new stories…');
         try {
             const res = await fetch('/api/posts/sync', { method: 'POST' });
             const data = await res.json();
             if (res.ok) {
-                setSyncMessage(`✅ Synced ${data.synced} items`);
+                toast.success(`Synced ${data.synced} items`, { id: toastId });
                 router.refresh();
             } else {
-                setSyncMessage(`❌ ${data.error}`);
+                toast.error(data.error || 'Sync failed', { id: toastId });
             }
         } catch (err) {
-            setSyncMessage(`❌ Sync failed: ${err.message}`);
+            toast.error(`Sync failed: ${err.message}`, { id: toastId });
         } finally {
             setIsSyncing(false);
         }
@@ -82,7 +90,12 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
     };
 
     const handleDeleteAutomation = async (story) => {
-        if (!confirm('Remove DM automation for this story?')) return;
+        const ok = await confirm({
+            title: 'Remove DM automation?',
+            message: 'The DM automation for this story will be removed. This cannot be undone.',
+            confirmText: 'Remove',
+        });
+        if (!ok) return;
         setDeletingId(story.id);
         try {
             const res = await fetch(`/api/automations?postId=${story.id}`, { method: 'DELETE' });
@@ -103,13 +116,21 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
         );
     };
 
+    // ── All Stories pagination ────────────────────────────────────
+    const [storiesPage, setStoriesPage]         = useState(1);
+    const [storiesPageSize, setStoriesPageSize] = useState(20);
+    // Reset page on search or page-size change so we don't show empty pages.
+    useEffect(() => { setStoriesPage(1); }, [searchQuery, storiesPageSize]);
+    const filteredStories  = filterBySearch(stories);
+    const paginatedStories = paginate(filteredStories, storiesPage, storiesPageSize);
+
     const getStatusBadge = (story) => {
         const isExpired = story.story_expires_at && new Date(story.story_expires_at) <= new Date();
         if (isExpired) return <span className={styles.expiredBadge}>Expired</span>;
         switch (story.status) {
             case 'active': return <span className={styles.activeBadge}>✅ Active</span>;
             case 'paused': return <span className={styles.pausedBadge}>⏸ Paused</span>;
-            default: return <span className={styles.setupBadge} onClick={() => handleSetupStory(story.id)}>Configure AutoDM</span>;
+            default: return <span className={styles.setupBadge} onClick={() => handleSetupStory(story.id)}>Configure</span>;
         }
     };
 
@@ -127,7 +148,6 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                         <RefreshCw size={14} className={isSyncing ? styles.spinning : ''} />
                         {isSyncing ? 'Syncing...' : 'Check for new stories'}
                     </button>
-                    {syncMessage && <span className={styles.syncTime}>{syncMessage}</span>}
                 </div>
             </div>
 
@@ -234,30 +254,20 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                                         </div>
                                     </div>
 
-                                    {/* Actions — no Skip button, single full-width CTA */}
+                                    {/* Single CTA — pause / resume / delete live in the All Stories
+                                        table to keep the card focused on the primary action. */}
                                     <div className={styles.storyActions}>
                                         {story.status === 'setup' ? (
                                             <button className={styles.storyActionBtn} onClick={() => handleSetupStory(story.id)}>
-                                                <Edit3 size={13} /> Configure AutoDM
+                                                <Edit3 size={13} /> Set up auto-DM
                                             </button>
-                                        ) : story.status === 'active' ? (
-                                            <>
-                                                <button className={`${styles.storyActionBtn} ${styles.storyActionBtnActive}`} onClick={() => handleSetupStory(story.id)}>
-                                                    <Edit3 size={13} /> Edit AutoDM
-                                                </button>
-                                                <button className={styles.skipBtn} onClick={() => handleToggleStatus(story)} disabled={togglingId === story.id}>
-                                                    <Pause size={12} /> Pause
-                                                </button>
-                                            </>
                                         ) : (
-                                            <>
-                                                <button className={`${styles.storyActionBtn} ${styles.storyActionBtnPaused}`} onClick={() => handleSetupStory(story.id)}>
-                                                    <Edit3 size={13} /> Edit AutoDM
-                                                </button>
-                                                <button className={styles.skipBtn} onClick={() => handleToggleStatus(story)} disabled={togglingId === story.id}>
-                                                    <Play size={12} /> Resume
-                                                </button>
-                                            </>
+                                            <button
+                                                className={`${styles.storyActionBtn} ${story.status === 'active' ? styles.storyActionBtnActive : styles.storyActionBtnPaused}`}
+                                                onClick={() => handleSetupStory(story.id)}
+                                            >
+                                                <Edit3 size={13} /> Edit auto-DM
+                                            </button>
                                         )}
                                     </div>
                                 </div>
@@ -285,19 +295,19 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                             />
                         </div>
                     </div>
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <div className={styles.tableScroll}>
+                        <table className={styles.storyTable}>
                             <thead>
-                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                                <tr className={styles.storyTableHeadRow}>
                                     {['Story', 'Status', 'Sent', 'Open', 'Clicks', 'CTR', ''].map((h) => (
-                                        <th key={h} style={{ textAlign: 'left', padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
+                                        <th key={h} className={styles.storyTableTh}>{h}</th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
-                                {filterBySearch(stories).map((story) => (
-                                    <tr key={story.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <td style={{ padding: '12px 14px' }}>
+                                {paginatedStories.map((story) => (
+                                    <tr key={story.id} className={styles.storyTableRow}>
+                                        <td className={styles.storyTableTd}>
                                             <div className={styles.storyRow}>
                                                 <div className={styles.storyThumb}>
                                                     {story.media_url && <img src={story.media_url} alt="" />}
@@ -307,27 +317,46 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                                                 </span>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '12px 14px' }}>{getStatusBadge(story)}</td>
-                                        <td className={styles.metricCell} style={{ padding: '12px 14px' }}>{story.sent || 0}</td>
-                                        <td className={styles.metricCell} style={{ padding: '12px 14px' }}>0</td>
-                                        <td className={styles.metricCell} style={{ padding: '12px 14px' }}>0</td>
-                                        <td className={styles.metricCell} style={{ padding: '12px 14px' }}>{story.sent > 0 ? '0%' : '-'}</td>
-                                        <td style={{ padding: '12px 14px' }}>
-                                            {(story.status === 'active' || story.status === 'paused') && (
-                                                <div className={styles.actionBtns}>
-                                                    <button className={styles.actionBtn} title="Edit" onClick={() => handleSetupStory(story.id)}><Edit3 size={13} /></button>
-                                                    <button className={styles.actionBtn} title={story.status === 'active' ? 'Pause' : 'Resume'} onClick={() => handleToggleStatus(story)} disabled={togglingId === story.id}>
-                                                        {story.status === 'active' ? <Pause size={13} /> : <Play size={13} />}
-                                                    </button>
-                                                    <button className={`${styles.actionBtn} ${styles.actionDanger}`} title="Remove" onClick={() => handleDeleteAutomation(story)} disabled={deletingId === story.id}><Trash2 size={13} /></button>
-                                                </div>
-                                            )}
+                                        <td className={styles.storyTableTd}>{getStatusBadge(story)}</td>
+                                        <td className={`${styles.metricCell} ${styles.storyTableTd}`}>{story.sent || 0}</td>
+                                        <td className={`${styles.metricCell} ${styles.storyTableTd}`}>0</td>
+                                        <td className={`${styles.metricCell} ${styles.storyTableTd}`}>0</td>
+                                        <td className={`${styles.metricCell} ${styles.storyTableTd}`}>{story.sent > 0 ? '0%' : '-'}</td>
+                                        <td className={styles.storyTableTd}>
+                                            {(story.status === 'active' || story.status === 'paused') && (() => {
+                                                // Once a story expires, the automation can't fire even if active —
+                                                // hide Edit / Pause / Resume so the row only offers actions that
+                                                // still make sense (copy the config to a live story, or remove
+                                                // the dead row entirely).
+                                                const isExpired = story.story_expires_at && new Date(story.story_expires_at) <= new Date();
+                                                return (
+                                                    <div className={styles.actionBtns}>
+                                                        {!isExpired && (
+                                                            <button className={styles.actionBtn} title="Edit" onClick={() => handleSetupStory(story.id)}><Edit3 size={13} /></button>
+                                                        )}
+                                                        <button className={styles.actionBtn} title="Copy automation to another story" onClick={() => setDuplicateStory(story)}><Copy size={13} /></button>
+                                                        {!isExpired && (
+                                                            <button className={styles.actionBtn} title={story.status === 'active' ? 'Pause' : 'Resume'} onClick={() => handleToggleStatus(story)} disabled={togglingId === story.id}>
+                                                                {story.status === 'active' ? <Pause size={13} /> : <Play size={13} />}
+                                                            </button>
+                                                        )}
+                                                        <button className={`${styles.actionBtn} ${styles.actionDanger}`} title="Remove" onClick={() => handleDeleteAutomation(story)} disabled={deletingId === story.id}><Trash2 size={13} /></button>
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
+                    <Pagination
+                        totalItems={filteredStories.length}
+                        currentPage={storiesPage}
+                        pageSize={storiesPageSize}
+                        onPageChange={setStoriesPage}
+                        onPageSizeChange={setStoriesPageSize}
+                    />
                 </div>
             )}
 
@@ -337,6 +366,30 @@ export default function StoriesContent({ stories = [], isConnected = false, plat
                     postId={selectedStoryId}
                 />
             )}
+
+            {duplicateStory && (() => {
+                // DuplicateModal expects camelCase `thumbnailUrl` (the Posts page
+                // already maps to that shape; the Stories page passes raw rows
+                // with `thumbnail_url`). Normalise here so thumbnails render
+                // and the source preview / list items aren't blank.
+                const toModalShape = (s) => ({
+                    ...s,
+                    thumbnailUrl: s.thumbnailUrl || s.thumbnail_url || s.media_url || null,
+                    caption: s.caption || 'No caption',
+                });
+                return (
+                    <DuplicateModal
+                        sourcePost={toModalShape(duplicateStory)}
+                        allPosts={stories.map(toModalShape)}
+                        onClose={() => setDuplicateStory(null)}
+                        onSuccess={() => {
+                            setDuplicateStory(null);
+                            toast.success('Automation copied');
+                            router.refresh();
+                        }}
+                    />
+                );
+            })()}
         </div>
     );
 }

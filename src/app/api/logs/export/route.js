@@ -21,27 +21,25 @@ export async function GET(request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status') || 'all';
-    const range  = searchParams.get('range')  || '30d';
-    const search = searchParams.get('search') || '';
-    const scope  = searchParams.get('scope')  || 'filtered'; // filtered | all
+    const status   = searchParams.get('status')   || 'all';
+    const range    = searchParams.get('range')    || '30d';
+    const search   = searchParams.get('search')   || '';
+    const scope    = searchParams.get('scope')    || 'filtered'; // filtered | all
+    const platform = searchParams.get('platform') || 'all';      // all | instagram | facebook
 
     try {
-        // ── Fetch automations for this user ──────────────────────
+        // Fetch the user's automations only for the post-info enrichment
+        // map (caption + ig_post_id per row). The dm_sent_log query
+        // filters by user_id directly so historical rows survive automation
+        // deletions and stay in the export.
         const { data: userAutomations } = await supabase
             .from('dm_automations')
             .select('id, dm_type, instagram_posts(id, caption, ig_post_id)')
             .eq('user_id', user.id);
 
-        if (!userAutomations || userAutomations.length === 0) {
-            return csvResponse(buildCsv([]), 'autodm-logs.csv');
-        }
-
-        const allIds  = userAutomations.map((a) => a.id);
-
         // automation_id → { caption, dmType, postId }
         const autoMap = {};
-        for (const a of userAutomations) {
+        for (const a of (userAutomations || [])) {
             autoMap[a.id] = {
                 caption:   a.instagram_posts?.caption   || 'No caption',
                 igPostId:  a.instagram_posts?.ig_post_id || '',
@@ -64,17 +62,29 @@ export async function GET(request) {
         }
 
         // ── Query ─────────────────────────────────────────────────
+        // Filter by user_id directly — same source of truth as the sidebar
+        // counter, captures rows whose automation has since been deleted.
         let query = supabase
             .from('dm_sent_log')
-            .select('id, automation_id, recipient_ig_id, comment_id, comment_text, status, error_message, sent_at')
-            .in('automation_id', allIds)
+            .select('id, automation_id, recipient_ig_id, comment_id, comment_text, status, error_message, sent_at, platform')
+            .eq('user_id', user.id)
             .order('sent_at', { ascending: false })
             .limit(50_000);
 
         if (scope === 'filtered') {
             if (status !== 'all')   query = query.eq('status', status);
             if (fromDate)           query = query.gte('sent_at', fromDate.toISOString());
-            if (search.trim())      query = query.or(`comment_text.ilike.%${search}%,recipient_ig_id.ilike.%${search}%`);
+            if (search.trim()) {
+                // See logs/route.js — strip PostgREST filter metacharacters before splice.
+                const safeSearch = search.replace(/[%,()'"*\\]/g, '').trim();
+                if (safeSearch) {
+                    query = query.or(`comment_text.ilike.%${safeSearch}%,recipient_ig_id.ilike.%${safeSearch}%`);
+                }
+            }
+        }
+        // Platform filter applies in both scopes — 'all' here means "all time".
+        if (platform !== 'all') {
+            query = query.eq('platform', platform);
         }
 
         const { data: logs, error } = await query;
@@ -84,6 +94,7 @@ export async function GET(request) {
         const enriched = (logs || []).map((log) => {
             const meta = autoMap[log.automation_id] || {};
             return {
+                platform:       log.platform || 'instagram',
                 post_caption:   meta.caption   || '',
                 ig_post_id:     meta.igPostId  || '',
                 dm_type:        formatDmType(meta.dmType),
@@ -99,7 +110,7 @@ export async function GET(request) {
         });
 
         const filename = `autodm-logs-${new Date().toISOString().split('T')[0]}.csv`;
-        return csvResponse(buildCsv(enriched), filename);
+        return csvResponse(buildCsv(enriched), filename, enriched.length);
 
     } catch (err) {
         console.error('[Export]', err);
@@ -170,7 +181,7 @@ function esc(val) {
     return `"${s}"`;
 }
 
-function csvResponse(csv, filename) {
+function csvResponse(csv, filename, rowCount = 0) {
     // Prepend UTF-8 BOM (\uFEFF) so Excel auto-detects encoding correctly
     const bom = '\uFEFF';
     return new Response(bom + csv, {
@@ -178,6 +189,9 @@ function csvResponse(csv, filename) {
             'Content-Type':        'text/csv; charset=utf-8',
             'Content-Disposition': `attachment; filename="${filename}"`,
             'Cache-Control':       'no-store',
+            // Surface the data-row count so the client can show an accurate
+            // "Downloaded N rows" toast and detect genuinely-empty exports.
+            'X-Row-Count':         String(rowCount),
         },
     });
 }

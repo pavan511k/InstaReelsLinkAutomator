@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Twitter, Instagram, Linkedin, Github } from 'lucide-react';
-import styles from './Footer.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './Footer.module.css';
+import lightStyles from './Footer.light.module.css';
 
 const LINKS = {
   Product: [
@@ -32,6 +34,7 @@ const SOCIALS = [
 ];
 
 export default function Footer() {
+  const styles = useStyles(darkStyles, lightStyles);
   return (
     <footer className={styles.footer}>
 

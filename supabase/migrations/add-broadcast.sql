@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS broadcast_jobs (
     dm_config           jsonb NOT NULL DEFAULT '{}',
 
     -- Progress
-    status              text NOT NULL DEFAULT 'pending'  -- pending | running | paused | completed | failed
-                        CHECK (status IN ('pending','running','paused','completed','failed')),
+    status              text NOT NULL DEFAULT 'pending'  -- pending | running | paused | throttled | completed | failed
+                        CHECK (status IN ('pending','running','paused','throttled','completed','failed')),
     total_recipients    integer NOT NULL DEFAULT 0,
     processed_count     integer NOT NULL DEFAULT 0,
     sent_count          integer NOT NULL DEFAULT 0,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS broadcast_jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_user    ON broadcast_jobs (user_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_status  ON broadcast_jobs (status) WHERE status IN ('running', 'pending');
+CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_status  ON broadcast_jobs (status) WHERE status IN ('running', 'pending', 'throttled');
 CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_post    ON broadcast_jobs (post_id);
 
 ALTER TABLE broadcast_jobs ENABLE ROW LEVEL SECURITY;
@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS broadcast_recipients (
     recipient_ig_id text NOT NULL,
     status          text NOT NULL DEFAULT 'pending'     -- pending | sent | failed | skipped
                     CHECK (status IN ('pending','sent','failed','skipped')),
+    retry_count     integer NOT NULL DEFAULT 0,         -- incremented on each transient failure, max 3
     error_message   text,
     processed_at    timestamptz
 );

@@ -1,9 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+/* Settings-style pages cap the form column at 900px for readability and
+   center it within the available width. Outer page padding lives on the
+   dashboard layout's <main>. */
 .settingsPage {
   max-width: 900px;
   margin: 0 auto;
-  padding: 32px 28px 64px;
   font-family: 'Inter', -apple-system, sans-serif;
   animation: fadeIn 0.35s ease both;
 }
@@ -331,6 +333,23 @@
 }
 
 /* Rate limit */
+.rateLimitAccount {
+  margin-bottom: 16px;
+}
+.rateLimitAccount:last-child {
+  margin-bottom: 0;
+}
+.rateLimitAccountLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 8px;
+  letter-spacing: 0.01em;
+}
+
 .rateLimitRow {
   display: flex;
   align-items: center;
@@ -630,9 +649,10 @@ select.formInput option {
 .modalOverlay {
   position: fixed;
   inset: 0;
-  z-index: 200;
-  background: rgba(0, 0, 0, 0.7);
+  z-index: 250;
+  background: rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -641,13 +661,51 @@ select.formInput option {
 
 .modal {
   width: 100%;
-  max-width: 440px;
+  max-width: 560px;
   background: #16122A;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   padding: 32px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
   animation: modalIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Email confirmation pill shown next to "Type your email to confirm".
+   Dark theme — light text on subtle white tint. */
+.emailPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  padding: 2px 8px;
+}
+.emailPill strong {
+  font-family: monospace;
+  font-weight: 600;
+}
+.emailPillCopyBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  transition: color 150ms;
+}
+.emailPillCopyBtn:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+.emailPillCopyBtnCopied {
+  color: #10B981;
 }
 
 @keyframes modalIn {
@@ -731,6 +789,37 @@ select.formInput option {
   display: flex;
   gap: 10px;
   margin-top: 8px;
+}
+
+/* Primary action button used inside .modalActions — matches the Cancel
+   button's 42px height so the row is visually balanced. Replaces the
+   smaller .refreshBtn / .saveBtn variants when used as a modal CTA. */
+.modalPrimaryBtn {
+  flex: 1;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: #7C3AED;
+  border: 1px solid rgba(167, 139, 250, 0.30);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  transition: background 150ms, transform 100ms, opacity 150ms;
+}
+.modalPrimaryBtn:hover:not(:disabled) {
+  background: #6D28D9;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45);
+}
+.modalPrimaryBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .cancelBtn {
@@ -849,6 +938,51 @@ select.formInput option {
   transform: translateX(-50%);
   cursor: help;
 }
+
+/* Inline upgrade CTA shown when free user crosses 80% */
+.usageGaugeUpgrade {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #FCD34D;
+  text-decoration: none;
+  transition: color 150ms;
+}
+.usageGaugeUpgrade:hover { color: #F59E0B; text-decoration: underline; }
+
+/* Unlimited-plan replacement card — Pro/Trial/Business users see this
+   instead of a numeric gauge (limit=null breaks the percentage math). */
+.usageGaugeUnlimited {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.10), rgba(124, 58, 237, 0.10));
+  border: 1px solid rgba(245, 158, 11, 0.30);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+.usageGaugeUnlimitedBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.40);
+  color: #FCD34D;
+  flex-shrink: 0;
+}
+.usageGaugeUnlimitedLabel {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.65);
+  flex: 1;
+}
+.usageGaugeUnlimitedLabel strong { color: rgba(255, 255, 255, 0.92); font-weight: 700; }
 
 /* Threshold button strip */
 .thresholdRow {
@@ -1027,6 +1161,58 @@ select.formInput option {
 }
 
 /* ── Info boxes (used in GlobalAutomationsContent + WelcomeOpenersContent) ── */
+/* ── Pro upsell banner (Global Triggers gate) ───────────────── */
+.proUpsellBanner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  margin: 12px 0 16px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.10), rgba(217, 119, 6, 0.06));
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 12px;
+}
+.proUpsellIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.18);
+  color: rgba(252, 211, 77, 1);
+  flex-shrink: 0;
+}
+.proUpsellBody {
+  flex: 1;
+  min-width: 0;
+}
+.proUpsellTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(252, 211, 77, 0.95);
+  margin: 0 0 2px;
+}
+.proUpsellDesc {
+  font-size: 12px;
+  color: rgba(252, 211, 77, 0.7);
+  margin: 0;
+  line-height: 1.5;
+}
+.proUpsellBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  background: rgba(245, 158, 11, 0.95);
+  color: #0F0F12;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 150ms;
+  flex-shrink: 0;
+}
+.proUpsellBtn:hover { background: #fcd34d; }
+
 .infoBox {
   display: flex;
   align-items: flex-start;
@@ -1068,4 +1254,14 @@ select.formInput option {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+@media (max-width: 480px) {
+  .modalOverlay { padding: 16px; }
+  .modal { padding: 22px 20px; border-radius: 16px; }
+  .modalIcon { width: 48px; height: 48px; border-radius: 12px; margin-bottom: 14px; }
+  .modalTitle { font-size: 1rem; }
+  .modalDesc { font-size: 0.825rem; }
+  .modalActions { flex-direction: column-reverse; gap: 8px; }
+  .modalActions > * { width: 100%; }
 }

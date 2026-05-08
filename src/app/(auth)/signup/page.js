@@ -6,7 +6,9 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Mail, Lock, Loader2, ArrowRight, Check, User, Zap, Shield, TrendingUp, Star } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
-import styles from './signup.module.css';
+import { useStyles } from '@/lib/useStyles';
+import darkStyles from './signup.module.css';
+import lightStyles from './signup.light.module.css';
 
 const PASSWORD_MIN_LENGTH = 6;
 
@@ -39,6 +41,7 @@ const STATS = [
 ];
 
 export default function SignupPage() {
+    const styles = useStyles(darkStyles, lightStyles);
     const [email, setEmail]                 = useState('');
     const [password, setPassword]           = useState('');
     const [fullName, setFullName]           = useState('');

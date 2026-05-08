@@ -1,5 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+/* ── All Stories table — themed (dark) ──────────────────────────── */
+.tableScroll { overflow-x: auto; }
+.storyTable { width: 100%; border-collapse: collapse; }
+.storyTableHeadRow { border-bottom: 1px solid rgba(255,255,255,0.07); }
+.storyTableTh {
+    text-align: left; padding: 10px 14px;
+    font-size: 11px; font-weight: 700;
+    color: rgba(255,255,255,0.55);
+    text-transform: uppercase; letter-spacing: 0.06em;
+}
+.storyTableRow { border-bottom: 1px solid rgba(255,255,255,0.05); }
+.storyTableTd { padding: 12px 14px; }
+
 .storiesPage {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     animation: fadeIn 0.35s ease both;
@@ -39,6 +52,7 @@
     color: #C4B5FD; background: rgba(124,58,237,0.18);
     border: 1px solid rgba(167,139,250,0.3);
     border-radius: 9px; cursor: pointer;
+    white-space: nowrap;
     transition: background 150ms;
 }
 .syncBtn:hover:not(:disabled) { background: rgba(124,58,237,0.28); }
@@ -141,8 +155,14 @@
 /* ── Story grid ──────────────────────────────────────────────── */
 .storyGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 12px;
+    /* Cap each card's width so a single story doesn't balloon to fill
+       the whole row — using `1fr` as the max stretched the lone card
+       to ~1500px, leaving the thumbnail looking marooned in empty
+       space. `minmax(180px, 240px)` keeps cards a sensible size while
+       still flowing responsively when there are many. */
+    grid-template-columns: repeat(auto-fill, minmax(180px, 240px));
+    justify-content: start;
+    gap: 14px;
 }
 
 /* Card — matches PostCard quality */
@@ -158,9 +178,12 @@
     transform: translateY(-2px);
 }
 
-/* Thumbnail — fixed height portrait preview, same clean fill as PostCard */
+/* Thumbnail — true Instagram-Story 9:16 portrait, identical across every
+   card regardless of source media. object-fit: cover handles oddly-sized
+   uploads cleanly. */
 .storyMedia {
-    height: 200px;
+    width: 100%;
+    aspect-ratio: 9 / 16;
     background: rgba(255,255,255,0.04);
     position: relative; overflow: hidden;
     flex-shrink: 0;
@@ -344,7 +367,10 @@
 .setupBadge:hover { background: rgba(124,58,237,0.25); }
 .metricCell {
     font-size: 0.845rem; font-weight: 500;
-    color: rgba(255,255,255,0.55); text-align: center;
+    color: rgba(255,255,255,0.55);
+    /* text-align: left to match the .storyTableTh headers — values
+       must sit directly under their column label. */
+    text-align: left;
 }
 .actionBtn {
     width: 30px; height: 30px; border-radius: 7px;

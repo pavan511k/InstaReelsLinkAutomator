@@ -9,7 +9,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 .container {
-  max-width: 860px;
+  max-width: 1020px;
   margin: 0 auto;
   padding: 48px 24px 80px;
   font-family: 'Inter', -apple-system, sans-serif;
@@ -124,13 +124,51 @@
 }
 
 .card {
+  position: relative;
   display: flex; flex-direction: column; gap: 16px;
-  padding: 24px;
+  /* Extra top padding leaves a clean row for the .cardBadge above the
+     icon/title so they never collide. */
+  padding: 40px 24px 24px;
   background: #FFFFFF;
   border: 1px solid rgba(124,58,237,0.09);
   border-radius: 16px;
   box-shadow: 0 1px 3px rgba(30,21,53,0.05), 0 4px 16px rgba(124,58,237,0.05);
-  transition: border-color 200ms, transform 200ms, box-shadow 200ms;
+  transition: border-color 200ms, transform 200ms, box-shadow 200ms, opacity 200ms;
+}
+
+/* Disabled card — coming-soon. Suppress hover lift, dim slightly. */
+.cardDisabled { opacity: 0.70; }
+.cardDisabled:hover { transform: none; border-color: rgba(124,58,237,0.09); }
+
+/* Card badge — top-right */
+.cardBadge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+.cardBadge_recommended {
+  background: rgba(124, 58, 237, 0.10);
+  border-color: rgba(124, 58, 237, 0.30);
+  color: #5B21B6;
+}
+.cardBadge_limited {
+  background: rgba(245, 158, 11, 0.10);
+  border-color: rgba(245, 158, 11, 0.32);
+  color: #92400E;
+}
+.cardBadge_soon {
+  background: rgba(30, 21, 53, 0.05);
+  border-color: rgba(30, 21, 53, 0.15);
+  color: rgba(30, 21, 53, 0.60);
 }
 .card:hover {
   border-color: rgba(124,58,237,0.22);
@@ -190,7 +228,17 @@
   box-shadow: 0 4px 14px rgba(30,21,53,0.18);
 }
 .connectBtn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
-.connectBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Disabled state — used for "Coming Soon". On a white card the default
+   white-text-on-no-background button is invisible; give it a clear
+   muted-purple chip look instead. */
+.connectBtn:disabled {
+  background: rgba(124, 58, 237, 0.06) !important;
+  border: 1px solid rgba(124, 58, 237, 0.20) !important;
+  color: rgba(30, 21, 53, 0.55) !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+  opacity: 1;
+}
 
 /* ── Trust footer ──────────────────────────────────────────── */
 .footer {

@@ -5,7 +5,10 @@ import { ChevronLeft, ChevronRight, Upload, Camera } from 'lucide-react';
 import styles from './PhonePreview.module.css';
 
 export default function PhonePreview({ config, onImageUpload, activeSlideIndex = 0, onSlideChange, userPlan = 'free' }) {
-    const isPro = userPlan === 'pro' || userPlan === 'business';
+    // Trial users have the same Pro feature set per lib/plans.js — keep
+    // this in sync with isProOrTrial() so trial users see custom branding
+    // in the preview just like real Pro users.
+    const isPro = userPlan === 'pro' || userPlan === 'business' || userPlan === 'trial';
     // Internal fallback state — only used if no external activeSlideIndex is provided
     const [_localSlide, _setLocalSlide] = useState(0);
     const activeSlide    = onSlideChange ? activeSlideIndex : _localSlide;
@@ -87,11 +90,24 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
     const headline = currentSlide.headline || '';
     const buttonLabel = currentSlide.buttonLabel || currentSlide.buttons?.[0]?.label || '';
 
-    // Compute subtitle for a slide respecting plan + appendBranding toggle
-    const getSubtitle = (slide) => {
+    // Build the brand label text the recipient sees in subtitles. Mirrors
+    // sendButtonTemplateDM / sendMultiCtaDM logic: Pro custom string overrides
+    // the default when set; otherwise default 'Sent with AutoDM'. Used for
+    // button-card and multi-cta subtitles.
+    const brandLabelFor = (scope) => {
+        const custom = isPro ? (scope?.branding || '').trim() : '';
+        return custom || 'Sent with AutoDM';
+    };
+
+    // Compute subtitle for a button-card slide. Branding controlled by the
+    // unified top-level appendBranding flag (config or linkDmConfig).
+    const getSubtitle = (slide, scope = config) => {
         const desc = (slide?.description || '').trim();
-        const shouldAppend = isPro ? (slide?.appendBranding !== false) : true;
-        if (shouldAppend) return desc ? `${desc} • Sent with AutoDM` : 'Sent with AutoDM';
+        const shouldAppend = scope?.appendBranding !== false;
+        if (shouldAppend) {
+            const label = brandLabelFor(scope);
+            return desc ? `${desc} • ${label}` : label;
+        }
         return desc || null;
     };
 
@@ -190,21 +206,49 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
         </div>
     );
 
+    // Demo substitution — show what the recipient will see, not the raw
+    // template. Uses a sample handle so users can spot how their copy reads.
+    const SAMPLE_USERNAME = 'sarah';
+    const previewSubstitute = (text = '') => text
+        .replace(/\{first_name\}/g, SAMPLE_USERNAME)
+        .replace(/\{username\}/g, SAMPLE_USERNAME);
+
+    // Default branding suffix shown to recipients. Must mirror
+    // defaultBrandingSuffix() in lib/send-dm.js so the preview never lies.
+    const FREE_BRANDING_SUFFIX = `— Sent with AutoDM · autodm.pro`;
+
+    // Apply the unified branding rule to a plain-text message body. Mirrors
+    // applyBranding() in lib/send-dm.js exactly:
+    //   - scope.appendBranding === false → no suffix
+    //   - Pro + scope.branding set       → `— <custom>`
+    //   - otherwise                       → default suffix
+    //
+    // Always evaluates regardless of whether `raw` is filled — the preview
+    // must reflect the toggle state at all times, including when the user
+    // is staring at the placeholder before typing.
+    const applyBrandingToBody = (body, _raw, scope) => {
+        if (scope?.appendBranding === false) return body;
+        if (isPro && scope?.branding?.trim()) return `${body}\n\n— ${scope.branding.trim()}`;
+        return `${body}\n\n${FREE_BRANDING_SUFFIX}`;
+    };
+
+    const messagePreviewBody = (rawMsg) => {
+        const body = previewSubstitute(rawMsg || 'Your message will appear here...');
+        return applyBrandingToBody(body, rawMsg, config);
+    };
+
     const renderMessageTemplate = () => (
         <div className={styles.messagePreview}>
             <div className={styles.messageBubble}>
-                <p>{config.message || 'Your message will appear here...'}</p>
+                <p>{messagePreviewBody(config.message)}</p>
             </div>
-            {config.branding && (
-                <span className={styles.branding}>{config.branding}</span>
-            )}
         </div>
     );
 
     const renderQuickReply = () => (
         <div className={styles.messagePreview}>
             <div className={styles.messageBubble}>
-                <p>{config.message || 'Your message will appear here...'}</p>
+                <p>{messagePreviewBody(config.message)}</p>
             </div>
             <div className={styles.quickReplies}>
                 {(config.quickReplies || [{ title: 'Reply option 1' }])
@@ -217,34 +261,48 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
         </div>
     );
 
-    const renderMultiCta = () => (
-        <div className={styles.buttonPreview}>
-            <div className={styles.cardContainer}>
-                <div className={styles.cardInfo} style={{ paddingBottom: 0 }}>
-                    <p className={styles.cardTitle}>{config.message || 'Your message here...'}</p>
-                    {!isPro && <span className={styles.cardSubtitle}>Sent with AutoDM</span>}
-                </div>
-                <div className={styles.ctaButtons}>
-                    {(config.buttons || [{ label: 'Button 1', url: '' }])
-                        .filter((b) => b.label?.trim())
-                        .slice(0, 3)
-                        .map((b, i) => (
-                            <div key={i} className={styles.ctaButton}>
-                                {b.label}
-                            </div>
-                        ))}
+    const renderMultiCta = () => {
+        // Match the Meta wire format: title is the generic_template title
+        // (capped at 80) and subtitle is the branding line. Substitute
+        // placeholders so the preview shows what the recipient actually sees.
+        const titleRaw = previewSubstitute(config.message || 'Your message here...');
+        const title = titleRaw.length > 80 ? titleRaw.slice(0, 80) : titleRaw;
+        const subtitle = config.appendBranding === false
+            ? null
+            : brandLabelFor(config);
+
+        return (
+            <div className={styles.buttonPreview}>
+                <div className={styles.cardContainer}>
+                    <div className={styles.cardInfo} style={{ paddingBottom: 0 }}>
+                        <p className={styles.cardMessage}>{title}</p>
+                        {subtitle && <span className={styles.cardSubtitle}>{subtitle}</span>}
+                    </div>
+                    <div className={styles.ctaButtons}>
+                        {(config.buttons || [{ label: 'Button 1', url: '' }])
+                            .filter((b) => b.label?.trim())
+                            .slice(0, 3)
+                            .map((b, i) => (
+                                <div key={i} className={styles.ctaButton}>
+                                    {b.label}
+                                </div>
+                            ))}
+                    </div>
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const renderFollowGate = () => {
         const isFollowedState = false; // always show the gate state in preview
+        // Gate message follows the same branding rule as message_template.
+        const gateRaw  = config.gateMessage || 'Hey! 👋 To get the link, please follow our page first, then reply YES here 👇';
+        const gateBody = applyBrandingToBody(previewSubstitute(gateRaw), config.gateMessage, config);
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {/* Gate message */}
+                {/* Gate message — substitute placeholders so the preview matches send-time output */}
                 <div className={styles.messageBubble}>
-                    <p>{config.gateMessage || 'Hey! 👋 To get the link, please follow our page first, then reply YES here 👇'}</p>
+                    <p>{gateBody}</p>
                 </div>
                 {/* YES / NO quick reply chips */}
                 <div className={styles.quickReplies}>
@@ -262,7 +320,7 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
                     {config.linkDmType === 'button_template' ? (() => {
                         const rSlides = config.linkDmConfig?.slides || [{}];
                         const rSlide  = rSlides[0] || {};
-                        const rSubtitle = getSubtitle(rSlide);
+                        const rSubtitle = getSubtitle(rSlide, config.linkDmConfig || {});
                         return (
                             <div className={styles.buttonPreview}>
                                 <div className={styles.cardContainer}>
@@ -284,8 +342,13 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
                         <div className={styles.buttonPreview}>
                             <div className={styles.cardContainer}>
                                 <div className={styles.cardInfo}>
-                                    <p className={styles.cardTitle}>{config.linkDmConfig?.message || config.linkMessage || '🎉 Thanks for following!'}</p>
-                                    {!isPro && <span className={styles.cardSubtitle}>Sent with AutoDM</span>}
+                                    <p className={styles.cardMessage}>{previewSubstitute(config.linkDmConfig?.message || config.linkMessage || '🎉 Thanks for following!')}</p>
+                                    {(() => {
+                                        const sub = config.linkDmConfig?.appendBranding === false
+                                            ? null
+                                            : brandLabelFor(config.linkDmConfig || {});
+                                        return sub ? <span className={styles.cardSubtitle}>{sub}</span> : null;
+                                    })()}
                                 </div>
                                 <div className={styles.ctaButtons}>
                                     {(config.linkDmConfig?.buttons || [{ label: 'Get the link' }]).filter(b => b.label).slice(0, 3).map((b, i) => (
@@ -294,11 +357,51 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
                                 </div>
                             </div>
                         </div>
-                    ) : (
-                        <div className={styles.messageBubble}>
-                            <p>{config.linkMessage || '🎉 Thanks for following! Here is your link: https://...'}</p>
-                        </div>
-                    )}
+                    ) : (() => {
+                        // Reward = plain text. Use the unified helper bound
+                        // to linkDmConfig so the preview matches send-time.
+                        const raw  = config.linkMessage || '🎉 Thanks for following! Here is your link: https://...';
+                        const body = applyBrandingToBody(previewSubstitute(raw), raw, config.linkDmConfig || {});
+                        return (
+                            <div className={styles.messageBubble}>
+                                <p>{body}</p>
+                            </div>
+                        );
+                    })()}
+                </div>
+            </div>
+        );
+    };
+
+    const renderEmailCollector = () => {
+        // Two-step flow: ask DM (top) + the captured-email confirmation
+        // (bottom, faded). Ask + confirm both follow the unified branding
+        // rule so the preview matches what recipients actually see.
+        const SAMPLE_EMAIL = 'sarah@example.com';
+        const askRaw = config.emailAskMessage ||
+            'Hey {first_name}! 👋 Could you share your email address? 📧';
+        const askBody = applyBrandingToBody(previewSubstitute(askRaw), askRaw, config);
+        const confirmRaw = config.emailConfirmMessage ||
+            "Thanks {first_name}! 🎉 We've got your email ({email}) and will be in touch soon.";
+        const confirmBody = applyBrandingToBody(
+            previewSubstitute(confirmRaw).replace(/\{email\}/g, SAMPLE_EMAIL),
+            confirmRaw,
+            config,
+        );
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className={styles.messageBubble}>
+                    <p>{askBody}</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0', opacity: 0.4 }}>
+                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.15)' }} />
+                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>after they reply with email</span>
+                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.15)' }} />
+                </div>
+                <div style={{ opacity: 0.6 }}>
+                    <div className={styles.messageBubble}>
+                        <p>{confirmBody}</p>
+                    </div>
                 </div>
             </div>
         );
@@ -311,6 +414,7 @@ export default function PhonePreview({ config, onImageUpload, activeSlideIndex =
             case 'quick_reply':      return renderQuickReply();
             case 'multi_cta':        return renderMultiCta();
             case 'follow_up':        return renderFollowGate();
+            case 'email_collector':  return renderEmailCollector();
             default:                 return null;
         }
     };

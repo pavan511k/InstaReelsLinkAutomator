@@ -1,40 +1,68 @@
 'use client';
 
-import { useState } from 'react';
-import { Users, Mail, RefreshCw, Download } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { Users, Mail, RefreshCw, Download, AlertCircle, Lock } from 'lucide-react';
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from './SettingsContent.module.css';
 import lightStyles from './SettingsContent.light.module.css';
 
-export default function LeadsContent({ connectedAccounts = [] }) {
+const PAGE_SIZE = 100;
+
+// Defang CSV-formula-injection: prefix any cell starting with =, +, -, @, tab,
+// or carriage return with a single quote so spreadsheet apps don't execute it.
+// Also wrap in quotes and escape any internal quotes per RFC 4180.
+function csvCell(value) {
+    if (value == null) return '';
+    let s = String(value);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+}
+
+export default function LeadsContent({ connectedAccounts = [], isPro = false }) {
     const styles = useStyles(darkStyles, lightStyles);
     const firstActiveAccount = connectedAccounts.find((a) => a.is_active) || null;
 
     const [leads, setLeads]               = useState([]);
+    const [total, setTotal]               = useState(0);
+    const [offset, setOffset]             = useState(0);
     const [leadsLoading, setLeadsLoading] = useState(false);
-    const [leadsLoaded, setLeadsLoaded]   = useState(false);
+    const [error, setError]               = useState(null);
 
-    const loadLeads = async () => {
-        if (leadsLoaded) return;
+    const loadLeads = useCallback(async (nextOffset = 0) => {
         setLeadsLoading(true);
+        setError(null);
         try {
-            const res  = await fetch('/api/leads');
+            const res  = await fetch(`/api/leads?limit=${PAGE_SIZE}&offset=${nextOffset}`);
             const data = await res.json();
-            if (res.ok) setLeads(data.leads || []);
-        } catch { /* non-fatal */ }
-        finally { setLeadsLoading(false); setLeadsLoaded(true); }
-    };
+            if (!res.ok) {
+                setError(data?.error || 'Failed to load leads');
+                return;
+            }
+            setLeads(data.leads || []);
+            setTotal(data.total || 0);
+            setOffset(nextOffset);
+        } catch (err) {
+            setError(err.message || 'Network error');
+        } finally {
+            setLeadsLoading(false);
+        }
+    }, []);
 
-    // Kick off load on first render
-    if (!leadsLoaded && !leadsLoading) loadLeads();
+    useEffect(() => {
+        if (isPro && firstActiveAccount) loadLeads(0);
+    }, [isPro, firstActiveAccount, loadLeads]);
 
     const exportLeadsCsv = () => {
         if (!leads.length) return;
         const header = 'email,ig_user_id,captured_at\n';
-        const rows   = leads.map((l) => `${l.email},${l.recipient_ig_id},${l.confirmed_at}`).join('\n');
-        const blob   = new Blob([header + rows], { type: 'text/csv' });
-        const url    = URL.createObjectURL(blob);
-        const a      = document.createElement('a');
+        const rows = leads.map((l) =>
+            [csvCell(l.email), csvCell(l.recipient_ig_id), csvCell(l.confirmed_at)].join(',')
+        ).join('\n');
+        const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
         a.href = url; a.download = 'autodm_email_leads.csv'; a.click();
         URL.revokeObjectURL(url);
     };
@@ -58,6 +86,32 @@ export default function LeadsContent({ connectedAccounts = [] }) {
             </div>
         );
     }
+
+    if (!isPro) {
+        return (
+            <div className={styles.settingsPage}>
+                <div className={styles.header}>
+                    <h1 className={styles.pageTitle}>Email Leads</h1>
+                </div>
+                <div className={styles.tabContent}>
+                    <div className={styles.noAccountBanner}>
+                        <div className={styles.noAccountIcon}><Lock size={28} /></div>
+                        <h3 className={styles.noAccountTitle}>Email Leads is a Pro feature</h3>
+                        <p className={styles.noAccountDesc}>
+                            Capture email addresses from your DM automations and export them as CSV.
+                            Available on the Pro plan.
+                        </p>
+                        <Link href="/pricing" className={styles.saveBtn} style={{ marginTop: 14, display: 'inline-flex', gap: 6 }}>
+                            Upgrade to Pro
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const hasNext = offset + leads.length < total;
+    const hasPrev = offset > 0;
 
     return (
         <div className={styles.settingsPage}>
@@ -83,7 +137,17 @@ export default function LeadsContent({ connectedAccounts = [] }) {
                             </div>
                         )}
 
-                        {!leadsLoading && leads.length === 0 && leadsLoaded && (
+                        {!leadsLoading && error && (
+                            <div className={styles.emptyState}>
+                                <AlertCircle size={28} />
+                                <p style={{ marginBottom: 10 }}>{error}</p>
+                                <button className={styles.saveBtn} onClick={() => loadLeads(offset)}>
+                                    Try again
+                                </button>
+                            </div>
+                        )}
+
+                        {!leadsLoading && !error && total === 0 && (
                             <div className={styles.emptyState}>
                                 <Mail size={32} />
                                 <p>
@@ -93,37 +157,71 @@ export default function LeadsContent({ connectedAccounts = [] }) {
                             </div>
                         )}
 
-                        {!leadsLoading && leads.length > 0 && (
+                        {!leadsLoading && !error && total > 0 && (
                             <>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
                                     <span style={{ fontSize: 13, opacity: 0.55 }}>
-                                        {leads.length} lead{leads.length !== 1 ? 's' : ''} captured
+                                        {total} lead{total !== 1 ? 's' : ''} captured
+                                        {total > leads.length && ` · showing ${offset + 1}–${offset + leads.length}`}
                                     </span>
-                                    <button className={styles.saveBtn} onClick={exportLeadsCsv} style={{ gap: 6 }}>
-                                        <Download size={13} /> Export CSV
-                                    </button>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button
+                                            className={styles.saveBtn}
+                                            onClick={() => loadLeads(offset)}
+                                            title="Refresh"
+                                            style={{ gap: 6 }}
+                                        >
+                                            <RefreshCw size={13} /> Refresh
+                                        </button>
+                                        <button className={styles.saveBtn} onClick={exportLeadsCsv} style={{ gap: 6 }}>
+                                            <Download size={13} /> Export CSV
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                                    <thead>
-                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                                            <th style={{ textAlign: 'left', padding: '8px 0', opacity: 0.45, fontWeight: 600 }}>Email</th>
-                                            <th style={{ textAlign: 'left', padding: '8px 0', opacity: 0.45, fontWeight: 600 }}>IG User</th>
-                                            <th style={{ textAlign: 'left', padding: '8px 0', opacity: 0.45, fontWeight: 600 }}>Captured</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {leads.map((lead) => (
-                                            <tr key={lead.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                                <td style={{ padding: '10px 0', fontFamily: 'monospace', opacity: 0.85 }}>{lead.email}</td>
-                                                <td style={{ padding: '10px 0', opacity: 0.55 }}>{lead.recipient_ig_id}</td>
-                                                <td style={{ padding: '10px 0', opacity: 0.45 }}>
-                                                    {new Date(lead.confirmed_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                </td>
+                                <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                                    <table style={{ width: '100%', minWidth: 480, borderCollapse: 'collapse', fontSize: 13 }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '1px solid rgba(120,120,140,0.15)' }}>
+                                                <th style={{ textAlign: 'left', padding: '8px 0', opacity: 0.55, fontWeight: 600 }}>Email</th>
+                                                <th style={{ textAlign: 'left', padding: '8px 0', opacity: 0.55, fontWeight: 600 }}>IG User</th>
+                                                <th style={{ textAlign: 'left', padding: '8px 0', opacity: 0.55, fontWeight: 600 }}>Captured</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            {leads.map((lead) => (
+                                                <tr key={lead.id} style={{ borderBottom: '1px solid rgba(120,120,140,0.08)' }}>
+                                                    <td style={{ padding: '10px 0', fontFamily: 'monospace' }}>{lead.email}</td>
+                                                    <td style={{ padding: '10px 0', opacity: 0.6 }}>{lead.recipient_ig_id}</td>
+                                                    <td style={{ padding: '10px 0', opacity: 0.5, whiteSpace: 'nowrap' }}>
+                                                        {new Date(lead.confirmed_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {(hasPrev || hasNext) && (
+                                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+                                        <button
+                                            className={styles.saveBtn}
+                                            disabled={!hasPrev}
+                                            onClick={() => loadLeads(Math.max(0, offset - PAGE_SIZE))}
+                                            style={{ opacity: hasPrev ? 1 : 0.4 }}
+                                        >
+                                            ← Prev
+                                        </button>
+                                        <button
+                                            className={styles.saveBtn}
+                                            disabled={!hasNext}
+                                            onClick={() => loadLeads(offset + PAGE_SIZE)}
+                                            style={{ opacity: hasNext ? 1 : 0.4 }}
+                                        >
+                                            Next →
+                                        </button>
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>

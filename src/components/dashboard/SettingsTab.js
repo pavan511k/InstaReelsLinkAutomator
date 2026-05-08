@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Clock, CalendarClock, ArrowRight, Plus, Trash2 } from 'lucide-react';
+import { Calendar, Clock, CalendarClock, ArrowRight, Plus, Trash2, ChevronDown, BookmarkPlus, Lock } from 'lucide-react';
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from './SettingsTab.module.css';
 import lightStyles from './SettingsTab.light.module.css';
+import darkSettingsStyles from './SettingsContent.module.css';
+import lightSettingsStyles from './SettingsContent.light.module.css';
 
 // Returns the minimum datetime string for the datetime-local input (now + 1h)
 function getMinDatetime() {
@@ -98,34 +100,22 @@ function FlowStepBuilder({ steps, onChange, styles }) {
                 <div key={step.id || idx} style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
                     {/* Step indicator */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-                        <div style={{
-                            width: 28, height: 28, borderRadius: '50%', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center', fontSize: 12,
-                            fontWeight: 700, background: 'rgba(139,92,246,0.2)',
-                            border: '1px solid rgba(139,92,246,0.4)', color: 'rgb(196,181,253)',
-                        }}>
+                        <div className={styles.flowStepIndicator}>
                             {idx + 1}
                         </div>
                         {idx < steps.length - 1 && (
-                            <div style={{ width: 1, flex: 1, minHeight: 20, background: 'rgba(139,92,246,0.2)', margin: '4px 0' }} />
+                            <div className={styles.flowStepConnector} />
                         )}
                     </div>
 
                     {/* Step card */}
-                    <div style={{
-                        flex: 1, background: 'rgba(255,255,255,0.03)',
-                        border: '1px solid rgba(255,255,255,0.07)',
-                        borderRadius: 10, padding: 12, marginBottom: idx < steps.length - 1 ? 0 : 0,
-                    }}>
+                    <div className={styles.flowStepCard}>
                         {/* Delay selector */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                             <Clock size={12} style={{ opacity: 0.5, flexShrink: 0 }} />
                             <span style={{ fontSize: 12, opacity: 0.6, flexShrink: 0 }}>Send after</span>
                             <select
-                                style={{
-                                    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-                                    borderRadius: 6, padding: '3px 8px', fontSize: 12, color: 'inherit', cursor: 'pointer',
-                                }}
+                                className={styles.flowStepDelaySelect}
                                 value={step.delayHours}
                                 onChange={(e) => updateStep(idx, { delayHours: Number(e.target.value) })}
                             >
@@ -138,11 +128,7 @@ function FlowStepBuilder({ steps, onChange, styles }) {
                             </span>
                             <div style={{ flex: 1 }} />
                             <button
-                                style={{
-                                    background: 'transparent', border: 'none', cursor: 'pointer',
-                                    color: 'rgba(239,68,68,0.7)', padding: '2px 4px', borderRadius: 4,
-                                    display: 'flex', alignItems: 'center',
-                                }}
+                                className={styles.flowStepRemoveBtn}
                                 onClick={() => removeStep(idx)}
                                 title="Remove step"
                             >
@@ -167,13 +153,8 @@ function FlowStepBuilder({ steps, onChange, styles }) {
 
             {steps.length < MAX_STEPS ? (
                 <button
-                    className={styles.checkDesc}
-                    style={{
-                        marginLeft: 38, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6,
-                        background: 'rgba(139,92,246,0.08)', border: '1px dashed rgba(139,92,246,0.3)',
-                        borderRadius: 8, padding: '7px 14px', cursor: 'pointer', color: 'rgb(196,181,253)',
-                        fontSize: 12, fontWeight: 500,
-                    }}
+                    className={styles.flowStepAddBtn}
+                    style={{ marginLeft: 38, marginTop: 4 }}
                     onClick={addStep}
                 >
                     <Plus size={13} /> Add step ({steps.length}/{MAX_STEPS})
@@ -187,10 +168,31 @@ function FlowStepBuilder({ steps, onChange, styles }) {
     );
 }
 
-export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
+export default function SettingsTab({ config, onChange, userPlan = 'free', onSaveTemplate }) {
     const isPro = userPlan === 'pro' || userPlan === 'business' || userPlan === 'trial';
     const styles = useStyles(darkStyles, lightStyles);
+    const settingsStyles = useStyles(darkSettingsStyles, lightSettingsStyles);
     const updateConfig = (updates) => onChange({ ...config, ...updates });
+
+    /* Collapse the four niche setting blocks (send delay, universal-trigger
+       disable, flow automation, upsell) under a single "Advanced settings"
+       toggle. Schedule + expiry stay visible since they're the most-used
+       knobs. Auto-expand if any advanced setting is already on. */
+    const advancedActive = !!config.delayMessage
+        || !!config.disableUniversalTriggers
+        || !!config.flowAutomation
+        || !!config.upsell?.enabled;
+    const [showAdvanced, setShowAdvanced] = useState(advancedActive);
+
+    /* Save Template lives at the end of the Settings tab — the natural
+       end-of-wizard moment to capture the whole config (DM + trigger +
+       settings) into a reusable template. */
+    const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [templateName, setTemplateName] = useState('');
+    const handleSaveTemplateConfirm = () => {
+        if (templateName.trim()) onSaveTemplate?.(templateName.trim());
+        setShowTemplateModal(false); setTemplateName('');
+    };
 
     const scheduledCountdown = config.scheduledStartEnabled && config.scheduledStartAt
         ? formatScheduledCountdown(config.scheduledStartAt)
@@ -207,6 +209,7 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                       !scheduledInPast && config.expiresEnabled && config.expiresAt && !isExpired;
 
     return (
+        <>
         <div className={styles.tab}>
 
             {/* ── Automation Schedule ──────────────────────────── */}
@@ -214,33 +217,41 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                 <p className={styles.groupTitle}>Automation Schedule</p>
 
                 {/* ── Schedule start card ── */}
-                <div className={styles.scheduleCard}>
+                <div className={`${styles.scheduleCard} ${!isPro ? styles.proFeature : ''}`}>
                     <label className={styles.expiryToggleRow}>
                         <div className={styles.expiryToggleLeft}>
                             <div className={`${styles.expiryIcon} ${styles.scheduleIcon}`}>
                                 <CalendarClock size={14} />
                             </div>
                             <div>
-                                <span className={styles.checkText}>Schedule start time</span>
+                                <span className={styles.checkText}>
+                                    Schedule start time
+                                    {!isPro && <span className={styles.proBadge}>Pro</span>}
+                                </span>
                                 <p className={styles.checkDesc}>
                                     Automation activates automatically at this date and time. Save as inactive until then.
                                 </p>
                             </div>
                         </div>
                         <div
-                            className={`${styles.toggle} ${config.scheduledStartEnabled ? styles.toggleOn : ''}`}
-                            onClick={() => updateConfig({
-                                scheduledStartEnabled: !config.scheduledStartEnabled,
-                                scheduledStartAt: !config.scheduledStartEnabled ? config.scheduledStartAt : null,
-                            })}
+                            className={`${styles.toggle} ${isPro && config.scheduledStartEnabled ? styles.toggleOn : ''}`}
+                            onClick={() => {
+                                if (!isPro) return;
+                                updateConfig({
+                                    scheduledStartEnabled: !config.scheduledStartEnabled,
+                                    scheduledStartAt: !config.scheduledStartEnabled ? config.scheduledStartAt : null,
+                                });
+                            }}
                             role="switch"
-                            aria-checked={config.scheduledStartEnabled}
+                            aria-checked={isPro && !!config.scheduledStartEnabled}
+                            aria-disabled={!isPro}
+                            style={!isPro ? { cursor: 'not-allowed' } : undefined}
                         >
                             <div className={styles.toggleThumb} />
                         </div>
                     </label>
 
-                    {config.scheduledStartEnabled && (
+                    {isPro && config.scheduledStartEnabled && (
                         <div className={styles.expiryPickerWrap}>
                             <div className={styles.expiryPickerRow}>
                                 <Clock size={13} className={styles.expiryPickerIcon} />
@@ -348,6 +359,34 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                 </div>
             </div>
 
+            {/* ── Advanced settings ─────────────────────────────────
+                Send delay, universal-trigger disable, flow automation,
+                and upsell follow-up all live behind a single disclosure
+                so the Settings tab reads as "Schedule → Expiry → done"
+                for the common case. Power users still have one click to
+                everything. */}
+            <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className={styles.advancedToggle}
+                aria-expanded={showAdvanced}
+            >
+                <span>
+                    Advanced settings
+                    {advancedActive && <span className={styles.advancedActiveDot} aria-hidden="true" />}
+                </span>
+                <ChevronDown
+                    size={14}
+                    style={{
+                        transform: showAdvanced ? 'rotate(180deg)' : 'none',
+                        transition: 'transform 180ms',
+                    }}
+                />
+            </button>
+
+            {showAdvanced && (
+            <div className={styles.advancedBody}>
+
             {/* ── Send Delay ────────────────────────────────────── */}
             <div className={styles.settingGroup}>
                 <p className={styles.groupTitle}>Send Delay</p>
@@ -361,7 +400,9 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                     <div>
                         <span className={styles.checkText}>Delay Message</span>
                         <p className={styles.checkDesc}>
-                            Add a random delay (30s–2min) before sending the DM to appear more natural
+                            Add a random 30s–2min delay before queued DMs go out, so sends look
+                            more human. Doesn’t apply to instant flows like Follow-Gate gate
+                            messages, Email Collector asks, or Story-Mention replies.
                         </p>
                     </div>
                 </label>
@@ -386,27 +427,6 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                     </div>
                 </label>
 
-                <div className={styles.checkboxGroup}>
-                    <div className={styles.commentReplyCard}>
-                        <div className={styles.commentReplyHeader}>
-                            <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>💬</span>
-                            <div>
-                                <span className={styles.checkText} style={{ display: 'block', marginBottom: 3 }}>Comment Auto-Reply</span>
-                                <p className={styles.checkDesc}>
-                                    AutoDM always replies to the triggering comment after sending the DM.
-                                    Leave blank to use the default message.
-                                </p>
-                            </div>
-                        </div>
-                        <textarea
-                            className={styles.textarea}
-                            placeholder="Hey! Check your DM ❤️ Didn't receive the link? Follow and comment again."
-                            value={config.replyMessage || ''}
-                            onChange={(e) => updateConfig({ replyMessage: e.target.value })}
-                            rows={2}
-                        />
-                    </div>
-                </div>
             </div>
 
             {/* ── Flow Automation ──────────────────────────────── */}
@@ -432,7 +452,7 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                             {!isPro && <span className={styles.proBadge}>Pro</span>}
                         </span>
                         <p className={styles.checkDesc}>
-                            Send up to 3 automatic follow-up messages after the initial DM, with optional delays and yes/no branching.
+                            Send up to 3 automatic follow-up messages after the initial DM, each with its own delay.
                         </p>
                     </div>
                 </label>
@@ -446,9 +466,9 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                 )}
             </div>
 
-            {/* ── Upsell Follow-up ──────────────────────────────── */}
+            {/* ── Follow-up to Non-Clickers ─────────────────────── */}
             <div className={styles.settingGroup}>
-                <p className={styles.groupTitle}>Upsell Follow-up</p>
+                <p className={styles.groupTitle}>Follow-up to Non-Clickers</p>
 
                 <label className={`${styles.checkboxLabel} ${!isPro ? styles.proFeature : ''}`}>
                     <input
@@ -466,8 +486,8 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                             {!isPro && <span className={styles.proBadge}>Pro</span>}
                         </span>
                         <p className={styles.checkDesc}>
-                            If someone receives your DM but doesn’t click the link within the delay window,
-                            AutoDM sends them a second message automatically.
+                            After the delay, AutoDM sends a second DM only to recipients who
+                            haven’t clicked your link yet. Click attribution is per-recipient.
                         </p>
                     </div>
                 </label>
@@ -482,13 +502,7 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                                     return (
                                         <button
                                             key={h}
-                                            style={{
-                                                padding: '5px 14px', borderRadius: 20, border: '1px solid',
-                                                cursor: 'pointer', fontSize: 12, fontWeight: 500,
-                                                borderColor: active ? 'rgba(139,92,246,0.8)' : 'rgba(255,255,255,0.12)',
-                                                background:  active ? 'rgba(139,92,246,0.15)' : 'transparent',
-                                                color:       active ? 'rgb(196,181,253)' : 'inherit',
-                                            }}
+                                            className={`${styles.delayPill} ${active ? styles.delayPillActive : ''}`}
                                             onClick={() => updateConfig({
                                                 upsell: { ...(config.upsell || {}), delayHours: h }
                                             })}
@@ -519,6 +533,88 @@ export default function SettingsTab({ config, onChange, userPlan = 'free' }) {
                 )}
             </div>
 
+            </div>
+            )}
+
+            {/* ── Save as Template — end-of-wizard action ──────────
+                Sits below all other settings so the user reaches it
+                naturally as the last step before clicking Save & Activate.
+                Captures the full config (DM + trigger + settings) into a
+                named template that can be reused on future posts. */}
+            {onSaveTemplate && (
+                <div className={styles.settingGroup} style={{ borderBottom: 'none', paddingBottom: 0 }}>
+                    <p className={styles.groupTitle}>Save as Template</p>
+                    {isPro ? (
+                        <button
+                            type="button"
+                            className={styles.advancedToggle}
+                            onClick={() => { setTemplateName(''); setShowTemplateModal(true); }}
+                            style={{ marginTop: 4 }}
+                        >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <BookmarkPlus size={14} />
+                                Save this configuration as a template
+                            </span>
+                        </button>
+                    ) : (
+                        <a
+                            href="/pricing"
+                            className={styles.advancedToggle}
+                            style={{
+                                marginTop: 4, opacity: 0.85, textDecoration: 'none',
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            }}
+                            title="Upgrade to Pro to save templates"
+                        >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                <Lock size={13} />
+                                Save as Template
+                            </span>
+                            <span style={{
+                                fontSize: 10, fontWeight: 700, padding: '2px 8px',
+                                background: 'rgba(167, 139, 250, 0.18)',
+                                color: '#A78BFA', borderRadius: 100, letterSpacing: '0.04em',
+                            }}>
+                                PRO
+                            </span>
+                        </a>
+                    )}
+                </div>
+            )}
+
         </div>
+
+        {/* ── Save template modal ─────────────────────────────── */}
+        {showTemplateModal && (
+            <div className={settingsStyles.modalOverlay} onClick={() => setShowTemplateModal(false)}>
+                <div className={settingsStyles.modal} onClick={(e) => e.stopPropagation()}>
+                    <div className={settingsStyles.modalIcon}><BookmarkPlus size={28} /></div>
+                    <h3 className={settingsStyles.modalTitle}>Save as Template</h3>
+                    <p className={settingsStyles.modalDesc}>Give this configuration a name so you can reuse it on future posts.</p>
+                    <div className={settingsStyles.formGroup}>
+                        <label className={settingsStyles.formLabel}>Template Name</label>
+                        <input
+                            className={settingsStyles.formInput}
+                            placeholder="E.g., Product launch DM"
+                            value={templateName}
+                            onChange={(e) => setTemplateName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveTemplateConfirm()}
+                            autoFocus
+                        />
+                    </div>
+                    <div className={settingsStyles.modalActions}>
+                        <button className={settingsStyles.cancelBtn} onClick={() => setShowTemplateModal(false)}>Cancel</button>
+                        <button
+                            className={settingsStyles.modalPrimaryBtn}
+                            onClick={handleSaveTemplateConfirm}
+                            disabled={!templateName.trim()}
+                        >
+                            <BookmarkPlus size={14} /> Save Template
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 }

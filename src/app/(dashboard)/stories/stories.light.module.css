@@ -1,12 +1,25 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ── All Stories table — themed (light) ────────────────────────── */
+.tableScroll { overflow-x: auto; }
+.storyTable { width: 100%; border-collapse: collapse; }
+.storyTableHeadRow { border-bottom: 1px solid rgba(124,58,237,0.12); }
+.storyTableTh {
+    text-align: left; padding: 10px 14px;
+    font-size: 11px; font-weight: 700;
+    color: rgba(30,21,53,0.55);
+    text-transform: uppercase; letter-spacing: 0.06em;
+}
+.storyTableRow { border-bottom: 1px solid rgba(124,58,237,0.08); }
+.storyTableTd { padding: 12px 14px; color: #1E1535; }
+
 /* ================================================================
    LIGHT THEME — StoriesContent / stories.module.css
    White section cards with purple-tinted borders.
    Platform gradients (Instagram, Facebook) unchanged — brand assets.
    Status badge text darkened for legibility on white bg.
    ================================================================ */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
 .storiesPage {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     animation: fadeIn 0.35s ease both;
@@ -47,6 +60,7 @@
     color: #5B21B6; background: rgba(124,58,237,0.10);
     border: 1px solid rgba(124,58,237,0.22);
     border-radius: 9px; cursor: pointer;
+    white-space: nowrap;
     transition: background 150ms;
 }
 .syncBtn:hover:not(:disabled) { background: rgba(124,58,237,0.17); }
@@ -151,10 +165,18 @@
 /* ── Story grid ──────────────────────────────────────────────── */
 .storyGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
+    /* See dark module for the rationale — cap card width so single
+       cards don't stretch to fill the row. */
+    grid-template-columns: repeat(auto-fill, minmax(180px, 240px));
+    justify-content: start;
+    gap: 14px;
 }
 .storyCard {
+    /* Match the dark module's flex-column structure so the body, image,
+       and actions stretch across the full card width. Without this, the
+       storyMedia's intrinsic aspect-ratio shrunk it to ~146px and left
+       empty space to the right of the thumbnail. */
+    display: flex; flex-direction: column;
     background: #FFFFFF;
     border: 1px solid rgba(124,58,237,0.09);
     border-radius: 14px; overflow: hidden;
@@ -166,10 +188,15 @@
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(30,21,53,0.08), 0 8px 24px rgba(124,58,237,0.07);
 }
+/* True 9:16 portrait — matches dark module. .storyCard above is
+   display: flex; flex-direction: column, so the thumbnail expands to
+   the card's full width before applying the aspect-ratio for height. */
 .storyMedia {
-    aspect-ratio: 9/16; max-height: 260px;
+    width: 100%;
+    aspect-ratio: 9 / 16;
     background: rgba(124,58,237,0.05);
     position: relative; overflow: hidden;
+    flex-shrink: 0;
 }
 .storyMedia img { width: 100%; height: 100%; object-fit: cover; }
 /* Gradient placeholder stays — it's decorative */
@@ -355,7 +382,9 @@
 .setupBadge:hover { background: rgba(124,58,237,0.17); }
 .metricCell {
     font-size: 0.845rem; font-weight: 500;
-    color: rgba(30,21,53,0.55); text-align: center;
+    color: rgba(30,21,53,0.55);
+    /* match the .storyTableTh left-aligned header */
+    text-align: left;
 }
 .actionBtn {
     width: 30px; height: 30px; border-radius: 7px;

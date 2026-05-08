@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Loader2, CalendarClock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import Modal from '@/components/ui/Modal';
+import { X, Loader2, CalendarClock, Eye, ArrowRight } from 'lucide-react';
+import { toast } from 'sonner';
 import DMSetupTab from './DMSetupTab';
 import TriggerSetupTab from './TriggerSetupTab';
 import SettingsTab from './SettingsTab';
@@ -17,16 +18,25 @@ const TABS = [
     { key: 'settings', label: 'Settings' },
 ];
 
-export default function SetupDMModal({ onClose, postId, postCaption }) {
+export default function SetupDMModal({ onClose, postId, postCaption, platform = 'instagram' }) {
     const styles = useStyles(darkStyles, lightStyles);
     const [activeTab, setActiveTab] = useState('dm-setup');
     const [isSaving, setIsSaving] = useState(false);
     const [isLoadingConfig, setIsLoadingConfig] = useState(true);
-    const [saveMessage, setSaveMessage] = useState('');
+    /* Upload progress drives the thin bar above the save row.
+       total === 0 means "nothing to upload" — bar stays hidden.
+       current advances as each data-URL slide finishes uploading.
+       Save status text now lives in a single sonner loading toast
+       (saveToastIdRef) instead of an inline saveMessage span — the
+       toast updates in place as upload progresses, then converts to
+       success/error once the API call resolves. */
+    const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+    const saveToastIdRef = useRef(null);
     const [templates, setTemplates] = useState([]);
     const [userPlan, setUserPlan] = useState('free');
     const [activeSlideIndex,  setActiveSlideIndex]  = useState(0);
     const [activeAbVariant,   setActiveAbVariant]   = useState('A');
+    const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false);
     const [dmConfig, setDmConfig] = useState({
         type: 'button_template',
         slides: [{ imageUrl: '', buttons: [{ type: 'url', label: '', value: '' }] }],
@@ -53,27 +63,34 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
 
     useEffect(() => {
         const fetchData = async () => {
+            // Kick off the three independent API calls in parallel — they
+            // all run on /api/* and don't depend on each other. Previously
+            // these were awaited serially, costing ~4× round-trips.
+            const automationsP = postId
+                ? fetch(`/api/automations?postId=${postId}`).then((r) => r.json()).catch(() => null)
+                : Promise.resolve(null);
+            const templatesP   = fetch('/api/templates').then((r) => r.json()).catch(() => null);
+            const usageP       = fetch('/api/usage').then((r) => r.ok ? r.json() : null).catch(() => null);
+
+            const [automationsData, templatesData, usageData] = await Promise.all([
+                automationsP, templatesP, usageP,
+            ]);
+
             let hasExistingAutomation = false;
-
-            // Fetch existing automation config
-            if (postId) {
-                try {
-                    const res = await fetch(`/api/automations?postId=${postId}`);
-                    const data = await res.json();
-
-                    if (data.automations && data.automations.length > 0) {
-                        const existing = data.automations[0];
-                        if (existing.dm_config) setDmConfig(existing.dm_config);
-                        if (existing.trigger_config) setTriggerConfig(existing.trigger_config);
-                        if (existing.settings_config) setSettingsConfig(existing.settings_config);
-                        hasExistingAutomation = true;
-                    }
-                } catch (err) {
-                    console.error('Failed to load existing automation:', err);
-                }
+            if (automationsData?.automations?.length > 0) {
+                const existing = automationsData.automations[0];
+                if (existing.dm_config)       setDmConfig(existing.dm_config);
+                if (existing.trigger_config)  setTriggerConfig(existing.trigger_config);
+                if (existing.settings_config) setSettingsConfig(existing.settings_config);
+                hasExistingAutomation = true;
             }
 
-            // If no existing automation, pre-fill from account default config (#10)
+            setTemplates(templatesData?.templates || []);
+            setUserPlan(usageData?.plan || 'free');
+
+            // Pre-fill from account default config only when there's no
+            // existing automation — this branch is conditional, so we
+            // run it after the parallel batch resolves.
             if (!hasExistingAutomation) {
                 try {
                     const { createClient } = await import('@/lib/supabase-client');
@@ -97,7 +114,6 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                                     ...prev,
                                     slides: prev.slides.map((s) => ({
                                         ...s,
-                                        // populate both flat format (current) and legacy buttons[] format
                                         buttonLabel: s.buttonLabel || defaults.defaultButtonName,
                                         buttons: (s.buttons || []).map((b) => ({
                                             ...b,
@@ -117,28 +133,6 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                 } catch {
                     // Non-critical — defaults just won't be pre-filled
                 }
-            }
-
-            // Fetch saved templates
-            try {
-                const res = await fetch('/api/templates');
-                const data = await res.json();
-                setTemplates(data.templates || []);
-            } catch {
-                // Templates table may not exist yet
-            }
-
-            // Fetch user plan from user_plans (single source of truth)
-            // Uses /api/usage which already returns the effective plan string
-            try {
-                const planRes = await fetch('/api/usage');
-                if (planRes.ok) {
-                    const planData = await planRes.json();
-                    // plan is the effectivePlan string: 'free' | 'trial' | 'pro' | 'business'
-                    setUserPlan(planData.plan || 'free');
-                }
-            } catch {
-                // Plan fetch failed — default to free
             }
 
             setIsLoadingConfig(false);
@@ -176,24 +170,31 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
 
             const data = await res.json();
             if (res.ok) {
-                setSaveMessage('✅ Template saved!');
+                toast.success(`Template "${name}" saved`);
                 setTemplates((prev) => [data.template, ...prev]);
-                setTimeout(() => setSaveMessage(''), 3000);
             } else {
-                setSaveMessage(`❌ ${data.error || 'Failed to save template'}`);
+                toast.error(data.error || 'Failed to save template');
             }
         } catch (err) {
-            setSaveMessage(`❌ Template save failed: ${err.message}`);
+            toast.error(`Template save failed: ${err.message}`);
         }
     };
 
     const handleLoadTemplate = (template) => {
+        /* Load only the DM portion. Previously this also called
+           setTriggerConfig(template.trigger_config) and
+           setSettingsConfig(template.settings_config), which clobbered
+           the user's current trigger keywords and schedule whenever
+           they picked a template. New model: a template is a starting
+           point for the *message*; the user's trigger and settings for
+           this specific automation are theirs alone.
+
+           Save still bundles all three on POST (see handleSaveTemplate)
+           so old templates remain valid storage; we just stop applying
+           the bundled trigger/settings on load. */
         if (template.dm_config) setDmConfig(template.dm_config);
-        if (template.trigger_config) setTriggerConfig(template.trigger_config);
-        if (template.settings_config) setSettingsConfig(template.settings_config);
         setActiveSlideIndex(0); // reset to first slide when loading a template
-        setSaveMessage(`✅ Loaded template: ${template.name}`);
-        setTimeout(() => setSaveMessage(''), 3000);
+        toast.success(`Loaded template: ${template.name}`);
     };
 
     const handleDeleteTemplate = async (templateId) => {
@@ -201,14 +202,13 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
             const res = await fetch(`/api/templates?id=${templateId}`, { method: 'DELETE' });
             if (res.ok) {
                 setTemplates((prev) => prev.filter((t) => t.id !== templateId));
-                setSaveMessage('✅ Template deleted');
-                setTimeout(() => setSaveMessage(''), 3000);
+                toast.success('Template deleted');
             } else {
                 const data = await res.json();
-                setSaveMessage(`❌ ${data.error || 'Failed to delete template'}`);
+                toast.error(data.error || 'Failed to delete template');
             }
         } catch (err) {
-            setSaveMessage(`❌ Delete failed: ${err.message}`);
+            toast.error(`Delete failed: ${err.message}`);
         }
     };
 
@@ -220,10 +220,10 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                         config={dmConfig}
                         onChange={setDmConfig}
                         templates={templates}
-                        onSaveTemplate={handleSaveTemplate}
                         onLoadTemplate={handleLoadTemplate}
                         onDeleteTemplate={handleDeleteTemplate}
                         userPlan={userPlan}
+                        platform={platform}
                         activeSlideIndex={activeSlideIndex}
                         onSlideChange={setActiveSlideIndex}
                         activeAbVariant={activeAbVariant}
@@ -231,9 +231,23 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                     />
                 );
             case 'trigger-setup':
-                return <TriggerSetupTab config={triggerConfig} onChange={setTriggerConfig} />;
+                return (
+                    <TriggerSetupTab
+                        config={triggerConfig}
+                        onChange={setTriggerConfig}
+                        settings={settingsConfig}
+                        onSettingsChange={setSettingsConfig}
+                    />
+                );
             case 'settings':
-                return <SettingsTab config={settingsConfig} onChange={setSettingsConfig} userPlan={userPlan} />;
+                return (
+                    <SettingsTab
+                        config={settingsConfig}
+                        onChange={setSettingsConfig}
+                        userPlan={userPlan}
+                        onSaveTemplate={handleSaveTemplate}
+                    />
+                );
             default:
                 return null;
         }
@@ -254,8 +268,14 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                 break;
             case 'quick_reply': {
                 if (!cfg.message?.trim()) return `${label}: Enter an opening message.`;
-                const hasReplies = (cfg.quickReplies || []).some((qr) => qr.title?.trim());
-                if (!hasReplies) return `${label}: Add at least one quick reply option.`;
+                const replies = (cfg.quickReplies || []).filter((qr) => qr.title?.trim());
+                if (replies.length === 0) return `${label}: Add at least one quick reply option.`;
+                // Each chip with a title must also have a response — otherwise
+                // tapping the chip results in silent no-op for the recipient.
+                const missingResponse = replies.find((qr) => !qr.responseMessage?.trim());
+                if (missingResponse) {
+                    return `${label}: Add a reply for chip "${missingResponse.title.trim()}".`;
+                }
                 break;
             }
             case 'multi_cta': {
@@ -266,13 +286,25 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
             case 'follow_up':
                 if (!cfg.gateMessage?.trim()) return `${label}: Enter the gate message.`;
                 break;
+            case 'email_collector':
+                if (!cfg.emailAskMessage?.trim()) return `${label}: Enter the email-ask message.`;
+                if (!cfg.emailConfirmMessage?.trim()) return `${label}: Enter the confirmation message.`;
+                break;
             default:
                 if (!cfg?.type) return `${label}: Select a DM type.`;
         }
         return null;
     };
 
-    const validateConfig = () => {
+    /* Per-tab validators — each returns the first error found in its tab,
+       or null when the tab is OK. Drive both:
+         (a) the soft-wizard "Next →" button (disabled when current tab
+             has an error), and
+         (b) the small red dot on tab pills indicating which tab needs
+             attention.
+       validateConfig() composes them in tab order so save-time errors
+       still bubble up the same way as before. */
+    const validateDmTab = () => {
         if (dmConfig.abEnabled) {
             if (!dmConfig.variantA || !dmConfig.variantB) {
                 return 'Configure both Variant A and Variant B in DM Setup.';
@@ -291,7 +323,10 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                 if (!hasReward) return 'Add a reward link in DM Setup (Step 4).';
             }
         }
+        return null;
+    };
 
+    const validateTriggerTab = () => {
         const triggerType = triggerConfig.type || 'keywords';
         if (triggerType === 'keywords' && (!triggerConfig.keywords || triggerConfig.keywords.length === 0)) {
             return 'Add at least one trigger keyword in Trigger Setup.';
@@ -299,15 +334,63 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
         return null;
     };
 
+    const validateSettingsTab = () => {
+        /* Date sanity — the datetime-local input's `min` only constrains
+           the spinner; users can still paste / keyboard-type a past
+           timestamp. */
+        const now = Date.now();
+        if (settingsConfig.scheduledStartEnabled && settingsConfig.scheduledStartAt) {
+            if (new Date(settingsConfig.scheduledStartAt).getTime() <= now) {
+                return 'Scheduled start time is in the past — pick a future time in Settings.';
+            }
+        }
+        if (settingsConfig.expiresEnabled && settingsConfig.expiresAt) {
+            const expiresAtMs = new Date(settingsConfig.expiresAt).getTime();
+            if (expiresAtMs <= now) {
+                return 'Expiry time is in the past — pick a future time in Settings.';
+            }
+            if (settingsConfig.scheduledStartEnabled && settingsConfig.scheduledStartAt
+                && expiresAtMs <= new Date(settingsConfig.scheduledStartAt).getTime()) {
+                return 'Expiry time must be after the scheduled start time.';
+            }
+        }
+        return null;
+    };
+
+    const validateConfig = () =>
+        validateDmTab() || validateTriggerTab() || validateSettingsTab();
+
+    const tabErrors = {
+        'dm-setup':       validateDmTab(),
+        'trigger-setup':  validateTriggerTab(),
+        'settings':       validateSettingsTab(),
+    };
+
     const handleSave = async () => {
         const error = validateConfig();
         if (error) {
-            setSaveMessage(`⚠️ ${error}`);
+            toast.warning(error);
             return;
         }
 
         setIsSaving(true);
-        setSaveMessage('Uploading images...');
+
+        /* Count data-URL slides upfront so the progress bar has an accurate
+           denominator before the first upload begins. Without the pre-count,
+           the bar would jump as each variant's count is discovered mid-flight. */
+        const countDataUrlSlides = (slides) =>
+            (slides || []).filter((s) => s.imageUrl && s.imageUrl.startsWith('data:image')).length;
+        const totalUploads = dmConfig.abEnabled
+            ? countDataUrlSlides(dmConfig.variantA?.slides) + countDataUrlSlides(dmConfig.variantB?.slides)
+            : countDataUrlSlides(dmConfig.slides);
+
+        setUploadProgress({ current: 0, total: totalUploads });
+        // Single sonner toast that updates as work progresses. Same id is
+        // reused on success/error below so the user only ever sees one
+        // toast for this save.
+        saveToastIdRef.current = toast.loading(
+            totalUploads > 0 ? `Uploading 0 of ${totalUploads} images…` : 'Saving automation…'
+        );
 
         try {
             // 1. Initialize Supabase client for storage uploads
@@ -318,13 +401,15 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('You must be logged in to save');
 
-            // 2. Upload any data-URL images (both main and A/B variants)
+            // 2. Upload any data-URL images (both main and A/B variants).
+            //    Progress callback fires after each upload so the bar advances
+            //    in sync with the network reality, not a guess.
+            let completed = 0;
             const uploadSlides = async (slides, prefix) => {
                 const final = [...slides];
                 for (let i = 0; i < final.length; i++) {
                     const slide = final[i];
                     if (slide.imageUrl && slide.imageUrl.startsWith('data:image')) {
-                        setSaveMessage(`Uploading image for ${prefix} slide ${i + 1}...`);
                         const response = await fetch(slide.imageUrl);
                         const blob     = await response.blob();
                         const ext      = blob.type.split('/')[1] || 'jpg';
@@ -335,6 +420,11 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                         if (uploadError) throw new Error(`Failed to upload ${prefix} slide ${i + 1} image: ${uploadError.message}`);
                         const { data: { publicUrl } } = supabase.storage.from('dm_images').getPublicUrl(filename);
                         final[i] = { ...slide, imageUrl: publicUrl };
+                        completed += 1;
+                        setUploadProgress({ current: completed, total: totalUploads });
+                        toast.loading(`Uploading ${completed} of ${totalUploads} images…`, {
+                            id: saveToastIdRef.current,
+                        });
                     }
                 }
                 return final;
@@ -357,7 +447,7 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                 finalDmConfig = { ...finalDmConfig, slides: finalSlides };
             }
 
-            setSaveMessage('Saving automation...');
+            toast.loading('Saving automation…', { id: saveToastIdRef.current });
 
             // 3. Save the automation to DB
             const res = await fetch('/api/automations', {
@@ -376,27 +466,41 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
             if (res.ok) {
                 const isScheduled = data.scheduled && data.scheduledStartAt;
                 const successMsg = isScheduled
-                    ? `✅ Campaign scheduled for ${new Date(data.scheduledStartAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}!`
-                    : '✅ Automation saved successfully!';
-                setSaveMessage(successMsg);
-                setTimeout(() => {
-                    onClose();
-                    window.location.reload();
-                }, 1500);
+                    ? `Campaign scheduled for ${new Date(data.scheduledStartAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                    : 'Automation saved successfully';
+                // Replace the in-progress loading toast with the success
+                // result by passing the same id.
+                toast.success(successMsg, { id: saveToastIdRef.current });
+                onClose();
+                // Reload so the parent table reflects the new status.
+                window.location.reload();
             } else {
-                setSaveMessage(`❌ ${data.error || 'Failed to save'}`);
+                const errMsg = data.error || 'Failed to save';
+                toast.error(errMsg, { id: saveToastIdRef.current });
             }
         } catch (err) {
-            setSaveMessage(`❌ Save failed: ${err.message}`);
+            toast.error(`Save failed: ${err.message}`, { id: saveToastIdRef.current });
         } finally {
             setIsSaving(false);
+            setUploadProgress({ current: 0, total: 0 });
+            saveToastIdRef.current = null;
         }
     };
 
-    return createPortal(
-      <div className={styles.overlay} onClick={onClose}>
-            <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-                {/* Header */}
+    return (
+        <Modal
+            open={true}
+            onClose={onClose}
+            size={null}
+            ariaLabel="Configure AutoDM"
+            showCloseButton={false}
+            noPadding
+            className={styles.modal}
+        >
+                {/* Header — kept inline so the existing modalHeader / modalTitle /
+                    postCaption / closeBtn styling and the .modal::before glow
+                    accent are preserved verbatim. Modal primitive provides
+                    portal, escape, focus trap, and backdrop guard around it. */}
                 <div className={styles.modalHeader}>
                     <div>
                         <h2 className={styles.modalTitle}>Configure AutoDM</h2>
@@ -409,17 +513,27 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                     </button>
                 </div>
 
-                {/* Tabs */}
+                {/* Tabs — pill shows a small red dot when its validator
+                    detects a missing required field. Helps the user see
+                    at a glance which tab needs attention without having
+                    to click through them. */}
                 <div className={styles.tabs}>
-                    {TABS.map((tab) => (
-                        <button
-                            key={tab.key}
-                            className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
-                            onClick={() => setActiveTab(tab.key)}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
+                    {TABS.map((tab) => {
+                        const hasError = !!tabErrors[tab.key];
+                        return (
+                            <button
+                                key={tab.key}
+                                className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
+                                onClick={() => setActiveTab(tab.key)}
+                                title={hasError ? tabErrors[tab.key] : undefined}
+                            >
+                                {tab.label}
+                                {hasError && (
+                                    <span className={styles.tabDot} aria-label="Tab has missing required fields" />
+                                )}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {/* Body: Split layout */}
@@ -435,31 +549,76 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                             <div className={styles.formPanel}>
                                 {renderTab()}
                             </div>
-                            {/* Save bar is OUTSIDE the scrollable formPanel — always visible */}
+                            {/* Upload progress bar — only renders while uploads are in-flight,
+                                fades out once total === 0. Sits flush against the top edge of
+                                the save bar so it reads as "the save is working", not a
+                                separate UI element. */}
+                            {uploadProgress.total > 0 && (
+                                <div className={styles.uploadProgress}>
+                                    <div
+                                        className={styles.uploadProgressFill}
+                                        style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                                    />
+                                </div>
+                            )}
+                            {/* Save bar is OUTSIDE the scrollable formPanel — always visible.
+                                Soft-wizard pattern: DM Setup and Trigger Setup tabs show a
+                                "Next →" button that advances to the next tab. The Save /
+                                Schedule button only appears on the Settings (last) tab so
+                                users naturally walk through the steps. Tab nav stays clickable
+                                for power users who want to jump around. */}
                             <div className={styles.saveBar}>
-                                {saveMessage && (
-                                    <span className={styles.saveMessage}>{saveMessage}</span>
+                                {/* Spacer keeps action buttons flush-right now
+                                    that the inline saveMessage span was removed
+                                    in favour of a sonner loading toast. */}
+                                <div style={{ flex: 1 }} />
+                                <button
+                                    className={styles.previewToggleBtn}
+                                    onClick={() => setMobilePreviewOpen(true)}
+                                    type="button"
+                                    aria-label="Show preview"
+                                >
+                                    <Eye size={14} /> Preview
+                                </button>
+                                {activeTab !== 'settings' ? (
+                                    <button
+                                        className={styles.nextBtn}
+                                        type="button"
+                                        onClick={() => {
+                                            const currentErr = tabErrors[activeTab];
+                                            if (currentErr) {
+                                                toast.warning(currentErr);
+                                                return;
+                                            }
+                                            const next = activeTab === 'dm-setup' ? 'trigger-setup' : 'settings';
+                                            setActiveTab(next);
+                                        }}
+                                    >
+                                        Next
+                                        <ArrowRight size={14} strokeWidth={2.5} />
+                                    </button>
+                                ) : (
+                                    (() => {
+                                        const isScheduled = settingsConfig.scheduledStartEnabled &&
+                                            settingsConfig.scheduledStartAt &&
+                                            new Date(settingsConfig.scheduledStartAt) > new Date();
+                                        return (
+                                            <button
+                                                className={`${styles.saveBtn} ${isScheduled ? styles.saveBtnScheduled : ''}`}
+                                                onClick={handleSave}
+                                                disabled={isSaving}
+                                            >
+                                                {isSaving ? (
+                                                    <><Loader2 size={14} className={styles.spinner} /> Saving…</>
+                                                ) : isScheduled ? (
+                                                    <><CalendarClock size={14} /> Schedule Campaign</>
+                                                ) : (
+                                                    'Save & Activate'
+                                                )}
+                                            </button>
+                                        );
+                                    })()
                                 )}
-                                {(() => {
-                                    const isScheduled = settingsConfig.scheduledStartEnabled &&
-                                        settingsConfig.scheduledStartAt &&
-                                        new Date(settingsConfig.scheduledStartAt) > new Date();
-                                    return (
-                                        <button
-                                            className={`${styles.saveBtn} ${isScheduled ? styles.saveBtnScheduled : ''}`}
-                                            onClick={handleSave}
-                                            disabled={isSaving}
-                                        >
-                                            {isSaving ? (
-                                                <><Loader2 size={14} className={styles.spinner} /> Saving…</>
-                                            ) : isScheduled ? (
-                                                <><CalendarClock size={14} /> Schedule Campaign</>
-                                            ) : (
-                                                'Save & Activate'
-                                            )}
-                                        </button>
-                                    );
-                                })()}
                             </div>
                         </div>
                         {/* Right column: phone preview */}
@@ -479,8 +638,35 @@ export default function SetupDMModal({ onClose, postId, postCaption }) {
                         </div>
                     </div>
                 )}
-            </div>
-        </div>,
-      document.body
+
+                {/* Mobile preview sheet — full-screen overlay shown only on mobile when toggled */}
+                {mobilePreviewOpen && (
+                    <div className={styles.mobilePreviewSheet}>
+                        <div className={styles.mobilePreviewHeader}>
+                            <span className={styles.mobilePreviewTitle}>Preview</span>
+                            <button
+                                onClick={() => setMobilePreviewOpen(false)}
+                                className={styles.closeBtn}
+                                aria-label="Close preview"
+                                type="button"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className={styles.mobilePreviewBody}>
+                            <PhonePreview
+                                config={dmConfig.abEnabled
+                                    ? ((activeAbVariant === 'A' ? dmConfig.variantA : dmConfig.variantB) || {})
+                                    : dmConfig
+                                }
+                                onImageUpload={handleImageUploadFromPreview}
+                                activeSlideIndex={activeSlideIndex}
+                                onSlideChange={setActiveSlideIndex}
+                                userPlan={userPlan}
+                            />
+                        </div>
+                    </div>
+                )}
+        </Modal>
     );
 }

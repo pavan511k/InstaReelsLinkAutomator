@@ -365,3 +365,7 @@
     border: 1px solid rgba(167,139,250,0.24);
     color: #C4B5FD;
 }
+
+@media (max-width: 480px) {
+    .abCards { grid-template-columns: 1fr; }
+}
