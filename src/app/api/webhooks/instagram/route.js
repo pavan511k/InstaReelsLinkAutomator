@@ -73,9 +73,15 @@ export async function POST(request) {
     // Meta signs the raw body with the App Secret. Without this check, anyone
     // can POST forged events here and trigger DMs. Reference:
     // https://developers.facebook.com/docs/messenger-platform/webhooks#validate-payloads
-    const appSecret = process.env.META_APP_SECRET;
-    if (!appSecret) {
-        console.error('[Webhook] META_APP_SECRET not configured');
+    // Events can arrive signed by either the Facebook app or the Instagram app
+    // depending on which product the webhook subscription lives under. Accept
+    // either signature so a single webhook URL serves both flows.
+    const candidateSecrets = [
+        process.env.META_APP_SECRET,
+        process.env.INSTAGRAM_APP_SECRET,
+    ].filter(Boolean);
+    if (candidateSecrets.length === 0) {
+        console.error('[Webhook] Neither META_APP_SECRET nor INSTAGRAM_APP_SECRET configured');
         return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
     }
     const signatureHeader = request.headers.get('x-hub-signature-256') || '';
@@ -84,27 +90,25 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
     const providedHex = signatureHeader.slice('sha256='.length);
-    const expectedHex = createHmac('sha256', appSecret).update(rawBody).digest('hex');
-    let signaturesMatch = false;
+    let provided;
     try {
-        const provided = Buffer.from(providedHex, 'hex');
-        const expected = Buffer.from(expectedHex, 'hex');
-        signaturesMatch = provided.length === expected.length && timingSafeEqual(provided, expected);
+        provided = Buffer.from(providedHex, 'hex');
     } catch {
-        signaturesMatch = false;
+        provided = null;
     }
+    const signaturesMatch = !!provided && candidateSecrets.some((secret) => {
+        const expected = Buffer.from(
+            createHmac('sha256', secret).update(rawBody).digest('hex'),
+            'hex',
+        );
+        return provided.length === expected.length && timingSafeEqual(provided, expected);
+    });
     if (!signaturesMatch) {
-        // TEMP DEBUG — remove once signature mismatch is diagnosed.
-        // All values below are safe to log: hash prefixes are one-way, and the
-        // secret fingerprint is SHA256(secret) so the secret itself never leaks.
-        const secretFingerprint = createHmac('sha256', appSecret).update('').digest('hex').slice(0, 8);
         console.warn('[Webhook] Invalid X-Hub-Signature-256 — rejecting', {
             providedPrefix: providedHex.slice(0, 12),
-            expectedPrefix: expectedHex.slice(0, 12),
             providedLen: providedHex.length,
-            expectedLen: expectedHex.length,
             bodyBytes: Buffer.byteLength(rawBody, 'utf8'),
-            secretFingerprint,
+            secretsTried: candidateSecrets.length,
             ua: request.headers.get('user-agent') || null,
         });
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
