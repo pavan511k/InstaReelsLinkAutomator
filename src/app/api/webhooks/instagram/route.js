@@ -1007,7 +1007,10 @@ async function handleFollowUpAutomation(supabase, automation, post, commenterId,
     );
 
     try {
-        await sendFollowGateDM(igSenderId, commenterId, gateMessage, accessToken);
+        // Private Reply (recipient.comment_id) bypasses the 24h messaging
+        // window for the first comment-triggered DM. useIgApi stays at its
+        // pre-existing default (false) — adding it isn't in scope here.
+        await sendFollowGateDM(igSenderId, commenterId, gateMessage, accessToken, false, commentId);
 
         await supabase.from('dm_followup_queue').insert({
             automation_id:         automation.id,
@@ -1077,7 +1080,9 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
     );
 
     try {
-        await sendTextDM(igSenderId, commenterId, askMessage, accessToken, useIgApi);
+        // Private Reply for the comment-triggered first DM — bypasses the
+        // 24h window the standard recipient.id path requires.
+        await sendTextDM(igSenderId, commenterId, askMessage, accessToken, useIgApi, commentId);
 
         await supabase.from('email_collect_queue').insert({
             automation_id:        automation.id,
