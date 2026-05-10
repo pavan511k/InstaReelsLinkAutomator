@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase-server';
 import ConnectAccount from '@/components/dashboard/ConnectAccount';
 import DashboardView from './DashboardView';
-import { getEffectivePlan, getDmLimit, isUnlimited, trialDaysRemaining } from '@/lib/plans';
+import { getEffectivePlan, getDmLimit, isUnlimited, trialDaysRemaining, getAutomationLimit } from '@/lib/plans';
 
 export default async function DashboardPage() {
     const supabase = await createClient();
@@ -58,26 +58,12 @@ export default async function DashboardPage() {
     let prevWeekSent     = 0;
     let totalActivePosts = 0;
     let dailyDMData      = [];
-    let topPosts         = [];
 
     try {
-        const { data: userAutomations } = await supabase
-            .from('dm_automations')
-            .select('id, post_id')
-            .eq('user_id', user.id);
-
-        const allAutomationIds  = (userAutomations || []).map((a) => a.id);
-        const automationPostMap = {};
-        for (const a of (userAutomations || [])) {
-            automationPostMap[a.id] = a.post_id;
-        }
-
         // All count queries below filter by user_id directly. This is the
         // single source of truth that matches the sidebar's cached counter
         // and survives automation deletions (which used to undercount the
         // dashboard but not the sidebar — see add-user-id-to-dm-sent-log).
-        // The `userAutomations` lookup above is still used further down for
-        // the "Top performing posts" chart that maps automations to posts.
         {
             // All-time total
             const { count: sentCount } = await supabase
@@ -129,50 +115,6 @@ export default async function DashboardPage() {
                 .eq('user_id', user.id)
                 .order('sent_at', { ascending: true });
             dailyDMData = aggregateDailyDMs(dmRows || [], thirtyDaysAgo);
-
-            // Top posts by DMs sent — keep filtering by automation_id here
-            // since we attribute clicks to specific posts. Rows with
-            // automation_id NULL (deleted automations / story mentions)
-            // simply don't have a post to attribute to.
-            const { data: sentLogs } = await supabase
-                .from('dm_sent_log')
-                .select('automation_id')
-                .eq('status', 'sent')
-                .eq('user_id', user.id)
-                .not('automation_id', 'is', null);
-
-            const countByAutomation = {};
-            for (const log of (sentLogs || [])) {
-                countByAutomation[log.automation_id] = (countByAutomation[log.automation_id] || 0) + 1;
-            }
-
-            const postSentCounts = Object.entries(countByAutomation)
-                .map(([automationId, count]) => ({ postId: automationPostMap[automationId], count }))
-                .filter((item) => item.postId)
-                .sort((a, b) => b.count - a.count)
-                .slice(0, 5);
-
-            if (postSentCounts.length > 0) {
-                const topPostIds = postSentCounts.map((p) => p.postId);
-                const { data: postData } = await supabase
-                    .from('instagram_posts')
-                    .select('id, caption, thumbnail_url, media_url, media_type, timestamp')
-                    .in('id', topPostIds);
-
-                const postMap = {};
-                for (const p of (postData || [])) postMap[p.id] = p;
-
-                topPosts = postSentCounts
-                    .filter((item) => postMap[item.postId])
-                    .map((item) => ({
-                        id:           item.postId,
-                        count:        item.count,
-                        caption:      postMap[item.postId]?.caption || '',
-                        thumbnailUrl: postMap[item.postId]?.thumbnail_url || postMap[item.postId]?.media_url,
-                        mediaType:    postMap[item.postId]?.media_type,
-                        timestamp:    formatRelativeTime(postMap[item.postId]?.timestamp),
-                    }));
-            }
         }
 
         // Active automations count
@@ -200,8 +142,42 @@ export default async function DashboardPage() {
     // ── Derived values ───────────────────────────────────────────
     const effectivePlan   = getEffectivePlan(planRow);     // 'free' | 'trial' | 'pro' | 'business'
     const monthlyDmLimit  = getDmLimit(effectivePlan);     // null = unlimited
+    const automationLimit = getAutomationLimit(effectivePlan); // null = unlimited
     const unlimited       = isUnlimited(effectivePlan);
     const trialDaysLeft   = trialDaysRemaining(planRow);   // 0 if not on trial
+
+    // Total automations count (active + paused) — drives the free-tier
+    // automation cap UI on the dashboard + automations list.
+    let totalAutomations = 0;
+    try {
+        const { count } = await supabase
+            .from('dm_automations')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+        totalAutomations = count || 0;
+    } catch { /* table may not exist */ }
+
+    // Distinct contacts (people who triggered at least one DM). Counted
+    // off dm_sent_log because it's the canonical record of every DM the
+    // user has actually sent — automations can be deleted without us
+    // losing the contact history.
+    let totalContacts = 0;
+    try {
+        // Postgrest doesn't expose DISTINCT directly through the count
+        // syntax, so we read recipient ids and dedupe client-side.
+        // Capped at 5000 rows for the dashboard count; if you have more
+        // than that you're definitely on Pro and the cap doesn't matter.
+        const { data: recipients } = await supabase
+            .from('dm_sent_log')
+            .select('recipient_ig_id')
+            .eq('user_id', user.id)
+            .eq('status', 'sent')
+            .not('recipient_ig_id', 'is', null)
+            .limit(5000);
+        const seen = new Set();
+        for (const r of (recipients || [])) seen.add(r.recipient_ig_id);
+        totalContacts = seen.size;
+    } catch { /* fail-soft — card just shows 0 */ }
     const dmUsagePercent  = unlimited || !monthlyDmLimit
         ? 0
         : Math.min(100, Math.round((monthlySent / monthlyDmLimit) * 100));
@@ -240,7 +216,9 @@ export default async function DashboardPage() {
             bg:     'rgba(16,185,129,0.12)',
             border: 'rgba(16,185,129,0.22)',
             trend:  null,
-            sub:    `${activePosts.length} posts live`,
+            sub:    automationLimit != null
+                ? `${totalAutomations} / ${automationLimit} on free plan`
+                : `${totalAutomations} total · ${activePosts.length} posts live`,
         },
         {
             label:   'This month',
@@ -275,10 +253,12 @@ export default async function DashboardPage() {
             dailyDMData={dailyDMData}
             monthlySent={monthlySent}
             monthlyDmLimit={monthlyDmLimit}
-            topPosts={topPosts}
             setupPosts={setupPosts}
             effectivePlan={effectivePlan}
             trialDaysLeft={trialDaysLeft}
+            totalAutomations={totalAutomations}
+            automationLimit={automationLimit}
+            totalContacts={totalContacts}
         />
     );
 }

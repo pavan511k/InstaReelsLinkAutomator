@@ -29,7 +29,7 @@ export default function TermsOfService() {
 
             <div className={styles.container}>
                 <h1>Terms of Service</h1>
-                <span className={styles.updated}>Last updated: March 21, 2026</span>
+                <span className={styles.updated}>Last updated: May 10, 2026</span>
 
                 <p className={styles.intro}>
                     These Terms of Service (&quot;Terms&quot;) govern your access to and use of AutoDM (&quot;we,&quot;
@@ -52,10 +52,12 @@ export default function TermsOfService() {
                         <li>Syncing and displaying your posts, Reels, and Stories from connected accounts</li>
                         <li>Setting up automated DM responses with configurable trigger conditions (keywords, all comments, emojis only, mentions)</li>
                         <li>DM types including Button Templates, plain text messages, Quick Reply chips, Multi-CTA buttons, Follow Gate, and Email Collector</li>
-                        <li>Global Triggers — account-wide keyword automations that fire across all your content without per-post setup</li>
+                        <li>"Any post" / "Next post" target modes for account-wide automations that fire across all your content without per-post setup</li>
+                        <li>Ice Breakers — Instagram inbox quick-reply prompts (Pro)</li>
+                        <li>Story Mention Auto-DM — automatic replies when fans tag your account in their stories (Pro)</li>
                         <li>Multi-step Flow Automations and Upsell Follow-ups (Pro)</li>
                         <li>Link click tracking with short redirect URLs and CTR analytics</li>
-                        <li>Performance analytics including DMs sent, link clicks, click-through rate, and A/B test results</li>
+                        <li>Performance analytics including DMs sent, link clicks per automation, and engagement timelines</li>
                         <li>Subscription billing managed through Cashfree</li>
                     </ul>
                 </section>
@@ -162,37 +164,37 @@ export default function TermsOfService() {
 
                     <p><strong>Free Plan</strong> — included at no cost with every account:</p>
                     <ul>
+                        <li>Up to 5 automation flows (combined across Comment to DM, Story Reply, and DM Auto Responder templates)</li>
                         <li>Up to 3,000 automated DMs per calendar month (resets on the 1st of each month)</li>
                         <li>All four DM types: Button Template (image card + CTA), Message Template, Quick Reply chips, Multi-CTA</li>
                         <li>All trigger types: keywords, all comments, emojis only, @mentions</li>
                         <li>Carousel slides (up to 3 slides per automation)</li>
-                        <li>Global Triggers — account-wide keyword automations</li>
-                        <li>Automation scheduling (start time and expiry date)</li>
+                        <li>"Any post" / "Next post" target modes for account-wide automations</li>
                         <li>Auto-reply to triggering comment</li>
                         <li>Send delay (randomised humanisation)</li>
                         <li>Excess DM Queue (handles viral spikes beyond rate limits)</li>
                         <li>SendBack — automatic retry of failed DMs</li>
-                        <li>Welcome Openers (inbox quick-reply buttons)</li>
-                        <li>Story Mention Auto-DM</li>
                         <li>Real-time analytics dashboard and DM sent log</li>
-                        <li>Link click count and CTR % in the posts table</li>
+                        <li>Link click count per automation</li>
                         <li>Usage limit alerts (email + webhook)</li>
                         <li>Instagram Posts &amp; Reels, Stories, and Facebook Page support</li>
                         <li>Email support</li>
                     </ul>
 
-                    <p><strong>Pro Plan</strong> (paid monthly subscription, ₹299/month) — everything in Free, plus:</p>
+                    <p><strong>Pro Plan</strong> (paid subscription, ₹299/month or ₹2,999/year) — everything in Free, plus:</p>
                     <ul>
+                        <li>Unlimited automation flows</li>
                         <li>Unlimited DMs per month</li>
-                        <li>Follow Gate — send a link only after the user verifies they have followed your account</li>
-                        <li>Email Collector — capture leads by asking commenters for their email in a DM reply</li>
+                        <li><strong>Email Collector</strong> — capture leads by asking commenters for their email in a DM reply</li>
+                        <li><strong>Story Mention Auto-DM</strong> — automatic DM replies when users @mention your account in their Instagram story</li>
+                        <li><strong>Ice Breakers</strong> — up to 4 inbox quick-reply prompts shown when a non-follower opens your DM thread</li>
+                        <li><strong>Ask to Follow before DM</strong> — only send the reward link after the user verifies they have followed your account</li>
                         <li>Save &amp; load reusable DM templates</li>
                         <li>Unlimited carousel slides</li>
-                        <li>A/B message testing with automatic winner detection</li>
                         <li>Send DMs to previous comments (backfill existing commenters)</li>
                         <li>Multi-step Flow Automation — send sequential follow-up DMs at configurable delays</li>
                         <li>Upsell follow-up DMs — automatically re-message users who received but did not click your link</li>
-                        <li>Full click analytics dashboard — charts, per-link breakdown, and A/B performance</li>
+                        <li>Full click analytics dashboard — charts and per-link engagement breakdowns</li>
                         <li>Email Leads list with CSV export</li>
                         <li>Priority support</li>
                     </ul>
@@ -211,15 +213,15 @@ export default function TermsOfService() {
                 <section className={styles.section}>
                     <h2>7. Payments &amp; Subscriptions</h2>
                     <p>
-                        Paid plans are billed monthly. Payments are processed securely by <strong>Cashfree</strong>.
+                        Paid plans are billed per period (monthly or yearly). Payments are processed securely by <strong>Cashfree</strong>.
                         We accept UPI (GPay, PhonePe, Paytm), debit/credit cards (Visa, Mastercard, RuPay), and
                         net banking. We never store your payment card details.
                     </p>
                     <ul>
-                        <li>Subscriptions renew automatically each month unless cancelled before the renewal date</li>
-                        <li>You may cancel at any time from your account settings. You retain Pro access until the end of the current billing period</li>
-                        <li>We do not issue refunds for partially used billing periods, except where required by applicable law</li>
-                        <li>Failed payments may result in downgrade to the Free plan</li>
+                        <li><strong>No auto-renewal.</strong> Pro is a one-payment-per-period subscription. When the period ends your account moves back to the Free plan automatically; we do not charge your payment method again.</li>
+                        <li>We will email you 7 days before your Pro period ends as a renewal reminder.</li>
+                        <li>You retain Pro access through the end of the period you paid for, regardless of when you stop using the Services.</li>
+                        <li>All payments are final. We do not issue refunds for partially used billing periods, except where required by applicable law. Billing-related disputes can be sent to <a href="mailto:support@autodm.pro">support@autodm.pro</a> and we will review them on a case-by-case basis.</li>
                     </ul>
                 </section>
 

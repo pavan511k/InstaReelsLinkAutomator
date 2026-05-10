@@ -208,42 +208,49 @@
      These respond to [data-theme] instantly via the next-themes
      blocking script — no JS/React mount required, so no flash.
      Components reference these vars in their CSS modules directly. */
-  --page-bg:    #F0EDFF;
+  /* Was #F0EDFF (lavender) — moved to neutral off-white to match the
+     landing/auth design system (white + coral accent, no purple). */
+  --page-bg:    #FAFAFA;
   --sidebar-bg: #FFFFFF;
 }
 
 /* ================================================================
-   Reset
+   Reset + Base
+   ----------------------------------------------------------------
+   Wrapped in @layer base so Tailwind utilities (which Tailwind v4
+   places in @layer utilities) can override these defaults. Without
+   the layer, an unlayered `* { padding: 0 }` beats every layered
+   `.px-N` utility, which collapses any element styled purely with
+   Tailwind. Layer order: theme < base < components < utilities, so
+   utilities still win on a per-property basis.
    ================================================================ */
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+@layer base {
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* ================================================================
-   Base
-   ================================================================ */
-html {
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* Use `overflow-x: clip` (not `hidden`). `hidden` forces overflow-y to
-     compute as `auto`, which makes <html>/<body> their own scroll container
-     and breaks `position: sticky` on the dashboard sidebar. `clip` hides
-     overflow without creating a scroll context — exactly the behavior we
-     want here. Supported in Chrome 90+, Firefox 81+, Safari 16+. */
-  overflow-x: clip;
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* `overflow-x: clip` (not `hidden`) so <html>/<body> don't become
+       their own scroll container — that breaks `position: sticky` on
+       the dashboard sidebar. Supported in Chrome 90+, Firefox 81+,
+       Safari 16+. */
+    overflow-x: clip;
+  }
+  body {
+    font-family: var(--font);
+    font-size: var(--text-base);
+    font-weight: var(--weight-normal);
+    line-height: var(--line-height-normal);
+    color: var(--gray-900);
+    background-color: #EAE5FF;
+    overflow-x: clip;
+  }
+  a    { color: inherit; text-decoration: none; }
+  img  { max-width: 100%; height: auto; display: block; }
+  button { cursor: pointer; font-family: var(--font); border: none; background: none; }
+  input, textarea, select { font-family: var(--font); font-size: var(--text-base); }
 }
-body {
-  font-family: var(--font);
-  font-size: var(--text-base);
-  font-weight: var(--weight-normal);
-  line-height: var(--line-height-normal);
-  color: var(--gray-900);
-  background-color: #EAE5FF;
-  overflow-x: clip;
-}
-a    { color: inherit; text-decoration: none; }
-img  { max-width: 100%; height: auto; display: block; }
-button { cursor: pointer; font-family: var(--font); border: none; background: none; }
-input, textarea, select { font-family: var(--font); font-size: var(--text-base); }
 
 /* ================================================================
    Layout
@@ -538,6 +545,33 @@ input, textarea, select { font-family: var(--font); font-size: var(--text-base);
 @keyframes pulseGlow { 0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(16,185,129,.6) } 50% { opacity: .6; box-shadow: 0 0 12px rgba(16,185,129,.8) } }
 @keyframes countUp   { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
 
+/* Engagement section — three iOS-style notifications appearing in sequence
+   on the wallpaper image. Total cycle: 8s, infinite.
+   Sec 1-2: notif 1 enters; sec 3-4: notif 2 enters; sec 5-6: notif 3 enters;
+   sec 7-8: all three fade out together; loop.
+   Each notification has its own keyframe so the entrance is staggered while
+   the exit is synchronized — produces the cumulative-feed feel from
+   ChatAutoDM's hero. */
+@keyframes engagementNotif1 {
+  0%, 10%   { opacity: 0; transform: translateY(-12px) scale(.96); }
+  15%, 87%  { opacity: 1; transform: translateY(0) scale(1); }
+  92%, 100% { opacity: 0; transform: translateY(-12px) scale(.96); }
+}
+@keyframes engagementNotif2 {
+  0%, 35%   { opacity: 0; transform: translateY(-12px) scale(.96); }
+  40%, 87%  { opacity: 1; transform: translateY(0) scale(1); }
+  92%, 100% { opacity: 0; transform: translateY(-12px) scale(.96); }
+}
+@keyframes engagementNotif3 {
+  0%, 60%   { opacity: 0; transform: translateY(-12px) scale(.96); }
+  65%, 87%  { opacity: 1; transform: translateY(0) scale(1); }
+  92%, 100% { opacity: 0; transform: translateY(-12px) scale(.96); }
+}
+
+.animate-engagement-notif-1 { animation: engagementNotif1 8s ease-in-out infinite; }
+.animate-engagement-notif-2 { animation: engagementNotif2 8s ease-in-out infinite; }
+.animate-engagement-notif-3 { animation: engagementNotif3 8s ease-in-out infinite; }
+
 .animate-fade-in  { animation: fadeIn var(--t-slow); }
 .animate-slide-up { animation: slideUp var(--t-slow); }
 
@@ -633,4 +667,64 @@ input, textarea, select { font-family: var(--font); font-size: var(--text-base);
   * { @apply border-border outline-ring/50; }
   body { @apply bg-background text-foreground; }
   html { @apply font-sans; }
+}
+
+/* ─── Builder full-bleed override ──────────────────────────────────────────
+   When BuilderView (with `.builder-fullbleed`) renders inside a dashboard
+   `<main>`, strip the layout shell's max-w + horizontal padding + vertical
+   padding and turn it into a flex column so the page can split the body
+   into a fixed phone preview + a scrollable config rail.
+
+   We use :has() instead of a header-based decision in (dashboard)/layout.js
+   because layouts don't re-render on child-route navigations — a pathname
+   check there would lock in the shell from whichever page was loaded
+   first, leaving margins on /automations/builder if the user landed on
+   /automations first (and vice-versa). :has() always reflects the
+   currently-rendered tree, so it stays correct across navigations.
+
+   On lg+ we also cap main's height to the viewport and clip overflow so
+   only the inner cards column scrolls — the page itself stays put. We
+   skip this on small screens; mobile builder reverts to natural
+   document scrolling.
+   ────────────────────────────────────────────────────────────────────── */
+main:has(.builder-fullbleed) {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+/* Hide the scrollbar while keeping the element scrollable. Used on
+   the builder's cards column so the scroll surface doesn't show a
+   chunky native scrollbar on the right. Works in WebKit, Firefox,
+   and legacy Edge/IE. */
+.scrollbar-none {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE / legacy Edge */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;                  /* Chrome / Safari / new Edge */
+}
+
+@media (min-width: 1024px) {
+  main:has(.builder-fullbleed) {
+    height: 100vh !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+  /* Also constrain ancestors so main's `height: 100vh` actually works.
+     `<main>` lives inside a `<div class="flex min-h-screen ... lg:flex-row">`
+     and a `<div class="flex flex-1 flex-col">`. With min-h-screen the
+     outer can grow beyond 100vh if any descendant overflows; force it
+     and the inner wrapper to honor 100vh exactly so main's bound
+     becomes the page bound. */
+  body:has(.builder-fullbleed),
+  html:has(.builder-fullbleed) {
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+  }
 }

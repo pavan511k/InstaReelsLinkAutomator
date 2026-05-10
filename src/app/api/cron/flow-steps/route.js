@@ -67,7 +67,7 @@ export async function GET(request) {
         const { data: logRows, error: fetchErr } = await supabase
             .from('dm_sent_log')
             .select(`
-                id, automation_id, recipient_ig_id, recipient_username,
+                id, automation_id, recipient_ig_id, recipient_username, recipient_first_name,
                 post_id, sent_at, flow_step,
                 dm_automations!inner(
                     id, user_id, settings_config,
@@ -147,36 +147,37 @@ export async function GET(request) {
                 }
             }
 
-            // Personalization: use the captured username when available, else
-            // fall back to "there" so we never leak the numeric IGSID into a
-            // user-facing DM. Username is captured at initial send (webhook
-            // from.username for comments).
-            const personal = row.recipient_username || 'there';
+            // Personalization: prefer the fetched display-name first word for
+            // {first_name}; fall back to the username, then "there" so we never
+            // leak the numeric IGSID. {username} stays as the captured handle.
+            const usernameForStep  = row.recipient_username || 'there';
+            const firstNameForStep = row.recipient_first_name || 'there';
             const rawMessage = step.message
-                .replace(/{first_name}/g, personal)
-                .replace(/{username}/g, personal);
+                .replace(/{first_name}/g, firstNameForStep)
+                .replace(/{username}/g, usernameForStep);
 
             const { error: insertErr } = await supabase.from('dm_queue').insert({
-                user_id:            automation.user_id,
-                account_id:         account.id,
-                automation_id:      automation.id,
-                post_id:            row.post_id,
-                recipient_ig_id:    row.recipient_ig_id,
-                recipient_username: row.recipient_username,
-                comment_id:         null,
-                comment_text:       `[flow step ${nextStepIdx + 1}]`,
-                platform:           'instagram',
-                dm_type:            'message_template',
-                dm_config:          { type: 'message_template', message: rawMessage },
-                tracking_map:       {},
-                user_plan:          userPlan,
-                queue_reason:       'flow_step',
-                is_upsell:          false,
-                source_log_id:      row.id,
-                flow_step_index:    nextStepIdx + 1,
-                priority:           6,
-                status:             'pending',
-                scheduled_after:    now.toISOString(),
+                user_id:              automation.user_id,
+                account_id:           account.id,
+                automation_id:        automation.id,
+                post_id:              row.post_id,
+                recipient_ig_id:      row.recipient_ig_id,
+                recipient_username:   row.recipient_username,
+                recipient_first_name: row.recipient_first_name,
+                comment_id:           null,
+                comment_text:         `[flow step ${nextStepIdx + 1}]`,
+                platform:             'instagram',
+                dm_type:              'message_template',
+                dm_config:            { type: 'message_template', message: rawMessage },
+                tracking_map:         {},
+                user_plan:            userPlan,
+                queue_reason:         'flow_step',
+                is_upsell:            false,
+                source_log_id:        row.id,
+                flow_step_index:      nextStepIdx + 1,
+                priority:             6,
+                status:               'pending',
+                scheduled_after:      now.toISOString(),
             });
 
             if (insertErr) {

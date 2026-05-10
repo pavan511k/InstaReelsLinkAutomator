@@ -1,107 +1,100 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useTheme } from 'next-themes';
-import { Menu, X, ArrowRight, Sun, Moon } from 'lucide-react';
-import { useStyles, useIsDark } from '@/lib/useStyles';
-import darkStyles from './Navbar.module.css';
-import lightStyles from './Navbar.light.module.css';
+import { useEffect, useState } from 'react';
 
 const NAV_LINKS = [
-  { label: 'How it works', href: '#how-it-works' },
-  { label: 'Features',     href: '#features'     },
-  { label: 'Pricing',      href: 'pricing'       },
+  { href: '#how',          label: 'How it works' },
+  { href: '#pricing',      label: 'Pricing' },
+  { href: '#testimonials', label: 'Reviews' },
+  { href: '#faq',          label: 'FAQ' },
 ];
 
+/**
+ * Hybrid navbar: floating pill at the top of the hero, solid full-width bar
+ * once the user scrolls past the hero. The pill gets lost on the white
+ * content sections (low contrast, looks orphaned), so the switch to a
+ * grounded edge-to-edge header on scroll is intentional — clearer mental
+ * model for long marketing pages.
+ *
+ * Both modes share the same content; only the chrome (chunkiness, radius,
+ * width, bg opacity) animates between states.
+ */
 export default function Navbar() {
-  const styles = useStyles(darkStyles, lightStyles);
-  const isDark = useIsDark();
-  const { setTheme } = useTheme();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 16);
-    window.addEventListener('scroll', handler, { passive: true });
-    return () => window.removeEventListener('scroll', handler);
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const toggleTheme = () => setTheme(isDark ? 'light' : 'dark');
-
   return (
-    <header className={`${styles.header} ${scrolled ? styles.scrolled : ''}`}>
-      <div className={styles.inner}>
-
+    <header
+      className={[
+        'fixed inset-x-0 top-0 z-50 transition-all duration-300',
+        scrolled
+          ? 'pointer-events-auto border-b border-neutral-200 bg-white/95 shadow-sm backdrop-blur-xl'
+          : 'pointer-events-none flex justify-center px-4 pt-4',
+      ].join(' ')}
+    >
+      <div
+        className={[
+          'pointer-events-auto flex w-full items-center gap-2 transition-all duration-300',
+          scrolled
+            ? 'mx-auto max-w-7xl px-6 py-3'
+            : 'max-w-3xl rounded-2xl border border-white/40 bg-white/85 px-3 py-2.5 shadow-lg shadow-black/10 backdrop-blur-xl',
+        ].join(' ')}
+      >
         {/* Logo */}
-        <Link href="/" className={styles.logo}>
-          <div className={styles.logoMark}>
-            <Image src="/logo.png" alt="AutoDM" width={18} height={18} />
-          </div>
-          <span className={styles.logoText}>
-            auto<span className={styles.logoDM}>dm</span>
+        <Link href="/" className="flex items-center gap-2 pl-1 pr-3">
+          <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-white ring-1 ring-neutral-200">
+            <Image
+              src="/logo.png"
+              alt="AutoDM"
+              width={32}
+              height={32}
+              className="h-8 w-8 object-contain"
+              priority
+            />
+          </span>
+          <span className="text-base font-semibold tracking-tight">
+            <span className="text-neutral-900">Auto</span>
+            <span className="text-[#E63946]">DM</span>
           </span>
         </Link>
 
-        {/* Desktop nav */}
-        <nav className={styles.nav}>
-          {NAV_LINKS.map(({ label, href }) => (
-            <a key={label} href={href} className={styles.navLink}>{label}</a>
+        {/* Nav links — centered, hidden under md */}
+        <nav className="hidden flex-1 items-center justify-center gap-1 md:flex">
+          {NAV_LINKS.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 transition-colors"
+            >
+              {link.label}
+            </a>
           ))}
         </nav>
 
-        {/* Desktop CTAs */}
-        <div className={styles.ctas}>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className={styles.themeToggle}
-            aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-            title={isDark ? 'Switch to light' : 'Switch to dark'}
+        {/* CTAs */}
+        <div className="ml-auto flex items-center gap-2 md:ml-0">
+          <Link
+            href="/login"
+            className="hidden rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 sm:inline-flex"
           >
-            {isDark ? <Sun size={16} strokeWidth={2} /> : <Moon size={16} strokeWidth={2} />}
-          </button>
-          <Link href="/login" className={styles.loginBtn}>Sign in</Link>
-          <Link href="/signup" className={styles.signupBtn}>
-            Get started free
-            <ArrowRight size={14} strokeWidth={2.5} />
+            Log in
+          </Link>
+          <Link
+            href="/signup"
+            className="inline-flex items-center rounded-lg bg-[#E63946] px-4 py-2 text-sm font-semibold text-white hover:bg-[#CC2E3B] transition-colors"
+          >
+            Start for free
           </Link>
         </div>
-
-        {/* Mobile toggle */}
-        <button
-          className={styles.toggle}
-          onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="Toggle menu"
-        >
-          {menuOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
       </div>
-
-      {/* Mobile menu */}
-      {menuOpen && (
-        <div className={styles.mobileMenu}>
-          {NAV_LINKS.map(({ label, href }) => (
-            <a key={label} href={href} className={styles.mobileLink}
-              onClick={() => setMenuOpen(false)}>
-              {label}
-            </a>
-          ))}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className={styles.mobileThemeToggle}
-          >
-            {isDark ? <Sun size={16} strokeWidth={2} /> : <Moon size={16} strokeWidth={2} />}
-            {isDark ? 'Switch to light' : 'Switch to dark'}
-          </button>
-          <div className={styles.mobileCtas}>
-            <Link href="/login"  className={styles.mobileLogin}>Sign in</Link>
-            <Link href="/signup" className={styles.signupBtn}>Get started free</Link>
-          </div>
-        </div>
-      )}
     </header>
   );
 }

@@ -1,8 +1,0 @@
-.postsPage {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    animation: fadeIn 0.35s ease both;
-}
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: none; }
-}

@@ -361,11 +361,60 @@ export async function checkUserIsFollower(igAccountId, checkUserId, accessToken)
  * @param {string} message     — the gate message text
  * @param {string} accessToken
  */
-export async function sendFollowGateDM(igUserId, recipientId, message, accessToken, useIgApi = false, commentId = null) {
-    // Send with YES and NO quick reply chips so the user doesn't need to type anything.
-    // YES triggers the follow-check flow; NO gives them a polite decline.
+/**
+ * Send a heart (love) reaction to a message the user sent us.
+ *
+ * Uses the Send API's `sender_action: react` form, available on both
+ * Messenger and Instagram messaging endpoints. We need the inbound
+ * `messageId` (a.k.a. `mid` from the webhook event) to attach the
+ * reaction to the right bubble.
+ *
+ * Best-effort: a failure here is logged and swallowed so the main
+ * DM still goes out. Reactions don't have a strict 24h messaging
+ * window — same constraints as a normal DM reply, which we're
+ * inside of anyway since the user just messaged us.
+ */
+export async function sendHeartReaction(igUserId, recipientId, messageId, accessToken, useIgApi = false) {
+    if (!messageId || !recipientId || !igUserId) return null;
+    const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
+    const url  = `${base}/${igUserId}/messages`;
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            recipient: { id: recipientId },
+            sender_action: 'react',
+            payload: {
+                message_id: messageId,
+                reaction:   'love',
+            },
+            access_token: accessToken,
+        }),
+    });
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        // Log + swallow — the main DM is the important thing.
+        console.warn('[sendHeartReaction] failed:', err.error?.message || `${res.status} ${res.statusText}`);
+        return null;
+    }
+    return res.json();
+}
+
+export async function sendFollowGateDM(igUserId, recipientId, message, accessToken, useIgApi = false, commentId = null, opts = {}) {
+    // Send with confirm/decline quick reply chips so the user doesn't
+    // need to type anything. The confirm chip title is customizable
+    // via `opts.confirmTitle` (the new builder lets users pre-fill it
+    // with copy like "I'm following!"). Payload stays
+    // CONFIRMED_FOLLOW so the existing webhook handler matches the
+    // tap regardless of title text. Title length is capped at 20
+    // chars by Meta's quick-reply spec.
     const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
     const url = `${base}/${igUserId}/messages`;
+
+    const confirmTitle = (opts.confirmTitle || '').toString().trim().slice(0, 20)
+        || '✅ Yes, I followed!';
 
     const res = await fetch(url, {
         method: 'POST',
@@ -377,7 +426,7 @@ export async function sendFollowGateDM(igUserId, recipientId, message, accessTok
                 quick_replies: [
                     {
                         content_type: 'text',
-                        title: '✅ Yes, I followed!',
+                        title: confirmTitle,
                         payload: 'CONFIRMED_FOLLOW',
                     },
                     {
@@ -519,6 +568,50 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
         case 'multi_cta': {
             const message = resolveMessageVariables(dm_config.message || '', context);
             return sendMultiCtaDM(igUserId, recipientId, message, dm_config.buttons || [], accessToken, trackingMap, plan, useIgApi, dm_config, commentId);
+        }
+
+        case 'builder_v2': {
+            // New flow-builder shape:
+            //   dm_config = { message, imageUrl, buttons, openingEnabled,
+            //                 openingMessage, openingButtonText, ... }
+            // We collapse the opening block into the body for now (sending
+            // the interactive opening as a separate quick-reply with
+            // postback handling lands in a follow-up). Routing rules:
+            //   • image + buttons   → button_template (one slide)
+            //   • image only        → button_template (one slide, no buttons)
+            //   • buttons only      → multi_cta
+            //   • text only         → message_template
+            const validButtons = (dm_config.buttons || []).filter((b) => b.label && b.url);
+            const imageUrl     = dm_config.imageUrl || null;
+            const fullMessage  = [
+                dm_config.openingEnabled ? dm_config.openingMessage : null,
+                dm_config.message,
+            ].filter((s) => typeof s === 'string' && s.trim()).join('\n\n');
+            const message = resolveMessageVariables(fullMessage, context);
+
+            if (imageUrl) {
+                const slide = {
+                    headline:    'AutoDM',
+                    description: message,
+                    imageUrl,
+                    ...(validButtons.length > 0 && {
+                        buttons: validButtons.map((b) => ({ type: 'url', label: b.label, value: b.url })),
+                    }),
+                };
+                return sendButtonTemplateDM(igUserId, recipientId, [slide], accessToken, trackingMap, plan, useIgApi, dm_config, commentId);
+            }
+            if (validButtons.length > 0) {
+                return sendMultiCtaDM(
+                    igUserId, recipientId, message,
+                    validButtons.map((b) => ({ label: b.label, url: b.url })),
+                    accessToken, trackingMap, plan, useIgApi, dm_config, commentId,
+                );
+            }
+            return sendTextDM(
+                igUserId, recipientId,
+                applyBranding(message, dm_config, plan),
+                accessToken, useIgApi, commentId,
+            );
         }
 
         case 'follow_up': {

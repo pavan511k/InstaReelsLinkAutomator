@@ -1,51 +1,25 @@
-'use client';
-
 import Link from 'next/link';
-import { ArrowRight, Check } from 'lucide-react';
-import { useStyles } from '@/lib/useStyles';
-import darkStyles from './CtaBanner.module.css';
-import lightStyles from './CtaBanner.light.module.css';
+import { ArrowRight } from 'lucide-react';
 
 export default function CtaBanner() {
-  const styles = useStyles(darkStyles, lightStyles);
   return (
-    <section className={styles.section} id="pricing">
-      <div className={styles.inner}>
-        <div className={styles.bgGlow} />
-        <div className={styles.bgGrid} />
-
-        <div className={styles.content}>
-          <div className={styles.badge}>Free forever — no credit card</div>
-          <h2 className={styles.title}>
-            Start automating your Instagram DMs today
-          </h2>
-          <p className={styles.subtitle}>
-            Your first 3,000 DMs every month are completely free. Upgrade when you&apos;re ready to scale.
+    <section className="bg-white">
+      <div className="mx-auto max-w-5xl px-6 py-16">
+        <div className="rounded-2xl border border-neutral-200 bg-neutral-50 px-8 py-12 text-center">
+          <p className="text-sm font-semibold uppercase tracking-widest text-neutral-500">
+            Ready to transform your Instagram engagement?
           </p>
-
-          <ul className={styles.perks}>
-            {[
-              '3,000 free DMs per month',
-              'All features included on free plan',
-              'Official Meta API — 100% account safe',
-              'Set up in under 5 minutes',
-            ].map((p) => (
-              <li key={p} className={styles.perk}>
-                <div className={styles.perkCheck}><Check size={11} strokeWidth={3} /></div>
-                {p}
-              </li>
-            ))}
-          </ul>
-
-          <div className={styles.ctas}>
-            <Link href="/signup" className={styles.primary}>
-              Get started for free
-              <ArrowRight size={15} strokeWidth={2.5} />
-            </Link>
-            <Link href="/login" className={styles.secondary}>
-              Already have an account?
-            </Link>
-          </div>
+          <h3 className="mt-3 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
+            Start your free trial today
+          </h3>
+          <Link
+            href="/signup"
+            className="mt-6 inline-flex items-center gap-2 rounded-md bg-[#E63946] px-6 py-3.5 text-base font-semibold text-white hover:bg-[#CC2E3B] transition-colors"
+          >
+            Start Free Trial
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+          <p className="mt-3 text-sm text-neutral-500">No credit card required</p>
         </div>
       </div>
     </section>

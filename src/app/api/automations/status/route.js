@@ -14,20 +14,22 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { postId, isActive } = body;
+    const { id, postId, isActive } = body;
 
-    if (!postId || typeof isActive !== 'boolean') {
-        return NextResponse.json({ error: 'Post ID and isActive boolean are required' }, { status: 400 });
+    if ((!id && !postId) || typeof isActive !== 'boolean') {
+        return NextResponse.json({ error: 'id (or postId) and isActive are required' }, { status: 400 });
     }
 
+    // Prefer id when provided — it's unambiguous even when multiple
+    // automations share a post (which the new builder allows).
     try {
-        const { data, error } = await supabase
+        let q = supabase
             .from('dm_automations')
-            .update({ is_active: isActive })
-            .eq('post_id', postId)
-            .eq('user_id', user.id)
-            .select('is_active')
-            .single();
+            .update({ is_active: isActive, updated_at: new Date().toISOString() })
+            .eq('user_id', user.id);
+        q = id ? q.eq('id', id) : q.eq('post_id', postId);
+
+        const { data, error } = await q.select('is_active').single();
 
         if (error) {
             console.error('Failed to update automation status:', error);

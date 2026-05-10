@@ -44,7 +44,7 @@ export async function GET(request) {
 
         const { data: failedRows, error: fetchErr } = await db
             .from('dm_sent_log')
-            .select('id, automation_id, recipient_ig_id, recipient_username, comment_id, comment_text, retry_count, last_retry_at, platform')
+            .select('id, automation_id, recipient_ig_id, recipient_username, recipient_first_name, comment_id, comment_text, retry_count, last_retry_at, platform')
             .eq('status', 'failed')
             .lt('retry_count', MAX_RETRIES)
             .or(`last_retry_at.is.null,last_retry_at.lt.${cutoff}`)
@@ -143,14 +143,15 @@ export async function GET(request) {
                     ? account.fb_page_id
                     : account.ig_user_id;
 
-                // Friendly fallback when recipient_username wasn't captured
-                // on the original send. Never use recipient_ig_id here — it's
-                // a numeric IGSID and would render as "Hey 178414012…!" in
-                // the message body.
-                const personal = row.recipient_username || 'there';
+                // Friendly fallback when recipient_username / first_name
+                // weren't captured on the original send. Never use
+                // recipient_ig_id here — it's a numeric IGSID and would
+                // render as "Hey 178414012…!" in the message body.
+                const usernameForRetry  = row.recipient_username || 'there';
+                const firstNameForRetry = row.recipient_first_name || 'there';
                 const context  = {
-                    username:   personal,
-                    first_name: personal,
+                    username:   usernameForRetry,
+                    first_name: firstNameForRetry,
                     comment_id: row.comment_id || '',
                 };
 
@@ -167,14 +168,16 @@ export async function GET(request) {
                 );
 
                 await db.from('dm_sent_log').insert({
-                    automation_id:   row.automation_id,
-                    post_id:         null,
-                    recipient_ig_id: row.recipient_ig_id,
-                    comment_id:      row.comment_id,
-                    comment_text:    row.comment_text,
-                    status:          'sent',
-                    platform:        retryPlatform,
-                    sent_at:         now.toISOString(),
+                    automation_id:        row.automation_id,
+                    post_id:              null,
+                    recipient_ig_id:      row.recipient_ig_id,
+                    recipient_username:   row.recipient_username,
+                    recipient_first_name: row.recipient_first_name,
+                    comment_id:           row.comment_id,
+                    comment_text:         row.comment_text,
+                    status:               'sent',
+                    platform:             retryPlatform,
+                    sent_at:              now.toISOString(),
                 });
 
                 await db.from('dm_sent_log')

@@ -3,12 +3,13 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { graphBase } from '@/lib/meta-graph';
 import {
-    sendAutomatedDM, sendFollowGateDM, checkUserIsFollower,
+    sendAutomatedDM, sendFollowGateDM, checkUserIsFollower, sendHeartReaction,
     resolveMessageVariables, replyToComment,
     sendTextDM, sendButtonTemplateDM, sendQuickReplyDM, sendMultiCtaDM,
     applyBranding,
 } from '@/lib/send-dm';
 import { applyTracking } from '@/lib/click-tracking';
+import { fetchIgUserFirstName, extractFirstName } from '@/lib/ig-profile';
 import { fireAlerts } from '@/app/api/alerts/route';
 
 import { getDmLimit, getEffectivePlan } from '@/lib/plans';
@@ -222,6 +223,15 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
         .maybeSingle();
 
     if (!queueEntry) {
+        // No pending follow-gate — see if this DM matches a builder_v2
+        // dm-auto-responder automation (keyword-triggered DM reply).
+        // Returns true if a match handled the message; otherwise we
+        // fall through to legacy email-collector capture.
+        const dmAutoHandled = await handleDmAutoResponder(
+            supabase, igAccountId, senderId, msgText,
+            messagingEvent.message?.mid || null,
+        );
+        if (dmAutoHandled) return;
         await handleEmailCollectorReply(supabase, senderId, msgText);
         return;
     }
@@ -346,7 +356,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
             try {
                 // Use 'there' as a friendly placeholder fallback \u2014 the IGSID
                 // is meaningless to a recipient and dm_followup_queue doesn't
-                // currently capture the username.
+                // currently capture the username or first name.
                 const nudge = resolveMessageVariables(
                     queueEntry.nudge_message ||
                     "We couldn't verify your follow yet \ud83d\ude48 Make sure you're following, then tap \u2705 Yes!",
@@ -381,7 +391,7 @@ async function handleQuickReplyTap(supabase, senderId, msgPayload) {
     const { data: recent } = await supabase
         .from('dm_sent_log')
         .select(`
-            id, automation_id, recipient_username, platform, sent_at,
+            id, automation_id, recipient_username, recipient_first_name, platform, sent_at,
             dm_automations!inner(
                 id, user_id, dm_type, dm_config,
                 connected_accounts!inner(id, access_token, fb_page_access_token, ig_user_id)
@@ -417,14 +427,15 @@ async function handleQuickReplyTap(supabase, senderId, msgPayload) {
     const useIg   = !account.fb_page_access_token;
     const platform = recent.platform || 'instagram';
 
-    const personal = recent.recipient_username || 'there';
+    const usernameForReply  = recent.recipient_username || 'there';
+    const firstNameForReply = recent.recipient_first_name || 'there';
     const plan = await getUserPlan(supabase, automation.user_id);
 
     // Substitute placeholders + apply branding so the response matches the
     // way the original message_template / quick_reply DMs were sent.
     let body = resolveMessageVariables(matched.responseMessage, {
-        username: personal,
-        first_name: personal,
+        username:   usernameForReply,
+        first_name: firstNameForReply,
     });
     // Inline branding logic — applyBranding lives in send-dm.js but isn't
     // exported. We mirror its behaviour here: free → suffix with URL, Pro →
@@ -443,25 +454,27 @@ async function handleQuickReplyTap(supabase, senderId, msgPayload) {
         await sendTextDM(account.ig_user_id, senderId, body, token, useIg);
 
         await supabase.from('dm_sent_log').insert({
-            automation_id:      automation.id,
-            post_id:            null,
-            recipient_ig_id:    senderId,
-            recipient_username: recent.recipient_username,
-            comment_id:         null,
-            comment_text:       `[chip tap: ${matched.title}]`,
-            status:             'sent',
+            automation_id:        automation.id,
+            post_id:              null,
+            recipient_ig_id:      senderId,
+            recipient_username:   recent.recipient_username,
+            recipient_first_name: recent.recipient_first_name,
+            comment_id:           null,
+            comment_text:         `[chip tap: ${matched.title}]`,
+            status:               'sent',
             platform,
-            sent_at:            new Date().toISOString(),
+            sent_at:              new Date().toISOString(),
         });
 
         console.log(`[Webhook/QR] ✅ Chip "${matched.title}" reply sent to ${senderId}`);
     } catch (err) {
         console.error(`[Webhook/QR] Failed to reply for chip tap "${matched.title}":`, err.message);
         await supabase.from('dm_sent_log').insert({
-            automation_id:      automation.id,
-            post_id:            null,
-            recipient_ig_id:    senderId,
-            recipient_username: recent.recipient_username,
+            automation_id:        automation.id,
+            post_id:              null,
+            recipient_ig_id:      senderId,
+            recipient_username:   recent.recipient_username,
+            recipient_first_name: recent.recipient_first_name,
             comment_id:         null,
             comment_text:       `[chip tap: ${matched.title}]`,
             status:             'failed',
@@ -484,6 +497,43 @@ async function sendRewardDM(igSenderId, recipientId, dmType, dmConfig, accessTok
         }
         case 'multi_cta':
             return sendMultiCtaDM(igSenderId, recipientId, dmConfig.message || '', dmConfig.buttons || [], accessToken, trackingMap, plan, useIgApi, dmConfig);
+        case 'builder_v2': {
+            // Mirror the builder_v2 dispatch in sendAutomatedDM so the
+            // gate's reward path delivers the same DM the recipient
+            // would have gotten without the gate. Opening message is
+            // merged into the body (it doesn't get its own bubble in
+            // the gate flow — the gate already used a message slot).
+            const validButtons = (dmConfig.buttons || []).filter((b) => b.label && b.url);
+            const imageUrl     = dmConfig.imageUrl || null;
+            const fullMessage  = [
+                dmConfig.openingEnabled ? dmConfig.openingMessage : null,
+                dmConfig.message,
+            ].filter((s) => typeof s === 'string' && s.trim()).join('\n\n');
+
+            if (imageUrl) {
+                const slide = {
+                    headline:    'AutoDM',
+                    description: fullMessage,
+                    imageUrl,
+                    ...(validButtons.length > 0 && {
+                        buttons: validButtons.map((b) => ({ type: 'url', label: b.label, value: b.url })),
+                    }),
+                };
+                return sendButtonTemplateDM(igSenderId, recipientId, [slide], accessToken, trackingMap, plan, useIgApi, dmConfig);
+            }
+            if (validButtons.length > 0) {
+                return sendMultiCtaDM(
+                    igSenderId, recipientId, fullMessage,
+                    validButtons.map((b) => ({ label: b.label, url: b.url })),
+                    accessToken, trackingMap, plan, useIgApi, dmConfig,
+                );
+            }
+            return sendTextDM(
+                igSenderId, recipientId,
+                applyBranding(fullMessage, dmConfig, plan),
+                accessToken, useIgApi,
+            );
+        }
         case 'message_template':
         default: {
             const text = applyBranding(dmConfig.message || '', dmConfig, plan);
@@ -512,12 +562,14 @@ async function handleInstagramCommentEvent(supabase, igAccountId, commentData) {
 
     // from.username — Instagram includes the handle on comment webhook payloads.
     // Captured here and propagated through the queue / sent_log so flow-step
-    // and upsell follow-ups can substitute {first_name} / {username}.
+    // and upsell follow-ups can substitute {username}. {first_name} is fetched
+    // separately via the Graph API inside processAutomationForComment, where
+    // the access token is already loaded.
     const commenterUsername = from.username || null;
 
-    const perPostFired = await processAutomationForComment(supabase, post, text, from.id, commentId, 'instagram', commenterUsername);
+    const result = await processAutomationForComment(supabase, post, text, from.id, commentId, 'instagram', commenterUsername, null);
     if (post?.account_id) {
-        await processGlobalTriggers(supabase, post, text, from.id, commentId, 'instagram', perPostFired, commenterUsername);
+        await processGlobalTriggers(supabase, post, text, from.id, commentId, 'instagram', result.fired, commenterUsername, result.firstName);
     }
 }
 
@@ -537,144 +589,242 @@ async function handleFacebookCommentEvent(supabase, pageId, commentData) {
         .eq('ig_post_id', `fb_${post_id}`)
         .single();
 
+    // FB delivers the user's display name in from.name. Use it for both the
+    // {username} fallback (preserving prior behavior) and to derive a real
+    // {first_name} via the first whitespace-delimited token.
     const commenterUsername = from.name || from.username || null;
-    const perPostFiredFb = await processAutomationForComment(supabase, post, message, from.id, comment_id, 'facebook', commenterUsername);
+    const commenterFirstName = extractFirstName(from.name);
+    const result = await processAutomationForComment(supabase, post, message, from.id, comment_id, 'facebook', commenterUsername, commenterFirstName);
     if (post?.account_id) {
-        await processGlobalTriggers(supabase, post, message, from.id, comment_id, 'facebook', perPostFiredFb, commenterUsername);
+        await processGlobalTriggers(supabase, post, message, from.id, comment_id, 'facebook', result.fired, commenterUsername, result.firstName);
     }
 }
 
 // ─── Core Automation Logic ───────────────────────────────────────────────────
 
-async function processAutomationForComment(supabase, post, commentText, commenterId, commentId, platform, commenterUsername = null) {
+async function processAutomationForComment(supabase, post, commentText, commenterId, commentId, platform, commenterUsername = null, commenterFirstName = null, inboundMid = null, overrideAutomation = null) {
+    // Single result object — every early return ships this back so the
+    // caller (handleInstagramCommentEvent / handleFacebookCommentEvent /
+    // handleStoryReplyEvent) can forward firstName to processGlobalTriggers
+    // without a second Graph API call.
+    const out = { fired: false, firstName: commenterFirstName };
+
     if (!post) {
         console.log('[Webhook] Post not found in DB');
-        return;
+        return out;
     }
 
-    const { data: automation } = await supabase
-        .from('dm_automations')
-        .select('*')
-        .eq('post_id', post.id)
-        .eq('is_active', true)
-        .single();
-
-    if (!automation) {
-        console.log('[Webhook] No active automation for post:', post.id);
-        return;
-    }
-
-    if (automation.expires_at && new Date(automation.expires_at) <= new Date()) {
-        console.log(`[Webhook] Automation ${automation.id} has expired — auto-pausing`);
-        await supabase.from('dm_automations')
-            .update({ is_active: false, updated_at: new Date().toISOString() })
-            .eq('id', automation.id);
-        return;
-    }
-
-    if (automation.scheduled_start_at && new Date(automation.scheduled_start_at) > new Date()) {
-        console.log(`[Webhook] Automation ${automation.id} not yet started — skipping`);
-        return;
-    }
-
+    // ── Multi-automation routing (first match wins, ordered by specificity) ──
+    // A post can have N active automations attached (e.g., one per
+    // keyword set). Fetch all candidates, rank by specificity, then
+    // fire ONLY the highest-priority one whose trigger matches. This
+    // prevents the same fan from getting two DMs back-to-back when
+    // their comment matches multiple automations.
+    //
+    // We also include account-wide automations saved with
+    // post_target_mode='any' (post_id IS NULL). Those need an
+    // additional account-owner lookup to scope correctly.
     const { data: account } = await supabase
         .from('connected_accounts')
-        .select('access_token, fb_page_access_token, ig_user_id, fb_page_id, platform, default_config')
+        .select('user_id, access_token, fb_page_access_token, ig_user_id, fb_page_id, platform, default_config')
         .eq('id', post.account_id)
         .single();
 
     if (!account) {
         console.error('[Webhook] Connected account not found for post');
-        return;
+        return out;
     }
 
-    const triggerConfig    = automation.trigger_config;
-    const settingsConfig   = automation.settings_config || {};
-    const triggerType      = triggerConfig.type || triggerConfig.triggerType || 'keywords';
+    let candidates;
+    if (overrideAutomation) {
+        // Caller (e.g., handleDmAutoResponder) already matched the
+        // automation against the inbound message — skip the candidate
+        // query and trust their pick.
+        candidates = [overrideAutomation];
+    } else {
+        const { data: postBound } = await supabase
+            .from('dm_automations')
+            .select('*')
+            .eq('post_id', post.id)
+            .eq('is_active', true);
+
+        // "Any Post" automations are a fallback — they only fire when no
+        // active post-specific automation exists for this post. If a
+        // post-bound automation is paused, post-bound is empty here and
+        // any-mode kicks in. If a post-bound is active, any-mode yields
+        // entirely so two automations don't fire on the same comment.
+        const hasPostBound = (postBound || []).length > 0;
+        const { data: anyMode } = hasPostBound
+            ? { data: [] }
+            : await supabase
+                .from('dm_automations')
+                .select('*')
+                .is('post_id', null)
+                .eq('is_active', true)
+                .eq('user_id', account.user_id)
+                .filter('trigger_config->>postTargetMode', 'eq', 'any');
+
+        candidates = [...(postBound || []), ...(anyMode || [])];
+    }
+
+    if (candidates.length === 0) {
+        console.log('[Webhook] No active automation for post:', post.id);
+        return out;
+    }
+
+    // Resolve {first_name} for IG commenters via the Graph API. FB callers
+    // pre-fill commenterFirstName from from.name, so this only fires for
+    // platform === 'instagram'. Failure → null → downstream falls back to
+    // a neutral "there" so DMs never expose the numeric IGSID.
+    if (!out.firstName && platform === 'instagram') {
+        const lookupToken = account.fb_page_access_token || account.access_token;
+        const useIgApiForLookup = !account.fb_page_access_token;
+        out.firstName = await fetchIgUserFirstName(commenterId, lookupToken, useIgApiForLookup);
+    }
+
     const lowerCommentText = commentText.toLowerCase().trim();
-    let shouldSend = false;
 
-    switch (triggerType) {
-        case 'all_comments':
-            shouldSend = true;
-            break;
+    // Specificity ranking — lower number wins:
+    //   0  keyword automation with explicit keyword list (most specific)
+    //   1  emojis_only / mentions_only (specific shape match)
+    //   2  keyword automation with empty list (would fall through to globals)
+    //   3  all_comments catch-all
+    const specificity = (a) => {
+        const tc = a.trigger_config || {};
+        const tt = tc.type || tc.triggerType || 'keywords';
+        if (tt === 'keywords' && (tc.keywords || []).length > 0) return 0;
+        if (tt === 'emojis_only' || tt === 'mentions_only') return 1;
+        if (tt === 'keywords') return 2;
+        if (tt === 'all_comments') return 3;
+        return 4;
+    };
 
-        case 'emojis_only': {
-            const EMOJI_RE  = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu;
-            const plainText = lowerCommentText.replace(EMOJI_RE, '').trim();
-            shouldSend = EMOJI_RE.test(commentText) && plainText.replace(/[^a-z0-9]/g, '') === '';
-            break;
+    // Evaluate trigger match for a single candidate. Returns true when
+    // the comment satisfies that automation's trigger config (including
+    // global-default fallbacks and excludeMentions flag).
+    const evaluateMatch = (automation) => {
+        const triggerConfig  = automation.trigger_config || {};
+        const settingsConfig = automation.settings_config || {};
+        const triggerType    = triggerConfig.type || triggerConfig.triggerType || 'keywords';
+        let shouldSend = false;
+
+        switch (triggerType) {
+            case 'all_comments':
+                shouldSend = true;
+                break;
+            case 'emojis_only': {
+                const EMOJI_RE  = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu;
+                const plainText = lowerCommentText.replace(EMOJI_RE, '').trim();
+                shouldSend = EMOJI_RE.test(commentText) && plainText.replace(/[^a-z0-9]/g, '') === '';
+                break;
+            }
+            case 'mentions_only':
+                shouldSend = /@\w+/.test(commentText);
+                break;
+            case 'keywords':
+            default: {
+                const isExcludeMode = !!triggerConfig.excludeKeywords;
+                // Per-automation keywords are the user's source of truth.
+                // Merge in account-level globals only in positive mode —
+                // exclude-mode merging would flip globals into a blacklist.
+                let keywords = (triggerConfig.keywords || []).map((k) => k.toLowerCase());
+                if (!isExcludeMode && !settingsConfig.disableUniversalTriggers) {
+                    const globalKws = (account.default_config?.keywords || []).map((k) => k.toLowerCase());
+                    keywords = [...new Set([...keywords, ...globalKws])];
+                }
+                if (keywords.length === 0) {
+                    shouldSend = false;
+                } else if (isExcludeMode) {
+                    shouldSend = !keywords.some((kw) => lowerCommentText.includes(kw));
+                } else {
+                    shouldSend = keywords.some((kw) => lowerCommentText.includes(kw));
+                }
+                break;
+            }
         }
 
-        case 'mentions_only':
-            shouldSend = /@\w+/.test(commentText);
-            break;
-
-        case 'keywords':
-        default: {
-            const isExcludeMode = !!triggerConfig.excludeKeywords;
-
-            // Per-automation keywords are the user's source of truth for the
-            // match list. Globals (account.default_config.keywords) are
-            // *positive* default triggers — merging them into an exclude-mode
-            // automation would flip them into a blacklist, which is the
-            // opposite of the user's intent. So we only merge globals in
-            // positive (non-exclude) mode.
-            let keywords = (triggerConfig.keywords || []).map((k) => k.toLowerCase());
-            if (!isExcludeMode && !settingsConfig.disableUniversalTriggers) {
-                const globalKws = (account.default_config?.keywords || []).map((k) => k.toLowerCase());
-                keywords = [...new Set([...keywords, ...globalKws])];
+        // Global-trigger fallback when the automation is keyword-typed
+        // but has no keywords AND universal triggers aren't disabled.
+        if (
+            !shouldSend &&
+            !settingsConfig.disableUniversalTriggers &&
+            account.default_config?.triggerType &&
+            account.default_config.triggerType !== 'keywords' &&
+            triggerType === 'keywords' &&
+            (triggerConfig.keywords || []).length === 0
+        ) {
+            const globalType = account.default_config.triggerType;
+            if (globalType === 'all_comments') {
+                shouldSend = true;
+            } else if (globalType === 'emojis_only') {
+                const EMOJI_GLOBAL = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu;
+                const plainGlobal  = lowerCommentText.replace(EMOJI_GLOBAL, '').trim();
+                shouldSend = EMOJI_GLOBAL.test(commentText) && plainGlobal.replace(/[^a-z0-9]/g, '') === '';
+            } else if (globalType === 'mentions_only') {
+                shouldSend = /@\w+/.test(commentText);
             }
+        }
 
-            if (keywords.length === 0) {
-                // Empty keyword list on a 'keywords' trigger means the user
-                // hasn't configured a match — don't fire. To send on every
-                // comment, the user should pick trigger type 'all_comments'.
-                // The fallback block below still handles cases where the
-                // account-level default trigger type is non-keyword.
-                shouldSend = false;
-            } else if (isExcludeMode) {
-                shouldSend = !keywords.some((kw) => lowerCommentText.includes(kw));
+        if (shouldSend && triggerConfig.excludeMentions && commentText.includes('@')) {
+            shouldSend = false;
+        }
+        return shouldSend;
+    };
+
+    // Drop expired/not-yet-started before ranking — they can't fire
+    // and shouldn't take priority over a viable lower-priority match.
+    const now = new Date();
+    const eligible = [];
+    for (const c of candidates) {
+        if (c.expires_at && new Date(c.expires_at) <= now) {
+            console.log(`[Webhook] Automation ${c.id} has expired — auto-pausing`);
+            await supabase.from('dm_automations')
+                .update({ is_active: false, updated_at: now.toISOString() })
+                .eq('id', c.id);
+            continue;
+        }
+        if (c.scheduled_start_at && new Date(c.scheduled_start_at) > now) {
+            console.log(`[Webhook] Automation ${c.id} not yet started — skipping`);
+            continue;
+        }
+        eligible.push(c);
+    }
+
+    const ranked = [...eligible].sort((x, y) => specificity(x) - specificity(y));
+
+    let automation = null;
+    const matchedButSkipped = [];
+    for (const candidate of ranked) {
+        if (evaluateMatch(candidate)) {
+            if (automation === null) {
+                automation = candidate;
             } else {
-                shouldSend = keywords.some((kw) => lowerCommentText.includes(kw));
+                matchedButSkipped.push(candidate.id);
             }
-            break;
         }
     }
 
-    if (
-        !shouldSend &&
-        !settingsConfig.disableUniversalTriggers &&
-        account.default_config?.triggerType &&
-        account.default_config.triggerType !== 'keywords' &&
-        triggerType === 'keywords' &&
-        (triggerConfig.keywords || []).length === 0
-    ) {
-        const globalType = account.default_config.triggerType;
-        if (globalType === 'all_comments') {
-            shouldSend = true;
-        } else if (globalType === 'emojis_only') {
-            const EMOJI_GLOBAL = /\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu;
-            const plainGlobal  = lowerCommentText.replace(EMOJI_GLOBAL, '').trim();
-            shouldSend = EMOJI_GLOBAL.test(commentText) && plainGlobal.replace(/[^a-z0-9]/g, '') === '';
-        } else if (globalType === 'mentions_only') {
-            shouldSend = /@\w+/.test(commentText);
-        }
+    if (!automation) {
+        console.log('[Webhook] Comment did not match any active automation on post');
+        return out;
     }
 
-    if (shouldSend && triggerConfig.excludeMentions && commentText.includes('@')) {
-        shouldSend = false;
+    if (matchedButSkipped.length > 0) {
+        // Surface this so users in /logs can understand why their
+        // less-specific automation didn't fire on this comment.
+        console.log(
+            `[Webhook] Comment ${commentId} matched ${matchedButSkipped.length + 1} automations on post ${post.id}; ` +
+            `fired ${automation.id} (highest specificity), skipped: ${matchedButSkipped.join(', ')}`
+        );
     }
 
-    if (!shouldSend) {
-        console.log('[Webhook] Comment did not match trigger');
-        return;
-    }
+    const triggerConfig  = automation.trigger_config;
+    const settingsConfig = automation.settings_config || {};
 
     const globalExclude = (account.default_config?.excludeKeywords || []).map((k) => k.toLowerCase());
     if (globalExclude.length > 0 && globalExclude.some((kw) => lowerCommentText.includes(kw))) {
         console.log('[Webhook] Skipping — global exclude keyword matched');
-        return;
+        return out;
     }
 
     // ── Billing gate — plan from user_plans, count from cached counter ──
@@ -685,7 +835,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
         const totalMonthly = await getMonthlyDmCount(supabase, automation.user_id);
         if (totalMonthly >= dmLimit) {
             console.log(`[Webhook] Monthly limit (${dmLimit}) reached for ${userPlan} plan — skipping`);
-            return;
+            return out;
         }
     }
 
@@ -696,7 +846,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
 
     if (existingLog) {
         console.log('[Webhook] Already processed this comment (sent log)');
-        return;
+        return out;
     }
 
     const { data: existingQueue } = await supabase
@@ -706,7 +856,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
 
     if (existingQueue) {
         console.log('[Webhook] Already enqueued this comment (dm queue)');
-        return;
+        return out;
     }
 
     // ── Send-once-per-user ────────────────────────────────────────
@@ -716,7 +866,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
             .eq('automation_id', automation.id).eq('recipient_ig_id', commenterId).limit(1);
         if (prevDms && prevDms.length > 0) {
             console.log(`[Webhook] User ${commenterId} already received DM for this post`);
-            return;
+            return out;
         }
     }
 
@@ -735,10 +885,13 @@ async function processAutomationForComment(supabase, post, commentText, commente
     // Friendly fallback when Meta's webhook payload omits from.username —
     // we never want to substitute the numeric IGSID into a public comment
     // reply (it would surface "Hey 1784140123456789!" to the post).
+    // {first_name} resolves separately: real first name when we fetched / parsed
+    // one (FB from.name or IG Graph API), otherwise neutral "there".
     const personalForReply = commenterUsername || 'there';
+    const firstNameForReply = out.firstName || 'there';
     const context = {
         username:   personalForReply,
-        first_name: personalForReply,
+        first_name: firstNameForReply,
         comment_id: commentId,
     };
 
@@ -793,29 +946,195 @@ async function processAutomationForComment(supabase, post, commentText, commente
         }
     } catch { /* non-fatal */ }
 
+    // ── Runtime plan gate for Pro-only automation features ──────────
+    // Email Collector + Ask-to-Follow + Send follow-up are Pro-only.
+    // If the user built these on Pro/Trial and then downgraded, the
+    // saved row keeps the flags but they should stop firing on free —
+    // matches Story Mention's hard-cutoff behaviour. Reuses `userPlan`
+    // already resolved above for the DM-limit billing gate.
+    const planAllowsPro = userPlan === 'pro' || userPlan === 'business' || userPlan === 'trial';
+
     try {
+        // ── Heart reaction on inbound message (builder_v2 + opt-in) ────
+        // Best-effort: fires when reactWithHeart is on and we have an
+        // inbound message id (story-reply / DM auto-responder). The
+        // call swallows API failures so the main DM still proceeds.
+        if (
+            activeAutomation.dm_type === 'builder_v2'
+            && Boolean(activeAutomation.settings_config?.reactWithHeart)
+            && inboundMid
+            && platform === 'instagram'
+        ) {
+            try {
+                await sendHeartReaction(
+                    account.ig_user_id, commenterId, inboundMid, token, !account.fb_page_access_token,
+                );
+                console.log(`[Webhook] Heart reaction sent on mid ${inboundMid}`);
+            } catch (err) {
+                console.warn('[Webhook] Heart reaction failed (non-fatal):', err.message);
+            }
+        }
+
+        // ── Email Collector — queue the user for email capture ────────
+        // The actual ask message rides the standard builder_v2 enqueue
+        // path below (it lives at dm_config.message). Here we just
+        // insert an email_collect_queue row so when the user replies,
+        // the existing handleEmailCollectorReply picks it up,
+        // validates the email, and fires the thank-you message.
+        // Pro/Trial only — saved rows on a downgraded account stop
+        // capturing emails (the ask message itself still goes out as
+        // a normal DM, but no queue row means no follow-up capture).
+        if (
+            activeAutomation.dm_type === 'builder_v2'
+            && activeAutomation.settings_config?.templateType === 'email-collector'
+            && planAllowsPro
+        ) {
+            try {
+                await supabase.from('email_collect_queue').insert({
+                    automation_id:        activeAutomation.id,
+                    account_id:           post.account_id,
+                    recipient_ig_id:      commenterId,
+                    ig_sender_id:         account.ig_user_id,
+                    confirmation_message: activeAutomation.settings_config?.emailThanksMessage || '',
+                    status:               'awaiting_email',
+                });
+            } catch (err) {
+                console.warn('[Webhook] email_collect_queue insert failed:', err.message);
+            }
+        } else if (
+            activeAutomation.dm_type === 'builder_v2'
+            && activeAutomation.settings_config?.templateType === 'email-collector'
+            && !planAllowsPro
+        ) {
+            console.log(`[Webhook] Skipping email-collector queue — user ${account.user_id} is on ${userPlan}`);
+        }
+
         if (activeAutomation.dm_type === 'follow_up') {
-            await handleFollowUpAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token, trackingMap, commenterUsername, platform);
-            return true;
+            await handleFollowUpAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token, trackingMap, commenterUsername, platform, out.firstName);
+            out.fired = true;
+            return out;
         }
 
         if (activeAutomation.dm_type === 'email_collector') {
-            await handleEmailCollectorAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token, useIgApi, commenterUsername, platform);
-            return true;
+            // Legacy email-collector path — same Pro gate as builder_v2.
+            if (!planAllowsPro) {
+                console.log(`[Webhook] Skipping legacy email-collector — user ${account.user_id} is on ${userPlan}`);
+                return out;
+            }
+            await handleEmailCollectorAutomation(supabase, activeAutomation, post, commenterId, commentId, commentText, senderId, token, useIgApi, commenterUsername, platform, out.firstName);
+            out.fired = true;
+            return out;
+        }
+
+        // ── Conditional follow-gate for builder_v2 ─────────────────────
+        // When askToFollow is on, we only gate non-followers. Existing
+        // followers get the normal builder_v2 main DM with no extra
+        // confirmation step (Manychat-style — gate is invisible to
+        // people who already follow). For non-followers we send the
+        // gate message and queue them for YES verification, after
+        // which the existing dm_followup_queue YES handler routes
+        // them to sendRewardDM(dm_type='builder_v2', ...) with the
+        // saved inner config.
+        //
+        // Pro/Trial only — if a user built askToFollow on Trial and
+        // then downgraded, the gate skips and the main DM goes out
+        // ungated (still better than blocking the DM entirely).
+        if (activeAutomation.dm_type === 'builder_v2'
+            && Boolean(activeAutomation.settings_config?.askToFollow)
+            && planAllowsPro) {
+            // FB doesn't expose follower-list, so we only gate IG. On
+            // FB platform we fall through to the normal send.
+            if (platform === 'instagram') {
+                let isFollower = null;
+                try {
+                    isFollower = await checkUserIsFollower(account.ig_user_id, commenterId, token);
+                } catch (err) {
+                    console.warn('[Webhook] Follow check threw — sending DM anyway:', err.message);
+                }
+                // null = API failed → don't punish the user; treat as
+                // "follower" and send the DM. false = confirmed not
+                // following → fire the gate flow.
+                if (isFollower === false) {
+                    const settings = activeAutomation.settings_config || {};
+                    const gateMessage = resolveMessageVariables(
+                        settings.askToFollowMessage
+                          || 'Hey {first_name}! Follow us first and reply YES so I can send your link 🎁',
+                        { username: commenterUsername || 'there', first_name: out.firstName || 'there' },
+                    );
+                    try {
+                        await sendFollowGateDM(
+                            account.ig_user_id, commenterId, gateMessage, token,
+                            !account.fb_page_access_token, commentId,
+                            { confirmTitle: settings.askToFollowButtonText || "I'm following!" },
+                        );
+                        await supabase.from('dm_followup_queue').insert({
+                            automation_id:         activeAutomation.id,
+                            account_id:            post.account_id,
+                            recipient_ig_id:       commenterId,
+                            ig_sender_id:          account.ig_user_id,
+                            gate_message:          gateMessage,
+                            // Reuse the gate copy for retry nudges so we
+                            // don't have a second editable field cluttering
+                            // the builder UI.
+                            nudge_message:         gateMessage,
+                            decline_message:       "No worries! Follow us and reply YES whenever you're ready 🙌",
+                            confirmation_keywords: ['yes', 'done', 'followed', 'ok'],
+                            max_retries:           3,
+                            // YES handler reads these to dispatch the reward
+                            // DM via sendRewardDM. We point it back at the
+                            // same builder_v2 config we'd have sent directly.
+                            link_dm_type:          'builder_v2',
+                            link_dm_config:        activeAutomation.dm_config,
+                        });
+                        await supabase.from('dm_sent_log').insert({
+                            automation_id:        activeAutomation.id,
+                            post_id:              post.id,
+                            recipient_ig_id:      commenterId,
+                            recipient_username:   commenterUsername,
+                            recipient_first_name: out.firstName,
+                            comment_id:           commentId,
+                            comment_text:         commentText,
+                            status:               'sent',
+                            platform,
+                            sent_at:              new Date().toISOString(),
+                        });
+                        console.log(`[Webhook] Gate sent for non-follower ${commenterId}`);
+                        out.fired = true;
+                        return out;
+                    } catch (err) {
+                        console.warn('[Webhook] Gate send failed (falling through):', err.message);
+                    }
+                }
+            }
+            // Follower (or follower-check skipped): fall through to
+            // the normal builder_v2 enqueue path below. No gate sent.
         }
 
         // ── All other types — reply immediately (if enabled), enqueue the DM ──
         // commentReplyEnabled defaults to true: undefined / null on legacy
         // rows must keep the existing "always reply" behavior. The user has
         // to explicitly set it to false to suppress the reply.
-        const commentReplyEnabled = settingsConfig.commentReplyEnabled !== false;
+        // For builder_v2 rows, public reply is gated by `replyPublicly`
+        // and randomly picked from the `publicReplies` pool (only entries
+        // currently flagged enabled). Legacy rows keep their existing
+        // commentReplyEnabled-defaults-true behavior.
+        const isBuilderV2 = activeAutomation.dm_type === 'builder_v2';
+        const commentReplyEnabled = isBuilderV2
+            ? Boolean(settingsConfig.replyPublicly)
+            : (settingsConfig.commentReplyEnabled !== false);
         if (commentReplyEnabled) {
-            // Neutral default \u2014 works for keyword / all-comments / mentions /
-            // emoji automations alike. Users who specifically need
-            // follow-gate copy ("follow and comment again") can write it
-            // themselves on the SettingsTab textarea.
             const DEFAULT_COMMENT_REPLY = 'Hey! Just sent you a DM \ud83d\udce9 \u2014 check your inbox.';
-            const replyMsg = settingsConfig.replyMessage || settingsConfig.autoReplyText || DEFAULT_COMMENT_REPLY;
+            let replyMsg = null;
+            if (isBuilderV2 && Array.isArray(settingsConfig.publicReplies)) {
+                const enabledReplies = settingsConfig.publicReplies
+                    .filter((r) => r && r.enabled && typeof r.text === 'string' && r.text.trim());
+                if (enabledReplies.length > 0) {
+                    // Random pick \u2014 the same fan getting two DMs in a row
+                    // sees a different public reply each time.
+                    replyMsg = enabledReplies[Math.floor(Math.random() * enabledReplies.length)].text;
+                }
+            }
+            replyMsg = replyMsg || settingsConfig.replyMessage || settingsConfig.autoReplyText || DEFAULT_COMMENT_REPLY;
             try {
                 await replyToComment(commentId, resolveMessageVariables(replyMsg, context), token, useIgApi);
                 console.log('[Webhook] Comment reply sent');
@@ -827,23 +1146,24 @@ async function processAutomationForComment(supabase, post, commentText, commente
         }
 
         const { error: enqErr } = await supabase.from('dm_queue').insert({
-            user_id:            automation.user_id,
-            account_id:         post.account_id,
-            automation_id:      automation.id,
-            post_id:            post.id,
-            recipient_ig_id:    commenterId,
-            recipient_username: commenterUsername,
-            comment_id:         commentId,
-            comment_text:       commentText,
+            user_id:              automation.user_id,
+            account_id:           post.account_id,
+            automation_id:        automation.id,
+            post_id:              post.id,
+            recipient_ig_id:      commenterId,
+            recipient_username:   commenterUsername,
+            recipient_first_name: out.firstName,
+            comment_id:           commentId,
+            comment_text:         commentText,
             platform,
-            dm_type:            activeAutomation.dm_type,
-            dm_config:          activeAutomation.dm_config,
-            tracking_map:       trackingMap,
-            user_plan:          userPlan,
-            queue_reason:       'overflow',
-            priority:           5,
-            status:             'pending',
-            scheduled_after:    new Date(Date.now() + delayMs).toISOString(),
+            dm_type:              activeAutomation.dm_type,
+            dm_config:            activeAutomation.dm_config,
+            tracking_map:         trackingMap,
+            user_plan:            userPlan,
+            queue_reason:         'overflow',
+            priority:             5,
+            status:               'pending',
+            scheduled_after:      new Date(Date.now() + delayMs).toISOString(),
         });
 
         // Concurrent webhook deliveries can both pass the existingQueue check
@@ -853,7 +1173,8 @@ async function processAutomationForComment(supabase, post, commentText, commente
         if (enqErr) {
             if (enqErr.code === '23505') {
                 console.log(`[Webhook] DM already queued (dedup race) for ${commenterId} on comment ${commentId}`);
-                return true;
+                out.fired = true;
+                return out;
             }
             throw enqErr;
         }
@@ -889,21 +1210,25 @@ async function processAutomationForComment(supabase, post, commentText, commente
                 .catch((e) => console.warn('[Webhook] A/B winner check failed (non-fatal):', e.message));
         }
 
-        return true;
+        out.fired = true;
+        return out;
     } catch (err) {
         console.error('[Webhook] Failed to enqueue DM:', err.message);
         await supabase.from('dm_sent_log').insert({
-            automation_id:   automation.id,
-            post_id:         post.id,
-            recipient_ig_id: commenterId,
-            comment_id:      commentId,
-            comment_text:    commentText,
-            status:          'failed',
-            error_message:   `enqueue failed: ${err.message}`,
-            ab_variant:      abVariant,
+            automation_id:        automation.id,
+            post_id:              post.id,
+            recipient_ig_id:      commenterId,
+            recipient_username:   commenterUsername,
+            recipient_first_name: out.firstName,
+            comment_id:           commentId,
+            comment_text:         commentText,
+            status:               'failed',
+            error_message:        `enqueue failed: ${err.message}`,
+            ab_variant:           abVariant,
             platform,
-            sent_at:         new Date().toISOString(),
+            sent_at:              new Date().toISOString(),
         });
+        return out;
     }
 }
 
@@ -987,7 +1312,7 @@ async function checkAndDeclareAbWinner(supabase, automation) {
 
 // ─── Follow-Up Automation ─────────────────────────────────────────────────────
 
-async function handleFollowUpAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken, trackingMap = {}, commenterUsername = null, platform = 'instagram') {
+async function handleFollowUpAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken, trackingMap = {}, commenterUsername = null, platform = 'instagram', commenterFirstName = null) {
     const dmConfig = automation.dm_config;
 
     const { data: existing } = await supabase
@@ -1000,10 +1325,11 @@ async function handleFollowUpAutomation(supabase, automation, post, commenterId,
         return;
     }
 
-    const personalForGate = commenterUsername || 'there';
+    const usernameForGate  = commenterUsername || 'there';
+    const firstNameForGate = commenterFirstName || 'there';
     const gateMessage = resolveMessageVariables(
         dmConfig.gateMessage || 'Hey! Follow our account and reply YES to get the link \ud83d\ude0a',
-        { username: personalForGate, first_name: personalForGate },
+        { username: usernameForGate, first_name: firstNameForGate },
     );
 
     try {
@@ -1027,32 +1353,34 @@ async function handleFollowUpAutomation(supabase, automation, post, commenterId,
         });
 
         await supabase.from('dm_sent_log').insert({
-            automation_id:      automation.id, post_id: post.id,
-            recipient_ig_id:    commenterId,   recipient_username: commenterUsername,
-            comment_id:         commentId,
-            comment_text:       commentText,   status: 'sent',
+            automation_id:        automation.id, post_id: post.id,
+            recipient_ig_id:      commenterId,   recipient_username: commenterUsername,
+            recipient_first_name: commenterFirstName,
+            comment_id:           commentId,
+            comment_text:         commentText,   status: 'sent',
             platform,
-            sent_at:            new Date().toISOString(),
+            sent_at:              new Date().toISOString(),
         });
 
         console.log(`[Webhook] Follow-gate DM sent and queued for ${commenterId}`);
     } catch (err) {
         console.error('[Webhook] Failed to send follow-gate DM:', err.message);
         await supabase.from('dm_sent_log').insert({
-            automation_id:      automation.id, post_id: post.id,
-            recipient_ig_id:    commenterId,   recipient_username: commenterUsername,
-            comment_id:         commentId,
-            comment_text:       commentText,   status: 'failed',
-            error_message:      err.message,
+            automation_id:        automation.id, post_id: post.id,
+            recipient_ig_id:      commenterId,   recipient_username: commenterUsername,
+            recipient_first_name: commenterFirstName,
+            comment_id:           commentId,
+            comment_text:         commentText,   status: 'failed',
+            error_message:        err.message,
             platform,
-            sent_at:            new Date().toISOString(),
+            sent_at:              new Date().toISOString(),
         });
     }
 }
 
 // ─── Email Collector Comment Handler ─────────────────────────────────────────
 
-async function handleEmailCollectorAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken, useIgApi = false, commenterUsername = null, platform = 'instagram') {
+async function handleEmailCollectorAutomation(supabase, automation, post, commenterId, commentId, commentText, igSenderId, accessToken, useIgApi = false, commenterUsername = null, platform = 'instagram', commenterFirstName = null) {
     const dmConfig = automation.dm_config;
 
     const { data: existing } = await supabase
@@ -1065,7 +1393,8 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
         return;
     }
 
-    const personalForAsk = commenterUsername || 'there';
+    const usernameForAsk  = commenterUsername || 'there';
+    const firstNameForAsk = commenterFirstName || 'there';
     // Resolve placeholders + apply branding so free users get the AutoDM
     // footer and Pro users get their custom branding (or none if cleared) \u2014
     // matching what every other DM type does.
@@ -1073,7 +1402,7 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
     const askMessage = applyBranding(
         resolveMessageVariables(
             dmConfig.emailAskMessage || 'Hey! Could you share your email address? \ud83d\udce7',
-            { username: personalForAsk, first_name: personalForAsk },
+            { username: usernameForAsk, first_name: firstNameForAsk },
         ),
         dmConfig,
         userPlanForAsk,
@@ -1094,22 +1423,24 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
         });
 
         await supabase.from('dm_sent_log').insert({
-            automation_id:      automation.id, post_id: post.id,
-            recipient_ig_id:    commenterId,   recipient_username: commenterUsername,
-            comment_id:         commentId,
-            comment_text:       commentText,   status: 'sent',
+            automation_id:        automation.id, post_id: post.id,
+            recipient_ig_id:      commenterId,   recipient_username: commenterUsername,
+            recipient_first_name: commenterFirstName,
+            comment_id:           commentId,
+            comment_text:         commentText,   status: 'sent',
             platform,
-            sent_at:            new Date().toISOString(),
+            sent_at:              new Date().toISOString(),
         });
 
         console.log(`[Webhook/Email] Email ask DM sent for ${commenterId}`);
     } catch (err) {
         console.error('[Webhook/Email] Failed to send email ask DM:', err.message);
         await supabase.from('dm_sent_log').insert({
-            automation_id:      automation.id, post_id: post.id,
-            recipient_ig_id:    commenterId,   recipient_username: commenterUsername,
-            comment_id:         commentId,
-            comment_text:       commentText,   status: 'failed',
+            automation_id:        automation.id, post_id: post.id,
+            recipient_ig_id:      commenterId,   recipient_username: commenterUsername,
+            recipient_first_name: commenterFirstName,
+            comment_id:           commentId,
+            comment_text:         commentText,   status: 'failed',
             error_message:      err.message,
             platform,
             sent_at:            new Date().toISOString(),
@@ -1195,21 +1526,23 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
         const dmConfig = ownerAuto?.dm_config || {};
         const ownerPlan = await getUserPlan(supabase, ownerUserId);
 
-        // recipient_username may have been captured on the original ask DM \u2014
-        // fall back to 'there' if missing (e.g. story-mention edge cases).
+        // recipient_username + recipient_first_name may have been captured on
+        // the original ask DM \u2014 fall back to 'there' if missing (e.g. story-
+        // mention edge cases).
         const { data: askLog } = await supabase
-            .from('dm_sent_log').select('recipient_username')
+            .from('dm_sent_log').select('recipient_username, recipient_first_name')
             .eq('automation_id', queueEntry.automation_id)
             .eq('recipient_ig_id', senderId)
             .order('sent_at', { ascending: false }).limit(1).maybeSingle();
-        const personalForConfirm = askLog?.recipient_username || 'there';
+        const usernameForConfirm  = askLog?.recipient_username || 'there';
+        const firstNameForConfirm = askLog?.recipient_first_name || 'there';
 
         const rawConfirm = queueEntry.confirmation_message ||
             `Thanks! \ud83c\udf89 We've saved your email ({email}) and will be in touch soon.`;
         const confirmMsg = applyBranding(
             resolveMessageVariables(rawConfirm, {
-                username:   personalForConfirm,
-                first_name: personalForConfirm,
+                username:   usernameForConfirm,
+                first_name: firstNameForConfirm,
                 email,
             }),
             dmConfig,
@@ -1233,6 +1566,77 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
 // Returns true when an automation was attempted (handled or filtered),
 // false when no story-row / no active automation existed for this story —
 // the caller falls back to the legacy follow-gate / email-collector flow.
+// ─── DM Auto Responder ───────────────────────────────────────────────────────
+// Inbound DM (user-initiated, no story-reply context) gets matched
+// against the user's active builder_v2 rows where templateType is
+// 'dm-auto-responder'. First match (by trigger specificity) wins,
+// same ranking rules as the comment path. We synthesize a comment_id
+// from the inbound message id so dedup works even on retries.
+async function handleDmAutoResponder(supabase, igAccountId, senderId, msgText, inboundMid) {
+    if (!senderId || !msgText?.trim()) return false;
+
+    // Look up the connected account to scope automations to this user.
+    const { data: account } = await supabase
+        .from('connected_accounts')
+        .select('id, user_id, ig_user_id, fb_page_access_token, access_token, default_config')
+        .eq('ig_user_id', igAccountId)
+        .maybeSingle();
+    if (!account) return false;
+
+    const { data: candidates } = await supabase
+        .from('dm_automations')
+        .select('*')
+        .eq('user_id', account.user_id)
+        .eq('dm_type', 'builder_v2')
+        .eq('is_active', true)
+        .filter('settings_config->>templateType', 'eq', 'dm-auto-responder');
+    if (!candidates || candidates.length === 0) return false;
+
+    // Match: anyKeyword wins everything; otherwise need a keyword hit.
+    const lowerText = msgText.toLowerCase().trim();
+    const matchOne = (a) => {
+        const tc = a.trigger_config || {};
+        if (tc.anyKeyword) return true;
+        const kws = (tc.keywords || []).map((k) => String(k).toLowerCase());
+        return kws.some((kw) => kw && lowerText.includes(kw));
+    };
+    // Specificity rank — keyword automations beat any-keyword.
+    const rank = (a) => (a.trigger_config?.anyKeyword ? 1 : 0);
+    const matched = [...candidates].filter(matchOne).sort((x, y) => rank(x) - rank(y))[0];
+    if (!matched) return false;
+
+    // Dedup: synthesize a stable id so the same inbound DM doesn't
+    // fire twice on a Meta retry. Falls through to mid → senderId+text.
+    const syntheticCommentId = `dm_auto:${inboundMid || `${senderId}:${msgText.slice(0, 80)}`}`;
+
+    const { data: alreadyLogged } = await supabase
+        .from('dm_sent_log')
+        .select('id')
+        .eq('automation_id', matched.id)
+        .eq('comment_id', syntheticCommentId)
+        .maybeSingle();
+    if (alreadyLogged) {
+        console.log('[Webhook/DMAutoResponder] Already handled, skipping');
+        return true;
+    }
+
+    // Reuse processAutomationForComment — synthesize a "post-less"
+    // post object with just account_id so the existing code path
+    // (billing gate, idempotency, enqueue) works without divergence.
+    const fakePost = { id: null, account_id: account.id };
+
+    try {
+        await processAutomationForComment(
+            supabase, fakePost, msgText, senderId, syntheticCommentId,
+            'instagram', null, null, inboundMid, matched,
+        );
+        return true;
+    } catch (err) {
+        console.warn('[Webhook/DMAutoResponder] processing failed:', err.message);
+        return false;
+    }
+}
+
 async function handleStoryReplyEvent(supabase, igAccountId, { senderId, storyMediaId, text, mid }) {
     if (!senderId || !storyMediaId || !text?.trim()) {
         console.log('[Webhook/StoryReply] Missing required fields — skipping');
@@ -1274,12 +1678,12 @@ async function handleStoryReplyEvent(supabase, igAccountId, { senderId, storyMed
     console.log(`[Webhook/StoryReply] Dispatching automation for story ${storyMediaId}, sender ${senderId}, dedup=${syntheticCommentId}`);
 
     try {
-        const perPostFired = await processAutomationForComment(
-            supabase, post, text, senderId, syntheticCommentId, 'instagram', null,
+        const result = await processAutomationForComment(
+            supabase, post, text, senderId, syntheticCommentId, 'instagram', null, null, mid,
         );
         if (post.account_id) {
             await processGlobalTriggers(
-                supabase, post, text, senderId, syntheticCommentId, 'instagram', perPostFired, null,
+                supabase, post, text, senderId, syntheticCommentId, 'instagram', result.fired, null, result.firstName,
             );
         }
     } catch (err) {
@@ -1357,11 +1761,15 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
         // handle from media.from.username when Meta returns it; otherwise
         // fall back to the friendly default that the rest of the pipeline
         // (process-queue, sendback, flow-steps) already uses.
-        const personal = mentionerHandle || 'there';
+        // {first_name} pulls the display name via the same lookup helper as
+        // comment-trigger DMs; falls back to handle, then to "there".
+        const mentionerFirstName = await fetchIgUserFirstName(mentionerId, mentionToken, useIgApi);
+        const usernameForMention  = mentionerHandle || 'there';
+        const firstNameForMention = mentionerFirstName || 'there';
         const message  = applyBranding(
             resolveMessageVariables(mentionConfig.message, {
-                username:   personal,
-                first_name: personal,
+                username:   usernameForMention,
+                first_name: firstNameForMention,
             }),
             mentionConfig,
             mentionUserPlan,
@@ -1369,15 +1777,16 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
         await sendTextDM(account.ig_user_id, mentionerId, message, mentionToken, useIgApi);
 
         await supabase.from('dm_sent_log').insert({
-            automation_id:      null,
-            post_id:            null,
-            recipient_ig_id:    mentionerId,
-            recipient_username: mentionerHandle,
-            comment_id:         media_id,
-            comment_text:       '[story mention]',
-            status:             'sent',
-            platform:           'instagram',  // Story mentions are Instagram-only
-            sent_at:             new Date().toISOString(),
+            automation_id:        null,
+            post_id:              null,
+            recipient_ig_id:      mentionerId,
+            recipient_username:   mentionerHandle,
+            recipient_first_name: mentionerFirstName,
+            comment_id:           media_id,
+            comment_text:         '[story mention]',
+            status:               'sent',
+            platform:             'instagram',  // Story mentions are Instagram-only
+            sent_at:              new Date().toISOString(),
         });
 
         console.log(`[Webhook/Mention] \u2705 DM sent to ${mentionerId}`);
@@ -1388,7 +1797,7 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
 
 // ─── Global Triggers ─────────────────────────────────────────────────────────
 
-async function processGlobalTriggers(supabase, post, commentText, commenterId, commentId, platform, perPostFired = false, commenterUsername = null) {
+async function processGlobalTriggers(supabase, post, commentText, commenterId, commentId, platform, perPostFired = false, commenterUsername = null, commenterFirstName = null) {
     const { data: globalAutomations } = await supabase
         .from('global_automations').select('*')
         .eq('account_id', post.account_id).eq('is_active', true);
@@ -1400,6 +1809,15 @@ async function processGlobalTriggers(supabase, post, commentText, commenterId, c
         .select('access_token, fb_page_access_token, ig_user_id, fb_page_id')
         .eq('id', post.account_id).single();
     if (!account) return;
+
+    // If the entry handler didn't pass a firstName (e.g. processAutomationForComment
+    // bailed before its account-load + Graph API fetch), do the lookup here for IG
+    // commenters so global automations also get real {first_name} substitution.
+    if (!commenterFirstName && platform === 'instagram') {
+        const lookupToken = account.fb_page_access_token || account.access_token;
+        const useIgApiForLookup = !account.fb_page_access_token;
+        commenterFirstName = await fetchIgUserFirstName(commenterId, lookupToken, useIgApiForLookup);
+    }
 
     const lowerComment = commentText.toLowerCase().trim();
     // All global automations for the same account belong to the same user
@@ -1459,14 +1877,15 @@ async function processGlobalTriggers(supabase, post, commentText, commenterId, c
 
         try {
             await supabase.from('dm_queue').insert({
-                user_id:            ga.user_id,
-                account_id:         post.account_id,
-                automation_id:      ga.id,
-                post_id:            post.id,
-                recipient_ig_id:    commenterId,
-                recipient_username: commenterUsername,
-                comment_id:         commentId,
-                comment_text:       commentText,
+                user_id:              ga.user_id,
+                account_id:           post.account_id,
+                automation_id:        ga.id,
+                post_id:              post.id,
+                recipient_ig_id:      commenterId,
+                recipient_username:   commenterUsername,
+                recipient_first_name: commenterFirstName,
+                comment_id:           commentId,
+                comment_text:         commentText,
                 platform,
                 dm_type:            ga.dm_type,
                 dm_config:          ga.dm_config,

@@ -1,220 +1,254 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Instagram, Check, ChevronRight, Shield } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useStyles } from '@/lib/useStyles';
-import darkStyles from './ConnectAccount.module.css';
-import lightStyles from './ConnectAccount.light.module.css';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Instagram, Check, ShieldCheck, Sparkles, ArrowRight, Loader2, ChevronRight } from 'lucide-react';
 
 const CONNECTION_OPTIONS = [
-    {
-        id: 'instagram',
-        title: 'Instagram Account',
-        iconBg: 'linear-gradient(135deg, #F58529, #DD2A7B, #8134AF)',
-        description: 'Reply to comments and DMs from your Instagram business account.',
-        features: [
-            'AutoDM on post, reel & story comments',
-            'Story replies & mentions',
-            'Welcome openers & follow gate',
-            'Email lead capture',
-            'A/B testing on every DM type',
-        ],
-        buttonLabel: 'Connect Instagram',
-        buttonColor: '#E1306C',
-        badge: { text: 'Recommended', variant: 'recommended' },
-    },
-    {
-        id: 'facebook',
-        title: 'Facebook Page',
-        iconBg: '#1877F2',
-        // Honest list of what actually works on FB. Rich DM types fall back
-        // to plain text in send-dm.js, and Stories / Welcome Openers /
-        // Follow Gate are Instagram-only, so we don't promise them here.
-        description: 'Comment-triggered DMs from your Facebook Page (text replies only).',
-        features: [
-            'Comment-triggered text DMs',
-            'Auto-reply on comments',
-            'Keyword & global triggers',
-            'A/B testing (text variants)',
-        ],
-        buttonLabel: 'Connect Facebook',
-        buttonColor: '#1877F2',
-        badge: { text: 'Limited features', variant: 'limited' },
-    },
-    {
-        id: 'both',
-        title: 'Instagram + Facebook',
-        iconBg: 'linear-gradient(135deg, #1E293B, #334155)',
-        description: 'Connect both for complete coverage across platforms.',
-        features: [
-            'Everything in Instagram + Facebook',
-            'Single dashboard for both inboxes',
-            'Cross-posted content auto-detection',
-        ],
-        buttonLabel: 'Coming soon',
-        buttonColor: '#1E293B',
-        badge: { text: 'Coming soon', variant: 'soon' },
-        disabled: true,
-    },
+  {
+    id: 'instagram',
+    title: 'Instagram Account',
+    icon: 'instagram',
+    description: 'Reply to comments and DMs from your Instagram Business or Creator account.',
+    features: [
+      'AutoDM on post, reel & story comments',
+      'Story replies & Story Mention Auto-DM',
+      'Ice Breakers & Ask-to-Follow gate',
+      'Email Collector lead capture',
+      'Real-time analytics & DM logs',
+    ],
+    buttonLabel: 'Connect Instagram',
+    badge: { text: 'Recommended', tone: 'recommended' },
+    cardTint: 'bg-[#FFF5F2]',          // soft peach (warm, on-brand)
+    iconBg: 'bg-gradient-to-br from-amber-400 via-pink-500 to-fuchsia-600', // IG gradient on icon ONLY (small)
+    badgeBg: 'bg-[#E63946]/10 text-[#E63946] border-[#E63946]/20',
+  },
+  {
+    id: 'facebook',
+    title: 'Facebook Page',
+    icon: 'facebook',
+    description: 'Comment-triggered DMs from your Facebook Page (text replies only).',
+    features: [
+      'Comment-triggered text DMs',
+      'Auto-reply on comments',
+      'Keyword triggers (any-post & per-post)',
+      'Real-time analytics & DM logs',
+    ],
+    buttonLabel: 'Connect Facebook',
+    badge: { text: 'Limited features', tone: 'limited' },
+    cardTint: 'bg-[#EEF1F4]',          // cool blue-gray (neutral)
+    iconBg: 'bg-[#1877F2]',
+    badgeBg: 'bg-amber-100 text-amber-700 border-amber-200',
+  },
+  {
+    id: 'both',
+    title: 'Instagram + Facebook',
+    icon: 'both',
+    description: 'Connect both for complete coverage across platforms.',
+    features: [
+      'Everything in Instagram + Facebook',
+      'Single dashboard for both inboxes',
+      'Cross-posted content auto-detection',
+    ],
+    buttonLabel: 'Coming soon',
+    badge: { text: 'Coming soon', tone: 'soon' },
+    cardTint: 'bg-neutral-100',
+    iconBg: 'bg-neutral-900',
+    badgeBg: 'bg-neutral-200 text-neutral-700 border-neutral-300',
+    disabled: true,
+  },
 ];
 
 const ERROR_MESSAGES = {
-    oauth_denied: 'You denied access. Please try again and grant the required permissions.',
-    missing_params: 'Something went wrong. Please try connecting again.',
-    invalid_state: 'Invalid session. Please try connecting again.',
-    no_instagram_account: 'No Instagram Business account found. Make sure your Instagram account is a Business or Creator account linked to a Facebook Page.',
-    no_facebook_page: 'No Facebook Page found. You need at least one Facebook Page to connect.',
-    save_failed: 'Failed to save your account. Please try again.',
-    oauth_failed: 'Connection failed. Please try again.',
+  oauth_denied:        'You denied access. Please try again and grant the required permissions.',
+  missing_params:      'Something went wrong. Please try connecting again.',
+  invalid_state:       'Invalid session. Please try connecting again.',
+  no_instagram_account:'No Instagram Business account found. Make sure your Instagram account is a Business or Creator account linked to a Facebook Page.',
+  no_facebook_page:    'No Facebook Page found. You need at least one Facebook Page to connect.',
+  save_failed:         'Failed to save your account. Please try again.',
+  oauth_failed:        'Connection failed. Please try again.',
 };
 
+function PlatformIcon({ icon, className = 'h-5 w-5' }) {
+  if (icon === 'instagram') return <Instagram className={className} strokeWidth={2} />;
+  if (icon === 'facebook') return <span className={`${className} flex items-center justify-center font-extrabold text-white`} style={{ fontFamily: 'Arial, sans-serif' }}>f</span>;
+  return <Sparkles className={className} strokeWidth={2} />;
+}
+
 export default function ConnectAccount() {
-    const styles = useStyles(darkStyles, lightStyles);
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const [errorMessage, setErrorMessage] = useState('');
-    const [isConnecting, setIsConnecting] = useState('');
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isConnecting, setIsConnecting] = useState('');
 
-    useEffect(() => {
-        const error = searchParams.get('error');
-        const message = searchParams.get('message');
-        if (error) {
-            setErrorMessage(ERROR_MESSAGES[error] || message || 'An unknown error occurred.');
-        }
-        const connected = searchParams.get('connected');
-        if (connected) {
-            router.refresh();
-        }
-    }, [searchParams, router]);
+  useEffect(() => {
+    const error   = searchParams.get('error');
+    const message = searchParams.get('message');
+    if (error) setErrorMessage(ERROR_MESSAGES[error] || message || 'An unknown error occurred.');
 
-    const handleConnect = (connectionType) => {
-        setIsConnecting(connectionType);
-        setErrorMessage('');
-        window.location.href = `/api/auth/meta/connect?type=${connectionType}`;
-    };
+    const connected = searchParams.get('connected');
+    if (connected) router.refresh();
+  }, [searchParams, router]);
 
-    return (
-        <div className={styles.container}>
-            {/* Hero Section */}
-            <div className={styles.hero}>
-                <div className={styles.heroIconGroup}>
-                    <div className={`${styles.heroIcon} ${styles.heroIconInstagram}`}>
-                        <Instagram size={24} color="white" />
-                    </div>
-                    <div className={styles.heroConnector} />
-                    <div className={`${styles.heroIcon} ${styles.heroIconFacebook}`}>
-                        <span style={{ color: 'white', fontWeight: 800, fontSize: '1.5rem', fontFamily: 'Arial' }}>f</span>
-                    </div>
-                </div>
+  const handleConnect = (connectionType) => {
+    setIsConnecting(connectionType);
+    setErrorMessage('');
+    window.location.href = `/api/auth/meta/connect?type=${connectionType}`;
+  };
 
-                <div className={styles.header}>
-                    <h1 className={styles.title}>Connect Your Account</h1>
-                    <p className={styles.subtitle}>
-                        Choose how you want to connect. Each option enables different automation features.
-                    </p>
-                </div>
-            </div>
+  return (
+    <div className="relative min-h-screen">
+      {/* Soft crimson tint, same gradient family as the auth pages — gives
+          the "first time logging in" surface a brand bridge from signup. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 40% at 50% 0%, rgba(142,27,38,0.07) 0%, transparent 65%)',
+        }}
+      />
 
-            {/* Step Indicator */}
-            <div className={styles.steps}>
-                <div className={`${styles.step} ${styles.activeStep}`}>
-                    <span className={styles.stepNumber}>1</span>
-                    Choose Platform
-                </div>
-                <ChevronRight size={14} className={styles.stepArrow} />
-                <div className={styles.step}>
-                    <span className={styles.stepNumber}>2</span>
-                    Authorize
-                </div>
-                <ChevronRight size={14} className={styles.stepArrow} />
-                <div className={styles.step}>
-                    <span className={styles.stepNumber}>3</span>
-                    Start Automating
-                </div>
-            </div>
-
-            {errorMessage && (
-                <div className={styles.errorBanner}>
-                    <p>{errorMessage}</p>
-                </div>
-            )}
-
-            {/* Platform Cards */}
-            <div className={styles.cards}>
-                {CONNECTION_OPTIONS.map((option) => (
-                    <div
-                        key={option.id}
-                        className={`${styles.card} ${option.disabled ? styles.cardDisabled : ''}`}
-                    >
-                        {option.badge && (
-                            <span className={`${styles.cardBadge} ${styles[`cardBadge_${option.badge.variant}`]}`}>
-                                {option.badge.text}
-                            </span>
-                        )}
-                        <div className={styles.cardHeader}>
-                            <div
-                                className={styles.cardIcon}
-                                style={{ background: option.iconBg }}
-                            >
-                                {option.id === 'facebook' ? (
-                                    <span className={styles.fbIcon}>f</span>
-                                ) : option.id === 'instagram' ? (
-                                    <Instagram size={20} color="white" />
-                                ) : (
-                                    <span style={{ color: 'white', fontSize: '1rem' }}>⚡</span>
-                                )}
-                            </div>
-                            <h3 className={styles.cardTitle}>{option.title}</h3>
-                        </div>
-
-                        <p className={styles.cardDesc}>{option.description}</p>
-
-                        <ul className={styles.featureList}>
-                            {option.features.map((feature) => (
-                                <li key={feature} className={styles.featureItem}>
-                                    <Check size={14} className={styles.featureCheckIcon} />
-                                    {feature}
-                                </li>
-                            ))}
-                        </ul>
-
-                        <button
-                            className={styles.connectBtn}
-                            style={option.disabled ? undefined : { backgroundColor: option.buttonColor }}
-                            onClick={() => !option.disabled && handleConnect(option.id)}
-                            disabled={!!isConnecting || option.disabled}
-                            title={option.disabled ? 'This option is not available yet' : undefined}
-                        >
-                            {isConnecting === option.id ? 'Connecting...' : option.buttonLabel}
-                        </button>
-                    </div>
-                ))}
-            </div>
-
-            {/* Trust Footer */}
-            <div className={styles.footer}>
-                <span className={styles.partnerText}>
-                    <Shield size={14} />
-                    Official Meta Business Partner since 2026
-                </span>
-                <div className={styles.footerBadges}>
-                    <div className={styles.badge}>
-                        <span className={styles.metaLogo}>Ⓜ</span>
-                        <div>
-                            <span className={styles.badgeTitle}>Meta</span>
-                            <span className={styles.badgeSub}>Business Partner</span>
-                        </div>
-                    </div>
-                    <div className={styles.badge}>
-                        <span className={styles.metaLogo}>Ⓜ</span>
-                        <div>
-                            <span className={styles.badgeTitle}>Meta</span>
-                            <span className={styles.badgeSub}>Tech Provider</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <div className="relative mx-auto max-w-6xl px-6 py-12 sm:py-16">
+        {/* Hero */}
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm">
+            <ShieldCheck className="h-3.5 w-3.5 text-[#E63946]" />
+            Official Meta Business Partner
+          </span>
+          <h1 className="mt-5 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
+            Connect your account to get started
+          </h1>
+          <p className="mt-3 text-base text-neutral-600">
+            Choose how you want to connect. Each platform unlocks different automation features.
+          </p>
         </div>
-    );
+
+        {/* Step indicator */}
+        <ol className="mx-auto mt-8 flex max-w-xl items-center justify-center gap-2 text-xs font-medium text-neutral-500 sm:gap-3">
+          <li className="flex items-center gap-2">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#E63946] text-[11px] font-bold text-white">1</span>
+            <span className="text-neutral-900">Choose platform</span>
+          </li>
+          <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-neutral-400" strokeWidth={2.5} />
+          <li className="flex items-center gap-2">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-neutral-300 bg-white text-[11px] font-semibold text-neutral-500">2</span>
+            <span>Authorize</span>
+          </li>
+          <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-neutral-400" strokeWidth={2.5} />
+          <li className="flex items-center gap-2">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-neutral-300 bg-white text-[11px] font-semibold text-neutral-500">3</span>
+            <span>Start automating</span>
+          </li>
+        </ol>
+
+        {/* Error banner */}
+        {errorMessage && (
+          <div role="alert" className="mx-auto mt-8 max-w-2xl rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <span className="mr-2 font-semibold">Couldn&apos;t connect.</span>
+            {errorMessage}
+          </div>
+        )}
+
+        {/* Platform cards */}
+        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+          {CONNECTION_OPTIONS.map((option) => {
+            const isThisConnecting = isConnecting === option.id;
+            const isDisabled       = option.disabled || (isConnecting && !isThisConnecting);
+
+            return (
+              <div
+                key={option.id}
+                className={[
+                  'relative flex flex-col rounded-3xl border border-neutral-200 p-8 transition-shadow',
+                  option.cardTint,
+                  option.disabled
+                    ? 'opacity-60'
+                    : 'hover:border-neutral-300 hover:shadow-lg hover:shadow-neutral-200/80',
+                ].join(' ')}
+              >
+                {/* Floating badge */}
+                {option.badge && (
+                  <span className={[
+                    'absolute -top-3 left-6 inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider shadow-sm',
+                    option.badgeBg,
+                  ].join(' ')}>
+                    {option.badge.text}
+                  </span>
+                )}
+
+                {/* Icon */}
+                <span className={[
+                  'inline-flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-sm',
+                  option.iconBg,
+                ].join(' ')}>
+                  <PlatformIcon icon={option.icon} className="h-5 w-5" />
+                </span>
+
+                <h3 className="mt-5 text-lg font-bold text-neutral-900">{option.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-neutral-600">{option.description}</p>
+
+                <ul className="mt-5 flex-1 space-y-2.5">
+                  {option.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5">
+                      <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#E63946]" strokeWidth={3} />
+                      <span className="text-xs leading-relaxed text-neutral-700">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  type="button"
+                  onClick={() => !option.disabled && handleConnect(option.id)}
+                  disabled={isDisabled}
+                  className={[
+                    'mt-7 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors',
+                    option.disabled
+                      ? 'cursor-not-allowed bg-neutral-200 text-neutral-500'
+                      : 'bg-neutral-900 text-white shadow-sm hover:bg-black disabled:cursor-not-allowed disabled:opacity-60',
+                  ].join(' ')}
+                >
+                  {isThisConnecting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Redirecting…
+                    </>
+                  ) : (
+                    <>
+                      {option.buttonLabel}
+                      {!option.disabled && <ArrowRight className="h-4 w-4" />}
+                    </>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Trust footer — security-only message. The top pill already
+            establishes the Meta partnership, so we don't repeat the brand
+            here; this band is purely about HOW the connection works
+            (OAuth, no password handover). */}
+        <div className="mx-auto mt-12 flex max-w-2xl items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-5">
+          <span className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-neutral-900 text-white">
+            <ShieldCheck className="h-4 w-4" strokeWidth={2.5} />
+          </span>
+          <div className="leading-tight">
+            <p className="text-sm font-semibold text-neutral-900">Secure by design</p>
+            <p className="text-xs text-neutral-500">
+              Connect via official OAuth. Your password is never shared with us.
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-6 text-center text-xs text-neutral-500">
+          Need help connecting?{' '}
+          <Link href="mailto:support@autodm.pro" className="font-medium text-neutral-700 hover:text-neutral-900 transition-colors">
+            support@autodm.pro
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
 }

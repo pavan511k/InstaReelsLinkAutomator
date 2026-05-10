@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS dm_queue (
     post_id         uuid,           -- NULL ok (upsells have no post context)
     recipient_ig_id text NOT NULL,
     recipient_username text DEFAULT NULL,  -- captured at enqueue when known; nullable
+    recipient_first_name text DEFAULT NULL,  -- display-name first word; nullable when unavailable
     comment_id      text,
     comment_text    text,
     platform        text NOT NULL DEFAULT 'instagram',

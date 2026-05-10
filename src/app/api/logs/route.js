@@ -23,23 +23,6 @@ export async function GET(request) {
     const search   = searchParams.get('search')   || '';
 
     try {
-        // Fetch the user's automations only to build the post-info enrichment
-        // map (caption + thumbnail per row). The dm_sent_log query itself
-        // filters by user_id directly so logs survive automation deletions.
-        const { data: userAutomations } = await supabase
-            .from('dm_automations')
-            .select('id, post_id, instagram_posts(caption, thumbnail_url, media_url)')
-            .eq('user_id', user.id);
-
-        // automation → post lookup (caption + thumbnail for the table)
-        const autoMap = {};
-        for (const a of (userAutomations || [])) {
-            autoMap[a.id] = {
-                caption:      a.instagram_posts?.caption || 'No caption',
-                thumbnailUrl: a.instagram_posts?.thumbnail_url || a.instagram_posts?.media_url || null,
-            };
-        }
-
         // Date range filter
         let fromDate = null;
         if (range !== 'all') {
@@ -55,9 +38,13 @@ export async function GET(request) {
 
         // Build query — filter by user_id, the source of truth that matches
         // the sidebar's cached counter and survives automation deletions.
+        // post_id is included so we can resolve post info even when the
+        // automation has been deleted (FK SET NULLs automation_id on
+        // dm_sent_log; post_id stays intact since instagram_posts isn't
+        // cascade-deleted with the automation).
         let query = supabase
             .from('dm_sent_log')
-            .select('id, automation_id, recipient_ig_id, comment_text, status, error_message, sent_at, platform', { count: 'exact' })
+            .select('id, automation_id, post_id, recipient_ig_id, comment_text, status, error_message, sent_at, platform', { count: 'exact' })
             .eq('user_id', user.id)
             .order('sent_at', { ascending: false })
             .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -87,9 +74,49 @@ export async function GET(request) {
 
         if (error) throw error;
 
+        // Resolve post info via dm_sent_log.post_id directly. This survives
+        // automation deletion — RLS scopes the read to posts the user owns.
+        // Falls back to looking up via the automation only when post_id is
+        // null on the row (e.g. story-mention or chip-tap rows that don't
+        // have a post_id stored).
+        const postIds       = [...new Set((logs || []).map((l) => l.post_id).filter(Boolean))];
+        const orphanAutoIds = [...new Set((logs || [])
+            .filter((l) => !l.post_id && l.automation_id)
+            .map((l) => l.automation_id))];
+
+        const postMap = {};
+        if (postIds.length > 0) {
+            const { data: postRows } = await supabase
+                .from('instagram_posts')
+                .select('id, caption, thumbnail_url, media_url')
+                .in('id', postIds);
+            for (const p of (postRows || [])) {
+                postMap[p.id] = {
+                    caption:      p.caption || 'No caption',
+                    thumbnailUrl: p.thumbnail_url || p.media_url || null,
+                };
+            }
+        }
+
+        const autoMap = {};
+        if (orphanAutoIds.length > 0) {
+            const { data: autoRows } = await supabase
+                .from('dm_automations')
+                .select('id, instagram_posts(caption, thumbnail_url, media_url)')
+                .in('id', orphanAutoIds);
+            for (const a of (autoRows || [])) {
+                autoMap[a.id] = {
+                    caption:      a.instagram_posts?.caption || 'No caption',
+                    thumbnailUrl: a.instagram_posts?.thumbnail_url || a.instagram_posts?.media_url || null,
+                };
+            }
+        }
+
         // Enrich with post info — platform comes straight off the row.
         const rows = (logs || []).map((log) => {
-            const info = autoMap[log.automation_id] || { caption: 'Unknown post', thumbnailUrl: null };
+            const info = postMap[log.post_id]
+                || autoMap[log.automation_id]
+                || { caption: 'Unknown post', thumbnailUrl: null };
             return {
                 ...log,
                 platform: log.platform || 'instagram',

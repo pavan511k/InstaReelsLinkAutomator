@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS dm_sent_log (
     -- follow-up DMs ({first_name}, {username} placeholders). Nullable because
     -- some events (e.g. story mentions) may not include the handle.
     recipient_username text DEFAULT NULL,
+    -- recipient_first_name — display-name first word, fetched from the
+    -- Graph API for IG comments (instagram_business_basic) or parsed from
+    -- from.name on FB comments. Lets {first_name} substitute to a real
+    -- name instead of the handle. Nullable when the API call fails or
+    -- the user has no display name set.
+    recipient_first_name text DEFAULT NULL,
     -- platform — 'instagram' | 'facebook'. Captured at insert time so the
     -- DM Logs page can filter by platform without fragile joins through
     -- automation → post → connected_account.

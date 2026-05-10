@@ -34,12 +34,13 @@ export async function middleware(request) {
     } = await supabase.auth.getUser();
 
     // Protected routes — redirect to login if not authenticated
+    // Legacy /posts, /stories, /global-automations, /welcome-openers
+    // were removed; the new builder covers the same use cases.
     const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') ||
-        request.nextUrl.pathname.startsWith('/posts') ||
-        request.nextUrl.pathname.startsWith('/stories') ||
+        request.nextUrl.pathname.startsWith('/automations') ||
+        request.nextUrl.pathname.startsWith('/contacts') ||
+        request.nextUrl.pathname.startsWith('/tools') ||
         request.nextUrl.pathname.startsWith('/settings') ||
-        request.nextUrl.pathname.startsWith('/global-automations') ||
-        request.nextUrl.pathname.startsWith('/welcome-openers') ||
         request.nextUrl.pathname.startsWith('/leads');
 
     if (isProtectedRoute && !user) {

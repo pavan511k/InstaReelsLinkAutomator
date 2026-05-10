@@ -155,12 +155,12 @@ export async function sendTrialStartedEmail({ to, name, igUsername, trialEndsAt 
                 <td style="padding:4px;">
                     <table width="100%" cellpadding="0" cellspacing="0">
                         ${[
-                            ['✅', 'Unlimited DMs', 'No monthly cap — send as many as you need'],
-                            ['✅', 'Follow Gate', 'Only send links to users who follow you first'],
-                            ['✅', 'Save & load templates', 'Build a library of reusable DM setups'],
-                            ['✅', 'A/B message testing', 'Test two DM variants and pick the winner'],
-                            ['✅', 'Unlimited carousel slides', 'Showcase multiple products per DM'],
-                            ['✅', 'Advanced analytics', 'CTR, click tracking, conversion stats'],
+                            ['✅', 'Unlimited Automation Flows', 'No 5-automation cap — build as many as you need'],
+                            ['✅', 'Email Collector', 'Capture emails as leads via DM reply'],
+                            ['✅', 'Story Mention Auto-DM', 'Auto-reply when fans tag you in their story'],
+                            ['✅', 'Ask to Follow before DM', 'Only send links to users who follow you first'],
+                            ['✅', 'Multi-step Flow Automation', 'Send sequential follow-ups at configurable delays'],
+                            ['✅', 'Real-time analytics & priority support', 'DM logs, click counts & faster help'],
                         ].map(([icon, title, desc]) => `
                         <tr>
                           <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
@@ -181,14 +181,14 @@ export async function sendTrialStartedEmail({ to, name, igUsername, trialEndsAt 
         </table>
 
         <div style="text-align:center;margin-bottom:28px;">
-            ${button('Set up your first automation →', `${APP_URL}/posts`)}
+            ${button('Set up your first automation →', `${APP_URL}/automations`)}
         </div>
 
         ${divider}
 
         <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.35);line-height:1.6;text-align:center;">
             Your trial runs until <strong style="color:rgba(255,255,255,0.55);">${expiryDate}</strong>.<br/>
-            After that, continue with Pro for just <strong style="color:rgba(255,255,255,0.55);">₹299/month</strong> — or stay on the generous free plan.
+            After that, continue with Pro for just <strong style="color:rgba(255,255,255,0.55);">₹299/month</strong> — or stay on the free plan with up to 5 automations.
         </p>
     `);
 
@@ -200,7 +200,7 @@ export async function sendTrialStartedEmail({ to, name, igUsername, trialEndsAt 
     });
 }
 
-// ── 3. Trial expiry reminder (call this from a cron job at day 25) ────────────
+// ── 3. Trial expiry reminder (sent by /api/cron/expiring-soon) ────────────────
 export async function sendTrialExpiringEmail({ to, name, daysLeft, trialEndsAt }) {
     const firstName = (name || to.split('@')[0]).split(' ')[0];
     const expiryDate = new Date(trialEndsAt).toLocaleDateString('en-IN', {
@@ -210,20 +210,22 @@ export async function sendTrialExpiringEmail({ to, name, daysLeft, trialEndsAt }
     const html = layout(`
         <div style="text-align:center;margin-bottom:28px;">
             <div style="display:inline-block;padding:8px 20px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:100px;font-size:13px;font-weight:700;color:#FCD34D;margin-bottom:20px;">
-                ⚠️ Trial ending in ${daysLeft} days
+                ⚠️ Trial ending in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}
             </div>
             <h1 style="margin:0 0 10px;font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.04em;">
-                Don't lose your Pro access, ${firstName}
+                Don't lose your Pro features, ${firstName}
             </h1>
             <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.5);line-height:1.65;">
                 Your free trial ends on <strong style="color:rgba(255,255,255,0.7);">${expiryDate}</strong>.<br/>
-                Upgrade now to keep all your automations running without interruption.
+                Upgrade now to keep your Pro automations firing without interruption.
             </p>
         </div>
 
         <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(167,139,250,0.2);border-radius:14px;padding:20px 24px;margin-bottom:28px;">
             <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#fff;">AutoDM Pro</p>
-            <p style="margin:0 0 14px;font-size:13px;color:rgba(255,255,255,0.45);">Unlimited DMs · All Pro features · Priority support</p>
+            <p style="margin:0 0 14px;font-size:13px;color:rgba(255,255,255,0.45);">
+                Unlimited automations · Email Collector · Story Mention Auto-DM · Ask-to-Follow · Priority support
+            </p>
             <p style="margin:0;font-size:28px;font-weight:800;color:#A78BFA;letter-spacing:-0.04em;">
                 ₹299<span style="font-size:15px;font-weight:400;color:rgba(255,255,255,0.4)">/month</span>
             </p>
@@ -236,15 +238,16 @@ export async function sendTrialExpiringEmail({ to, name, daysLeft, trialEndsAt }
         ${divider}
 
         <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.32);text-align:center;line-height:1.6;">
-            If you don't upgrade, your automations will continue on the free plan (3,000 DMs/month).<br/>
-            You won't lose any data.
+            If you don't upgrade, your account moves to the free plan (up to 5 automations).<br/>
+            <strong style="color:rgba(255,255,255,0.55);">Email Collector, Story Mention Auto-DM and Ask-to-Follow stop firing</strong> on free.<br/>
+            All your saved data stays intact.
         </p>
     `);
 
     return getResend().emails.send({
         from: FROM,
         to,
-        subject: `⚠️ Your AutoDM Pro trial expires in ${daysLeft} days`,
+        subject: `⚠️ Your AutoDM Pro trial expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`,
         html,
     });
 }
@@ -270,7 +273,7 @@ export async function sendProExpiringEmail({ to, name, daysLeft, expiresAt }) {
             </h1>
             <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.5);line-height:1.65;">
                 Your AutoDM Pro subscription ends on <strong style="color:rgba(255,255,255,0.7);">${expiryDate}</strong>.<br/>
-                Renew now to keep unlimited DMs, A/B testing, Follow Gate, and all Pro features active.
+                Renew now to keep Email Collector, Story Mention Auto-DM, Ask-to-Follow and all Pro features active.
             </p>
         </div>
 
@@ -280,7 +283,7 @@ export async function sendProExpiringEmail({ to, name, daysLeft, expiresAt }) {
                     <td style="vertical-align:top;">
                         <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#fff;">AutoDM Pro</p>
                         <p style="margin:0 0 14px;font-size:13px;color:rgba(255,255,255,0.45);">
-                            Unlimited DMs · Follow Gate · A/B testing · Priority support
+                            Unlimited automations · Email Collector · Story Mention Auto-DM · Ask-to-Follow · Priority support
                         </p>
                         <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.55);">
                             <strong style="color:#A78BFA;">₹299/month</strong> &nbsp;·&nbsp; <strong style="color:#A78BFA;">₹2,999/year</strong> (save ₹589)
@@ -298,8 +301,9 @@ export async function sendProExpiringEmail({ to, name, daysLeft, expiresAt }) {
 
         <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.32);text-align:center;line-height:1.6;">
             We don't auto-renew, so if you do nothing your account will move to the free plan
-            (3,000 DMs/month) on ${expiryDate}.<br/>
-            All your automations and data stay intact — only the Pro feature set is paused.
+            (up to 5 automations) on ${expiryDate}.<br/>
+            <strong style="color:rgba(255,255,255,0.55);">Email Collector, Story Mention Auto-DM and Ask-to-Follow stop firing</strong> on free —
+            but all your saved data stays intact.
         </p>
     `);
 

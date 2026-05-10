@@ -1,479 +1,438 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, X, Zap, ArrowRight, Loader2, Crown, ShieldCheck } from 'lucide-react';
+import {
+  Check, Zap, ArrowRight, Loader2, Crown, ShieldCheck, Lock, CreditCard, Clock, Sparkles,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useStyles } from '@/lib/useStyles';
-import darkStyles from './pricing.module.css';
-import lightStyles from './pricing.light.module.css';
 
-// ─── Feature table ────────────────────────────────────────────────────────────
-// Each category has a label and a list of features.
-// free: true  = available on free plan
-// free: false = Pro-only (shows ✗ on free card, ✓ on pro card)
-const FEATURE_CATEGORIES = [
-    {
-        label: 'DM Types',
-        features: [
-            { name: 'Button Template (image card + CTA button)',      free: true  },
-            { name: 'Message Template (plain text DM)',               free: true  },
-            { name: 'Quick Reply (tappable reply chips)',             free: true  },
-            { name: 'Multi-CTA (text + up to 3 URL buttons)',        free: true  },
-            { name: 'Follow Gate (send link after follow verified)',  free: false },
-            { name: 'Email Collector (capture leads via DM reply)',   free: false },
-        ],
-    },
-    {
-        label: 'DM Limits & Delivery',
-        features: [
-            { name: '3,000 DMs per month',                           free: true  },
-            { name: 'Unlimited DMs per month',                       free: false },
-            { name: 'Per-account rate limiting',                     free: true  },
-            { name: 'Excess DM Queue (handles viral spikes)',        free: true  },
-            { name: 'SendBack — auto-retry failed DMs',              free: true  },
-        ],
-    },
-    {
-        label: 'Trigger System',
-        features: [
-            { name: 'Keyword triggers',                              free: true  },
-            { name: 'All comments trigger',                          free: true  },
-            { name: 'Emojis-only trigger',                           free: true  },
-            { name: '@Mentions-only trigger',                        free: true  },
-            { name: 'Auto-reply to triggering comment',             free: true  },
-            { name: 'Send delay (humanised random timing)',          free: true  },
-            { name: 'Global Triggers (account-wide keywords)',       free: true  },
-        ],
-    },
-    {
-        label: 'Automation Controls',
-        features: [
-            { name: 'Schedule automation start time',                free: true  },
-            { name: 'Set automation expiry date',                    free: true  },
-            { name: 'Carousel slides (up to 3)',                     free: true  },
-            { name: 'Unlimited carousel slides',                     free: false },
-            { name: 'Save & load DM templates',                      free: false },
-            { name: 'A/B message testing with winner detection',     free: false },
-            { name: 'Send DMs to previous comments (backfill)',      free: false },
-            { name: 'Multi-step Flow Automation (sequential DMs)',   free: false },
-            { name: 'Upsell follow-up DMs for non-clickers',        free: false },
-        ],
-    },
-    {
-        label: 'Inbox & Engagement',
-        features: [
-            { name: 'Welcome Openers (inbox quick-reply buttons)',   free: true  },
-            { name: 'Story Mention Auto-DM',                         free: true  },
-        ],
-    },
-    {
-        label: 'Analytics & Insights',
-        features: [
-            { name: 'Real-time analytics dashboard',                 free: true  },
-            { name: 'DM sent log with comment history',             free: true  },
-            { name: 'Usage limit alerts (email + webhook)',          free: true  },
-            { name: 'Link click count (tracked short URLs)',          free: true  },
-            { name: 'CTR % in posts table',                          free: true  },
-            { name: 'Full click analytics dashboard (charts, per-link, A/B)', free: false },
-            { name: 'Email Leads list + CSV export',                free: false },
-        ],
-    },
-    {
-        label: 'Platforms & Support',
-        features: [
-            { name: 'Instagram Posts & Reels',                       free: true  },
-            { name: 'Instagram Stories',                             free: true  },
-            { name: 'Facebook Pages',                                free: true  },
-            { name: 'Email support',                                 free: true  },
-            { name: 'Priority support',                              free: false },
-        ],
-    },
+/**
+ * /pricing — same plan card layout as the landing page Pricing section.
+ * Simple feature lists per plan (no over-engineered category breakdowns).
+ * Mirrors src/components/landing/Pricing.js so logged-in users see the
+ * same plans they saw before signing up. PricingModal (in-dashboard
+ * upgrade flow) wraps the same plan structure.
+ */
+
+const PLANS = [
+  {
+    id: null,
+    name: 'Free plan',
+    tagline: 'For individuals & new creators',
+    price: '₹0',
+    period: 'forever',
+    highlight: false,
+    features: [
+      '5 Automation Flows',
+      'Comment-trigger automations',
+      'Story-reply automations',
+      'Basic Analytics',
+      'Email support',
+    ],
+  },
+  {
+    id: 'pro',
+    name: 'Pro plan',
+    tagline: 'Best for creators',
+    highlight: true,
+    badge: 'Most Popular',
+    features: [
+      'Unlimited Automation Flows',
+      'Email Collector — capture leads via DM',
+      'Story Mention Auto-DM',
+      'Ask to Follow before DM',
+      'Multi-step Flow Automation',
+      'Priority support',
+    ],
+  },
+  {
+    id: null,
+    name: 'Elite plan',
+    tagline: 'For agencies & businesses',
+    price: '₹799',
+    period: 'month',
+    highlight: false,
+    comingSoon: true,
+    features: [
+      'Everything in Pro',
+      'Dedicated Account Manager',
+      'Custom Branding',
+      'Advanced Lead Capture',
+      'Story-mention auto replies',
+      'White-glove onboarding',
+    ],
+  },
 ];
 
 const FAQ = [
-    {
-        q: 'What counts as a DM?',
-        a: 'Every DM sent to a unique commenter counts as one DM — including the initial gate message in Follow Gate and each follow-up nudge.',
-    },
-    {
-        q: 'Does the limit reset every month?',
-        a: 'Yes. The DM count resets on the 1st of every calendar month at midnight UTC.',
-    },
-    {
-        q: 'Do new users get a free trial?',
-        a: 'Yes — every new user gets 30 days of Pro access for free, automatically, the moment they connect their Instagram account. No credit card required.',
-    },
-    {
-        q: 'Is Follow Gate really checking if they follow?',
-        a: 'Yes. When a user taps ✅ Yes, AutoDM calls the Instagram Graph API to verify they are in your recent followers list before sending the reward link.',
-    },
-    {
-        q: 'What payment methods are accepted?',
-        a: 'We accept all major UPI apps (GPay, PhonePe, Paytm), debit/credit cards (Visa, Mastercard, RuPay), and net banking via Cashfree.',
-    },
-    {
-        q: 'Can I cancel anytime?',
-        a: "There's nothing to cancel — Pro is one payment per billing period (₹299 for a month, ₹2,999 for a year), and your subscription doesn't auto-renew. If you decide not to continue, just don't renew when the period ends. We'll email you 7 days before expiry as a reminder.",
-    },
-    {
-        q: 'Do you offer refunds?',
-        a: 'All payments are final. Your Pro access remains active until the end of the period you paid for. If you have a billing issue, email support@autodm.pro and we will look into it on a case-by-case basis.',
-    },
+  {
+    q: 'What counts as a DM?',
+    a: 'Every DM sent to a unique commenter counts as one DM — including the initial gate message in Follow Gate and each follow-up nudge.',
+  },
+  {
+    q: 'Does the limit reset every month?',
+    a: 'Yes. The DM count resets on the 1st of every calendar month at midnight UTC.',
+  },
+  {
+    q: 'Do new users get a free trial?',
+    a: 'Yes — every new user gets 30 days of Pro access for free, automatically, the moment they connect their Instagram account. No credit card required.',
+  },
+  {
+    q: 'Is Follow Gate really checking if they follow?',
+    a: 'Yes. When a user taps ✅ Yes, AutoDM calls the Instagram Graph API to verify they are in your recent followers list before sending the reward link.',
+  },
+  {
+    q: 'What payment methods are accepted?',
+    a: 'We accept all major UPI apps (GPay, PhonePe, Paytm), debit/credit cards (Visa, Mastercard, RuPay), and net banking via Cashfree.',
+  },
+  {
+    q: 'Can I cancel anytime?',
+    a: "There's nothing to cancel — Pro is one payment per billing period (₹299 for a month, ₹2,999 for a year), and your subscription doesn't auto-renew. If you decide not to continue, just don't renew when the period ends. We'll email you 7 days before expiry as a reminder.",
+  },
+  {
+    q: 'Do you offer refunds?',
+    a: 'All payments are final. Your Pro access remains active until the end of the period you paid for. If you have a billing issue, email support@autodm.pro and we will look into it on a case-by-case basis.',
+  },
 ];
 
 function loadCashfreeSDK() {
-    return new Promise((resolve, reject) => {
-        if (window.Cashfree) { resolve(); return; }
-        const script = document.createElement('script');
-        script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
-        document.head.appendChild(script);
-    });
+  return new Promise((resolve, reject) => {
+    if (window.Cashfree) { resolve(); return; }
+    const script = document.createElement('script');
+    script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
+    document.head.appendChild(script);
+  });
 }
 
-// ─── Feature row ─────────────────────────────────────────────────────────────
-function FeatureRow({ name, available, styles }) {
-    return (
-        <li className={`${styles.featureItem} ${!available ? styles.featureLocked : ''}`}>
-            {available ? (
-                <span className={styles.featureCheck}>
-                    <Check size={11} strokeWidth={3} />
-                </span>
-            ) : (
-                <span className={styles.featureCross}>
-                    <X size={11} strokeWidth={3} />
-                </span>
-            )}
-            <span>{name}</span>
-        </li>
-    );
-}
+function PlanCard({ plan, loadingPlan, onUpgrade, isCurrentlyPaidPro, paidProExpiresAt, billingCycle }) {
+  const isProTier   = plan.id === 'pro';
+  const isComingSoon = plan.comingSoon;
 
-// ─── Plan card ────────────────────────────────────────────────────────────────
-// `plan.id` is null for the Free card. For Pro, the actual purchasable SKU
-// is computed from the page-level billing cycle ('pro' or 'pro_yearly').
-function PlanCard({ plan, styles, loadingPlan, onUpgrade, isCurrentlyPaidPro, paidProExpiresAt, billingCycle }) {
-    const isProTier = plan.id === 'pro';
+  let purchaseSku   = null;
+  let priceLabel    = plan.price;
+  let periodLabel   = plan.period;
+  let priceSubtitle = null;
 
-    // Map (tier, cycle) → the concrete SKU + display values.
-    // Headline price ALWAYS matches the actual charge amount — this avoids
-    // the "page said ₹250 but Cashfree charged ₹2,999" expectation mismatch.
-    // The per-month equivalent goes in the subtitle as a value-prop callout
-    // rather than as the headline (some SaaS products like Notion/Linear do
-    // it the other way; we prefer the truthful number up top for trust).
-    let purchaseSku  = null;
-    let priceLabel   = plan.price;
-    let periodLabel  = plan.period;
-    let priceSubtitle = null;
-    if (isProTier) {
-        if (billingCycle === 'yearly') {
-            purchaseSku   = 'pro_yearly';
-            priceLabel    = '₹2,999';
-            periodLabel   = 'per year';
-            priceSubtitle = '≈ ₹250/month · Save ₹589 vs monthly';
-        } else {
-            purchaseSku   = 'pro';
-            priceLabel    = '₹299';
-            periodLabel   = 'per month';
-            priceSubtitle = null;
-        }
+  if (isProTier) {
+    if (billingCycle === 'yearly') {
+      purchaseSku   = 'pro_yearly';
+      priceLabel    = '₹2,999';
+      periodLabel   = 'per year';
+      priceSubtitle = '≈ ₹250/month · Save ₹589 vs monthly';
+    } else {
+      purchaseSku   = 'pro';
+      priceLabel    = '₹299';
+      periodLabel   = 'per month';
+      priceSubtitle = null;
     }
+  }
 
-    // When the user already has an active paid Pro subscription, replace the
-    // upgrade CTA on Pro tiers with a "you're on Pro until X" state.
-    // Industry standard — Notion, Linear, Stripe etc. all block re-purchase
-    // and steer users to renewal/cancellation flows.
-    const blockUpgrade = isProTier && isCurrentlyPaidPro;
+  const blockUpgrade = isProTier && isCurrentlyPaidPro;
 
-    const renderCta = () => {
-        if (!plan.id) {
-            return (
-                <Link href={plan.ctaHref} className={`${styles.ctaBtn} ${styles.ctaBtnSecondary}`}>
-                    {plan.cta}
-                </Link>
-            );
-        }
-        if (blockUpgrade) {
-            const expiryStr = paidProExpiresAt
-                ? new Date(paidProExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-                : null;
-            return (
-                <button
-                    className={`${styles.ctaBtn} ${styles.ctaBtnSecondary}`}
-                    disabled
-                    title="You're already on Pro. You'll be able to renew when your current period is closer to ending."
-                >
-                    <ShieldCheck size={14} strokeWidth={2.5} />
-                    {expiryStr ? `Active until ${expiryStr}` : 'Pro is active'}
-                </button>
-            );
-        }
-        return (
-            <button
-                className={`${styles.ctaBtn} ${styles.ctaBtnPrimary}`}
-                onClick={() => onUpgrade(purchaseSku)}
-                disabled={loadingPlan === purchaseSku}
-            >
-                {loadingPlan === purchaseSku ? (
-                    <><Loader2 size={14} className={styles.spin} /> Processing…</>
-                ) : (
-                    <><Crown size={14} strokeWidth={2.5} /> {plan.ctaLabel || 'Upgrade to Pro'} <ArrowRight size={14} /></>
-                )}
-            </button>
-        );
-    };
-
+  const renderCta = () => {
+    if (isComingSoon) {
+      return (
+        <button
+          type="button"
+          disabled
+          className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-100 px-4 py-3 text-sm font-semibold text-neutral-500 cursor-not-allowed"
+        >
+          <Clock className="h-3.5 w-3.5" strokeWidth={2.5} />
+          Coming Soon
+        </button>
+      );
+    }
+    if (!plan.id) {
+      return (
+        <Link
+          href="/dashboard"
+          className="mt-6 flex w-full items-center justify-center rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors"
+        >
+          Go to Dashboard
+        </Link>
+      );
+    }
+    if (blockUpgrade) {
+      const expiryStr = paidProExpiresAt
+        ? new Date(paidProExpiresAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+        : null;
+      return (
+        <button
+          type="button"
+          disabled
+          title="You're already on Pro."
+          className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 cursor-not-allowed"
+        >
+          <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2.5} />
+          {expiryStr ? `Active until ${expiryStr}` : 'Pro is active'}
+        </button>
+      );
+    }
     return (
-        <div className={`${styles.planCard} ${plan.highlight ? styles.planHighlight : ''}`}>
-            {plan.badge && <span className={styles.badge}>{plan.badge}</span>}
-
-            <div className={styles.planHeader}>
-                <h2 className={styles.planName}>{plan.name}</h2>
-                <div className={styles.planPrice}>
-                    <span className={styles.priceAmount}>{priceLabel}</span>
-                    <span className={styles.pricePeriod}>/{periodLabel}</span>
-                </div>
-                {/* Always render the subtitle slot for Pro tiers so the
-                    Monthly and Yearly cards have identical vertical height
-                    — Yearly fills it with the per-month equivalent, Monthly
-                    fills it with a non-breaking space that just reserves the
-                    line. Skipped for Free since Free's longer description
-                    already pads its card to the same height. */}
-                {isProTier && (
-                    <p className={styles.priceSubtitle}>
-                        {priceSubtitle || ' '}
-                    </p>
-                )}
-                <p className={styles.planDesc}>{plan.desc}</p>
-            </div>
-
-            {renderCta()}
-
-            <div className={styles.divider} />
-
-            {/* Feature list with categories */}
-            <div className={styles.featureCategories}>
-                {FEATURE_CATEGORIES.map((cat) => (
-                    <div key={cat.label} className={styles.featureCategory}>
-                        <span className={styles.categoryLabel}>{cat.label}</span>
-                        <ul className={styles.featureList}>
-                            {cat.features.map((f) => (
-                                <FeatureRow
-                                    key={f.name}
-                                    name={f.name}
-                                    available={isProTier ? true : f.free}
-                                    styles={styles}
-                                />
-                            ))}
-                        </ul>
-                    </div>
-                ))}
-            </div>
-        </div>
+      <button
+        type="button"
+        onClick={() => onUpgrade(purchaseSku)}
+        disabled={loadingPlan === purchaseSku}
+        className={[
+          'mt-6 flex w-full items-center justify-center gap-1.5 rounded-md px-4 py-3 text-sm font-semibold shadow-sm transition-colors',
+          plan.highlight
+            ? 'bg-[#E63946] text-white hover:bg-[#CC2E3B]'
+            : 'bg-neutral-900 text-white hover:bg-black',
+          loadingPlan === purchaseSku ? 'cursor-not-allowed opacity-60' : '',
+        ].join(' ')}
+      >
+        {loadingPlan === purchaseSku ? (
+          <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Processing…</>
+        ) : (
+          <>
+            <Crown className="h-3.5 w-3.5" strokeWidth={2.5} />
+            Upgrade to Pro
+            <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </>
+        )}
+      </button>
     );
+  };
+
+  return (
+    <div className={[
+      'relative rounded-2xl border bg-white p-6 transition-shadow sm:p-8',
+      plan.highlight
+        ? 'border-[#E63946] shadow-lg ring-2 ring-[#E63946]/10'
+        : 'border-neutral-200 hover:shadow-md',
+    ].join(' ')}>
+      {plan.badge && !isComingSoon && (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-[#E63946] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+          <Sparkles className="h-2.5 w-2.5" strokeWidth={3} />
+          {plan.badge}
+        </span>
+      )}
+      {isComingSoon && (
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-neutral-900 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+          <Clock className="h-2.5 w-2.5" strokeWidth={3} />
+          Coming Soon
+        </span>
+      )}
+
+      <h3 className="text-lg font-semibold text-neutral-900">{plan.name}</h3>
+      <p className="mt-1 text-sm text-neutral-600">{plan.tagline}</p>
+
+      <div className={[
+        'mt-5 flex items-baseline gap-1 select-none',
+        isComingSoon ? 'blur-sm' : '',
+      ].join(' ')}>
+        <span className="text-4xl font-bold tracking-tight text-neutral-900">{priceLabel}</span>
+        <span className="text-sm text-neutral-500">/{periodLabel}</span>
+      </div>
+      {/* Reserve subtitle slot for Pro tiers so Monthly + Yearly cards
+          stay vertically aligned. */}
+      {isProTier && (
+        <p className="mt-1 h-3 text-xs font-medium text-emerald-700">
+          {priceSubtitle || ' '}
+        </p>
+      )}
+
+      {renderCta()}
+
+      <p className="mt-7 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+        Included features
+      </p>
+      <ul className={[
+        'mt-3 space-y-2.5',
+        isComingSoon ? 'blur-sm select-none pointer-events-none' : '',
+      ].join(' ')}>
+        {plan.features.map((f) => (
+          <li key={f} className="flex items-start gap-2.5">
+            <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#E63946]" strokeWidth={3} />
+            <span className="text-sm text-neutral-700">{f}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Page ──────────────────────────────────────────────────────────────
 export default function PricingPage() {
-    const styles = useStyles(darkStyles, lightStyles);
-    const [loadingPlan, setLoadingPlan] = useState(null);
-    const [error, setError] = useState('');
-    // Default to yearly — same default as Notion / Slack / Linear since it's
-    // the higher-LTV path and the savings copy lives next to the toggle.
-    const [billingCycle, setBillingCycle] = useState('yearly');
-    // Current user plan + paid-pro expiry. Loaded on mount via /api/usage.
-    // While loading we render the cards in a "neutral" state (no Active-Until
-    // pill, no Upgrade) — flips into the right mode once we know the plan.
-    const [planState, setPlanState] = useState({ loaded: false, plan: 'free', planExpiresAt: null });
+  const [loadingPlan, setLoadingPlan]   = useState(null);
+  const [error, setError]               = useState('');
+  const [billingCycle, setBillingCycle] = useState('yearly');
+  const [planState, setPlanState] = useState({ loaded: false, plan: 'free', planExpiresAt: null });
 
-    useEffect(() => {
-        let cancelled = false;
-        fetch('/api/usage')
-            .then((r) => r.json())
-            .then((d) => {
-                if (cancelled) return;
-                setPlanState({
-                    loaded:        true,
-                    plan:          d.plan || 'free',
-                    planExpiresAt: d.planExpiresAt || null,
-                });
-            })
-            .catch(() => { if (!cancelled) setPlanState((s) => ({ ...s, loaded: true })); });
-        return () => { cancelled = true; };
-    }, []);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/usage')
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setPlanState({
+          loaded:        true,
+          plan:          d.plan || 'free',
+          planExpiresAt: d.planExpiresAt || null,
+        });
+      })
+      .catch(() => { if (!cancelled) setPlanState((s) => ({ ...s, loaded: true })); });
+    return () => { cancelled = true; };
+  }, []);
 
-    const isCurrentlyPaidPro =
-        planState.loaded &&
-        planState.plan === 'pro' &&
-        planState.planExpiresAt &&
-        new Date(planState.planExpiresAt) > new Date();
+  const isCurrentlyPaidPro =
+    planState.loaded &&
+    planState.plan === 'pro' &&
+    planState.planExpiresAt &&
+    new Date(planState.planExpiresAt) > new Date();
 
-    const handleUpgrade = async (planId) => {
-        if (!planId) return;
-        setLoadingPlan(planId);
-        setError('');
-        try {
-            const res  = await fetch('/api/payments/create-order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ planId }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to create order');
+  const handleUpgrade = async (planId) => {
+    if (!planId) return;
+    setLoadingPlan(planId);
+    setError('');
+    try {
+      const res  = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create order');
 
-            const { paymentSessionId, orderId } = data;
-            const mode = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production' ? 'production' : 'sandbox';
-            await loadCashfreeSDK();
-            const cashfree = window.Cashfree({ mode });
+      const { paymentSessionId, orderId } = data;
+      const mode = process.env.NEXT_PUBLIC_CASHFREE_ENV === 'production' ? 'production' : 'sandbox';
+      await loadCashfreeSDK();
+      const cashfree = window.Cashfree({ mode });
 
-            // In `_modal` mode the SDK opens an iframe modal and resolves
-            // this promise when the modal closes. It does NOT auto-navigate
-            // the parent page on success — we must do it ourselves so the
-            // success page can verify with Cashfree and activate the plan.
-            cashfree.checkout({ paymentSessionId, redirectTarget: '_modal' }).then((result) => {
-                if (result?.error) {
-                    setError(result.error.message || 'Payment failed. Please try again.');
-                    setLoadingPlan(null);
-                    return;
-                }
-                if (result?.paymentDetails || result?.redirect) {
-                    // Payment completed (or user redirected to a 3DS page).
-                    // Hand off to the success page which calls /api/payments/verify
-                    // → /api/payments/verify hits Cashfree to confirm and activates Pro.
-                    window.location.href = `/pricing/success?order_id=${encodeURIComponent(orderId)}&plan=${encodeURIComponent(planId)}`;
-                    return;
-                }
-                // Modal was closed without completing payment — reset so the
-                // user can try again instead of staring at a stuck spinner.
-                setLoadingPlan(null);
-            }).catch((err) => {
-                setError(err?.message || 'Payment was interrupted. Please try again.');
-                setLoadingPlan(null);
-            });
-        } catch (err) {
-            setError(err.message || 'Something went wrong. Please try again.');
-            setLoadingPlan(null);
+      cashfree.checkout({ paymentSessionId, redirectTarget: '_modal' }).then((result) => {
+        if (result?.error) {
+          setError(result.error.message || 'Payment failed. Please try again.');
+          setLoadingPlan(null);
+          return;
         }
-    };
+        if (result?.paymentDetails || result?.redirect) {
+          window.location.href = `/pricing/success?order_id=${encodeURIComponent(orderId)}&plan=${encodeURIComponent(planId)}`;
+          return;
+        }
+        setLoadingPlan(null);
+      }).catch((err) => {
+        setError(err?.message || 'Payment was interrupted. Please try again.');
+        setLoadingPlan(null);
+      });
+    } catch (err) {
+      setError(err.message || 'Something went wrong. Please try again.');
+      setLoadingPlan(null);
+    }
+  };
 
-    // Tier-level definitions only. The Pro card's price/period/SKU are
-    // derived from `billingCycle` inside PlanCard so the toggle drives both
-    // the displayed price and the planId sent to /api/payments/create-order.
-    const PLANS = [
-        {
-            id: null,
-            name: 'Free',
-            price: '₹0',
-            period: 'forever',
-            desc: 'Everything you need to start automating Instagram DMs. Forever free for up to 3,000 DMs/month.',
-            cta: 'Go to Dashboard',
-            ctaHref: '/dashboard',
-            highlight: false,
-        },
-        {
-            id: 'pro',
-            name: 'Pro',
-            // price/period overridden in PlanCard based on billingCycle
-            desc: 'Unlimited DMs, advanced automation, and full analytics.',
-            highlight: true,
-            badge: 'Most Popular',
-            ctaLabel: 'Upgrade to Pro',
-        },
-    ];
+  return (
+    <div className="space-y-12">
+      {/* Header */}
+      <div className="text-center">
+        <span className="inline-flex items-center rounded-full bg-[#FFF1F2] px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#E63946]">
+          Pricing
+        </span>
+        <h1 className="mt-4 text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
+          Simple, transparent pricing
+        </h1>
+        <p className="mx-auto mt-3 max-w-xl text-sm text-neutral-600 sm:text-base">
+          Start free. Upgrade when you need more. No hidden fees.
+        </p>
 
-    return (
-        <div className={styles.page}>
-            {/* Header */}
-            <div className={styles.header}>
-                <div className={styles.eyebrow}>Pricing</div>
-                <h1 className={styles.title}>Simple, transparent pricing</h1>
-                <p className={styles.subtitle}>
-                    Start free. Upgrade when you need more. No hidden fees.
-                </p>
-                <div className={styles.trialCallout}>
-                    <Zap size={15} strokeWidth={2.5} />
-                    <span>
-                        <strong>New users get 30 days of Pro free</strong> — no credit card required.
-                        Connect your Instagram account to start your trial automatically.
-                    </span>
-                </div>
-            </div>
-
-            {error && (
-                <div className={styles.errorBanner}>⚠️ {error}</div>
-            )}
-
-            {/* Billing-cycle toggle — only meaningful when the user can still
-                upgrade. For active Pro users we hide it since both options
-                are blocked anyway and the toggle would just be confusing. */}
-            {!isCurrentlyPaidPro && (
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <div className={styles.cycleToggle} role="tablist" aria-label="Billing cycle">
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={billingCycle === 'monthly'}
-                            className={`${styles.cycleToggleBtn} ${billingCycle === 'monthly' ? styles.cycleToggleActive : ''}`}
-                            onClick={() => setBillingCycle('monthly')}
-                        >
-                            Monthly
-                        </button>
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={billingCycle === 'yearly'}
-                            className={`${styles.cycleToggleBtn} ${billingCycle === 'yearly' ? styles.cycleToggleActive : ''}`}
-                            onClick={() => setBillingCycle('yearly')}
-                        >
-                            Yearly
-                            <span className={styles.cycleSavingsTag}>Save 16%</span>
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Plan cards */}
-            <div className={styles.plans}>
-                {PLANS.map((plan) => (
-                    <PlanCard
-                        key={plan.name}
-                        plan={plan}
-                        styles={styles}
-                        loadingPlan={loadingPlan}
-                        onUpgrade={handleUpgrade}
-                        isCurrentlyPaidPro={isCurrentlyPaidPro}
-                        paidProExpiresAt={planState.planExpiresAt}
-                        billingCycle={billingCycle}
-                    />
-                ))}
-            </div>
-
-            {/* Trust badges */}
-            <div className={styles.trustRow}>
-                <span className={styles.trustBadge}>🔒 Secured by Cashfree</span>
-                <span className={styles.trustBadge}>💳 UPI · Cards · Net Banking</span>
-                <span className={styles.trustBadge}>🇮🇳 100% Indian payment gateway</span>
-            </div>
-
-            {/* Note */}
-            <div className={styles.note}>
-                <Zap size={14} />
-                All plans include the full AutoDM dashboard, webhook integration, and official Meta Business Partner certification.
-            </div>
-
-            {/* FAQ */}
-            <div className={styles.faqSection}>
-                <h2 className={styles.faqTitle}>Frequently asked questions</h2>
-                <div className={styles.faqList}>
-                    {FAQ.map((item) => (
-                        <div key={item.q} className={styles.faqItem}>
-                            <h3 className={styles.faqQ}>{item.q}</h3>
-                            <p className={styles.faqA}>{item.a}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
+        <div className="mx-auto mt-5 inline-flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left">
+          <Zap className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600" strokeWidth={2.5} />
+          <p className="text-xs leading-relaxed text-emerald-900 sm:text-sm">
+            <strong>New users get 30 days of Pro free</strong> — no credit card required. Connect your Instagram account to start your trial automatically.
+          </p>
         </div>
-    );
+      </div>
+
+      {error && (
+        <div className="mx-auto flex max-w-xl items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span className="flex-shrink-0">⚠️</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Billing-cycle toggle */}
+      {!isCurrentlyPaidPro && (
+        <div className="flex justify-center">
+          <div className="inline-flex items-center gap-1 rounded-lg bg-neutral-100 p-1 text-xs font-semibold" role="tablist" aria-label="Billing cycle">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={billingCycle === 'monthly'}
+              onClick={() => setBillingCycle('monthly')}
+              className={[
+                'whitespace-nowrap rounded-md px-4 py-1.5 transition-colors',
+                billingCycle === 'monthly' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900',
+              ].join(' ')}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={billingCycle === 'yearly'}
+              onClick={() => setBillingCycle('yearly')}
+              className={[
+                'inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-4 py-1.5 transition-colors',
+                billingCycle === 'yearly' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-900',
+              ].join(' ')}
+            >
+              Yearly
+              <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
+                Save 16%
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Plan cards */}
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 md:grid-cols-3">
+        {PLANS.map((plan) => (
+          <PlanCard
+            key={plan.name}
+            plan={plan}
+            loadingPlan={loadingPlan}
+            onUpgrade={handleUpgrade}
+            isCurrentlyPaidPro={isCurrentlyPaidPro}
+            paidProExpiresAt={planState.planExpiresAt}
+            billingCycle={billingCycle}
+          />
+        ))}
+      </div>
+
+      {/* Trust badges */}
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700">
+          <Lock className="h-3 w-3 text-neutral-500" strokeWidth={2.5} />
+          Secured by Cashfree
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700">
+          <CreditCard className="h-3 w-3 text-neutral-500" strokeWidth={2.5} />
+          UPI · Cards · Net Banking
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700">
+          🇮🇳 100% Indian payment gateway
+        </span>
+      </div>
+
+      {/* FAQ */}
+      <div className="mx-auto max-w-3xl">
+        <h2 className="text-center text-2xl font-bold tracking-tight text-neutral-900">
+          Frequently asked questions
+        </h2>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          {FAQ.map((item) => (
+            <div
+              key={item.q}
+              className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm"
+            >
+              <h3 className="text-sm font-bold text-neutral-900">{item.q}</h3>
+              <p className="mt-2 text-[13px] leading-relaxed text-neutral-600">{item.a}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }

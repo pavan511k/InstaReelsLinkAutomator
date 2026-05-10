@@ -7,7 +7,10 @@
 CREATE TABLE IF NOT EXISTS dm_automations (
     id              uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id         uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    post_id         uuid REFERENCES instagram_posts(id) ON DELETE CASCADE NOT NULL,
+    -- post_id is NULLABLE: 'Next Post' / 'Any Post' target modes save
+    -- automations that aren't bound to a specific post yet. trigger_config
+    -- carries the post_target_mode flag so the webhook knows how to route.
+    post_id         uuid REFERENCES instagram_posts(id) ON DELETE CASCADE,
 
     -- DM type and full config snapshot
     dm_type         text NOT NULL DEFAULT 'button_template',
@@ -31,10 +34,10 @@ CREATE TABLE IF NOT EXISTS dm_automations (
     scheduled_start_at timestamptz DEFAULT NULL,
 
     created_at      timestamptz DEFAULT now(),
-    updated_at      timestamptz DEFAULT now(),
-
-    -- Only one automation per post
-    UNIQUE(post_id)
+    updated_at      timestamptz DEFAULT now()
+    -- (Multi-automation per post is supported; the previous
+    --  UNIQUE(post_id) constraint was removed by
+    --  migrations/add-multi-automation-and-target-mode.sql.)
 );
 
 -- RLS

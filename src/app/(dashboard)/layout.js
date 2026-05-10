@@ -2,9 +2,6 @@ import { createClient } from '@/lib/supabase-server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/dashboard/Sidebar';
-import ThemedShell from '@/components/dashboard/ThemedShell';
-import TrialBanner from '@/components/dashboard/TrialBanner';
-import bodyStyles from './layout.module.css';
 import { getEffectivePlan, trialDaysRemaining, getDmLimit, TRIAL_DAYS } from '@/lib/plans';
 
 export const metadata = {
@@ -123,8 +120,19 @@ export default async function DashboardLayout({ children }) {
     const dmUsed       = dmCountMonth === currentMonth ? monthlyDmCount : 0;
     const dmLimit      = getDmLimit(effectivePlan);
 
+    // Standard centered shell. Full-bleed routes (e.g., flow builder)
+    // override these properties via `main:has(.builder-fullbleed)` in
+    // globals.css — see comment there. We can't decide here based on
+    // pathname because Next.js layouts don't re-render across child
+    // navigations, so a header-based check would lock in the shell of
+    // whichever page was loaded first.
+    const mainClass = 'mx-auto w-full max-w-7xl flex-1 px-3 py-8 sm:px-4 sm:py-10 lg:px-5 lg:py-12 xl:px-6 xl:py-14';
+
     return (
-        <ThemedShell>
+        // bg-neutral-50 (#FAFAFA) matches --page-bg from globals.css; using a
+        // Tailwind utility directly so the shell doesn't depend on the CSS
+        // module variables anymore. Inter font kept via Tailwind's font-sans.
+        <div className="flex min-h-screen flex-col bg-neutral-50 font-sans lg:flex-row">
             <Sidebar
                 user={user}
                 isConnected={isConnected}
@@ -136,12 +144,18 @@ export default async function DashboardLayout({ children }) {
                 dmUsed={dmUsed}
                 dmLimit={dmLimit}
             />
-            <div className={bodyStyles.body}>
-                <TrialBanner effectivePlan={effectivePlan} trialDaysLeft={trialDaysLeft} />
-                <main className={bodyStyles.main}>
+            <div className="flex min-w-0 flex-1 flex-col">
+                {/* Trial-status communication is split intentionally:
+                    • DashboardView has an inline contextual banner on /dashboard
+                    • Sidebar's plan badge is visible on every other route
+                   The persistent layout ribbon was redundant — removed. */}
+                {/* Even tighter horizontal padding — content sits very close
+                    to the sidebar. Horizontal: 12/16/20/24px,
+                    vertical: 32/40/48/56px. max-w-7xl prevents sprawl. */}
+                <main className={mainClass}>
                     {children}
                 </main>
             </div>
-        </ThemedShell>
+        </div>
     );
 }

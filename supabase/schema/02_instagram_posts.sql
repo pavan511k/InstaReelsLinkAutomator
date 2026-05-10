@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS instagram_posts (
     timestamp       timestamptz,    -- When the post was published on Instagram
     is_story        boolean NOT NULL DEFAULT false,
 
+    -- Engagement counts captured at sync time. Used by the flow builder's
+    -- post-picker modal so users can pick a high-performing post quickly.
+    -- NULL means "not yet synced" — UI renders an em-dash in that case.
+    like_count      integer,
+    comments_count  integer,
+
     created_at      timestamptz DEFAULT now()
 );
 

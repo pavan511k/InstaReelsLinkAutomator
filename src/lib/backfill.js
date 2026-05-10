@@ -27,10 +27,29 @@ import { GRAPH_FB_BASE, GRAPH_IG_BASE } from '@/lib/meta-graph';
 const MAX_COMMENTS_PER_PAGE = 100;
 const MAX_PAGES             = 5; // up to 500 comments per backfill run
 
+/**
+ * Replay an automation against historical comments. We always run in
+ * "missed" semantics — skip anyone already in dm_sent_log or dm_queue
+ * — because IG's Private Reply endpoint is a single-shot per
+ * comment_id within 7 days of the comment timestamp, so a "send to
+ * everyone again" mode would just hit the API and fail. The 7-day
+ * window is enforced inline below: comments older than that get
+ * filtered out, since the Private Reply call will error.
+ *
+ * @param {object} args
+ * @param {string} args.automationId
+ * @param {string} args.postId
+ */
 export async function runBackfill({ automationId, postId }) {
     if (!automationId || !postId) {
         throw new Error('automationId and postId are required');
     }
+
+    // Instagram's Private Reply endpoint hard-rejects any comment
+    // older than 7 days. Pre-filter inline so we don't fill the queue
+    // with sends we know IG will reject.
+    const PRIVATE_REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+    const oldestAllowedMs = Date.now() - PRIVATE_REPLY_WINDOW_MS;
 
     const supabase = createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -77,7 +96,8 @@ export async function runBackfill({ automationId, postId }) {
 
     const sentSet = new Set((alreadySent || []).map((r) => r.recipient_ig_id));
 
-    // Also check dm_queue for pending items to avoid double-enqueue
+    // Skip queue items too so we don't double-enqueue when a previous
+    // backfill is mid-flight.
     const { data: alreadyQueued } = await supabase
         .from('dm_queue')
         .select('recipient_ig_id')
@@ -106,11 +126,12 @@ export async function runBackfill({ automationId, postId }) {
     } catch { /* non-fatal */ }
 
     // ── Paginate comments and enqueue matching ones ───────────────────
-    let commentsFetched = 0;
-    let queued          = 0;
-    let skipped         = 0;
-    let nextUrl         = `${graphBase}/${igPostId}/comments?fields=id,text,from,timestamp&limit=${MAX_COMMENTS_PER_PAGE}&access_token=${encodeURIComponent(token)}`;
-    let page            = 0;
+    let commentsFetched   = 0;
+    let queued            = 0;
+    let skipped           = 0;
+    let skippedOutOfWindow = 0;
+    let nextUrl           = `${graphBase}/${igPostId}/comments?fields=id,text,from,timestamp&limit=${MAX_COMMENTS_PER_PAGE}&access_token=${encodeURIComponent(token)}`;
+    let page              = 0;
 
     while (nextUrl && page < MAX_PAGES) {
         const res  = await fetch(nextUrl);
@@ -133,6 +154,17 @@ export async function runBackfill({ automationId, postId }) {
             if (!commenterId || !commentText || !commentId) continue;
             if (commenterId === account.ig_user_id) continue;          // skip own comments
             if (sentSet.has(commenterId)) { skipped++; continue; }     // skip already sent/queued
+
+            // 7-day window — IG's Private Reply endpoint rejects
+            // anything older. Comments are returned newest-first, so
+            // once we hit one outside the window we can stop the
+            // outer loop entirely (paging older won't help).
+            const ts = comment.timestamp ? Date.parse(comment.timestamp) : 0;
+            if (ts && ts < oldestAllowedMs) {
+                skippedOutOfWindow++;
+                nextUrl = null; // bail the outer pagination
+                break;
+            }
 
             // Trigger matching
             const lower = commentText.toLowerCase().trim();
@@ -183,7 +215,10 @@ export async function runBackfill({ automationId, postId }) {
         nextUrl = data.paging?.next || null;
     }
 
-    console.log(`[Backfill] automation=${automationId} fetched=${commentsFetched} queued=${queued} skipped=${skipped}`);
+    console.log(
+        `[Backfill] automation=${automationId} fetched=${commentsFetched} queued=${queued} ` +
+        `skipped=${skipped} skippedOutOfWindow=${skippedOutOfWindow}`
+    );
 
-    return { commentsFetched, queued, skipped, pages: page };
+    return { commentsFetched, queued, skipped, skippedOutOfWindow, pages: page };
 }

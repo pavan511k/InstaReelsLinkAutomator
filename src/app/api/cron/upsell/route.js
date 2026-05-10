@@ -60,7 +60,7 @@ export async function GET(request) {
         const { data: sentRows, error: fetchErr } = await supabase
             .from('dm_sent_log')
             .select(`
-                id, automation_id, recipient_ig_id, recipient_username,
+                id, automation_id, recipient_ig_id, recipient_username, recipient_first_name,
                 post_id, sent_at,
                 dm_automations!inner(
                     id, user_id, settings_config, dm_type, dm_config,
@@ -153,6 +153,18 @@ export async function GET(request) {
                 .eq('user_id', automation.user_id).maybeSingle();
             const item_user_plan = getEffectivePlan(userPlanRow);
 
+            // ── Pro-only gate ─────────────────────────────────────────────
+            // Send-follow-up upsell is a Pro feature. If the user
+            // downgraded after building the automation, mark these rows
+            // skipped so we don't keep checking them every 6h.
+            const planAllowsPro = item_user_plan === 'pro' || item_user_plan === 'business' || item_user_plan === 'trial';
+            if (!planAllowsPro) {
+                await markUpsellStatus(supabase, row.id, 'skipped');
+                results.skipped++;
+                console.log(`[Upsell] Skipping — user ${automation.user_id} is on ${item_user_plan}`);
+                continue;
+            }
+
             // ── Build upsell DM config ────────────────────────────────────
             const dmType  = upsellCfg.dmType  || 'message_template';
             const dmConfig = upsellCfg.dmConfig || { message: upsellCfg.message, type: dmType };
@@ -161,25 +173,26 @@ export async function GET(request) {
 
             // ── Enqueue the upsell DM ─────────────────────────────────────
             const { error: insertErr } = await supabase.from('dm_queue').insert({
-                user_id:            automation.user_id,
-                account_id:         account.id,
-                automation_id:      row.automation_id,
-                post_id:             row.post_id,
-                recipient_ig_id:    row.recipient_ig_id,
-                recipient_username: row.recipient_username,
-                comment_id:         null,
-                comment_text:       '[upsell]',
-                platform:           'instagram',
-                dm_type:            dmType,
-                dm_config:          dmConfig,
-                tracking_map:       {},
-                user_plan:          item_user_plan,
-                queue_reason:       'upsell',
-                is_upsell:          true,
-                source_log_id:      row.id,
-                priority:           7,
-                status:             'pending',
-                scheduled_after:    now.toISOString(),
+                user_id:              automation.user_id,
+                account_id:           account.id,
+                automation_id:        row.automation_id,
+                post_id:              row.post_id,
+                recipient_ig_id:      row.recipient_ig_id,
+                recipient_username:   row.recipient_username,
+                recipient_first_name: row.recipient_first_name,
+                comment_id:           null,
+                comment_text:         '[upsell]',
+                platform:             'instagram',
+                dm_type:              dmType,
+                dm_config:            dmConfig,
+                tracking_map:         {},
+                user_plan:            item_user_plan,
+                queue_reason:         'upsell',
+                is_upsell:            true,
+                source_log_id:        row.id,
+                priority:             7,
+                status:               'pending',
+                scheduled_after:      now.toISOString(),
             });
 
             if (insertErr) {

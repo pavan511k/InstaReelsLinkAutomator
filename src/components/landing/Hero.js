@@ -1,198 +1,100 @@
-'use client';
-
 import Link from 'next/link';
-import Image from 'next/image';
-import { ArrowRight, Shield, Zap, Check, MessageCircle, Heart, Send, MoreHorizontal, Bookmark, Sparkles, Activity, Lock } from 'lucide-react';
-import { useStyles } from '@/lib/useStyles';
-import darkStyles from './Hero.module.css';
-import lightStyles from './Hero.light.module.css';
+import { ArrowRight, ShieldCheck, CircleCheck } from 'lucide-react';
+
+const HERO_PHOTO = '/hero-creator.png';
 
 export default function Hero() {
-  const styles = useStyles(darkStyles, lightStyles);
   return (
-    <section className={styles.hero}>
-      {/* Background — single subtle accent glow + dot grid.
-          (Removed the previous triple stacked gradient orbs which read
-          as AI-template default.) */}
-      <div className={styles.bgGrid} />
-      <div className={styles.bgGlow} />
+    /* Navbar is now a floating fixed-position pill (no flow space), so the
+       hero starts at viewport-top naturally — no negative-margin trick. */
+    <section className="relative isolate overflow-hidden bg-[#8E1B26] text-white">
+      {/* Two-layer vignette only.
+          Dropped the warm "spotlight" overlay — at certain viewport sizes the
+          ellipse boundary was rendering as a hard diagonal streak across the
+          band, fighting the subject. A quiet corner vignette + a bottom fade
+          frames the photo without adding visual noise. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[1]"
+        style={{
+          background:
+            'radial-gradient(ellipse 110% 100% at 50% 50%, transparent 35%, rgba(0,0,0,0.6) 100%), linear-gradient(to bottom, transparent 75%, rgba(0,0,0,0.45) 100%)',
+        }}
+      />
 
-      <div className={styles.inner}>
-
-        {/* ── LEFT: Copy ───────────────────────────────── */}
-        <div className={styles.copy}>
-
-          <div className={styles.badge}>
-            <Shield size={12} strokeWidth={2.5} />
+      {/* Text container — left-anchored, vertically centered on lg+. */}
+      <div className="relative z-[3] max-w-7xl px-6 pt-20 sm:pt-24 lg:flex lg:min-h-screen lg:items-center lg:pl-12 lg:py-24 xl:pl-16 2xl:pl-24">
+        <div className="max-w-xl text-left">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-3 py-1 text-xs font-medium text-white backdrop-blur-sm ring-1 ring-white/20">
+            <ShieldCheck className="h-3.5 w-3.5" />
             Official Meta Business Partner
-          </div>
+          </span>
 
-          <h1 className={styles.headline}>
-            Reply to Instagram Comments with a DM,{' '}
-            <span className={styles.highlight}>Instantly!</span>
+          <h1 className="mt-7 text-3xl font-bold leading-[1.1] tracking-tight sm:text-4xl lg:text-5xl">
+            Reply to Instagram comments with a DM,{' '}
+            <span className="italic font-semibold">instantly.</span>
           </h1>
 
-          <p className={styles.subtitle}>
-            AutoDM watches every Reel, Post, and Story. The moment someone comments — keyword, emoji, or @mention — they get a personal DM.
+          <p className="mt-5 max-w-md text-base leading-relaxed text-white/80">
+            AutoDM automatically DMs people as soon as they comment on your Reels, Posts, or Stories.
           </p>
 
-          <ul className={styles.perks}>
-            {[
-              'Free up to 3,000 DMs / month',
-              'Reels, Posts, Stories & Facebook Pages',
-              'No Instagram password required — official OAuth',
-            ].map((p) => (
-              <li key={p} className={styles.perk}>
-                <div className={styles.perkCheck}><Check size={11} strokeWidth={3} /></div>
-                {p}
-              </li>
-            ))}
-          </ul>
-
-          <div className={styles.ctaRow}>
-            <Link href="/signup" className={styles.ctaPrimary}>
-              Start free — no credit card
-              <ArrowRight size={15} strokeWidth={2.5} />
-            </Link>
-            <Link href="#how-it-works" className={styles.ctaSecondary}>
-              See how it works
+          <div className="mt-9">
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-2 rounded-md bg-[#2563EB] px-8 py-4 text-base font-semibold text-white shadow-xl shadow-black/30 ring-1 ring-white/15 hover:bg-[#1D4ED8] transition-colors"
+            >
+              Get Started Free
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 
-          {/* Trust strip — replaces the abstract avatar stack with concrete,
-              specific signals that take 30 seconds to scan. */}
-          <div className={styles.trustStrip}>
-            <div className={styles.trustItem}>
-              <Activity size={11} className={styles.trustIcon} style={{ color: '#10B981' }} />
-              <span className={styles.trustVal}>99.9%</span>
-              <span className={styles.trustLbl}>delivery rate</span>
-            </div>
-            <div className={styles.trustDot} />
-            <div className={styles.trustItem}>
-              <span className={styles.trustVal}>3.2M+</span>
-              <span className={styles.trustLbl}>DMs sent this month</span>
-            </div>
-            <div className={styles.trustDot} />
-            <div className={styles.trustItem}>
-              <Lock size={11} className={styles.trustIcon} />
-              <span className={styles.trustLbl}>GDPR-ready · privacy-first</span>
-            </div>
-          </div>
+          <p className="mt-5 inline-flex items-center gap-2 text-sm text-white/85">
+            <CircleCheck className="h-5 w-5 text-teal-400" strokeWidth={2} />
+            No credit card required
+          </p>
         </div>
+      </div>
 
-        {/* ── RIGHT: Hero banner — Instagram phone mockup ───────────────── */}
-        <div className={styles.visual}>
-
-          {/* Soft single-color glow halo behind the phone.
-              (Removed the fake CSS-drawn creator hand + the
-              creator photo backdrop that referenced an asset
-              never shipped — both read as AI-template noise.) */}
-          <div className={styles.heroGlow} />
-
-          {/* Phone mockup — Instagram post + comment thread */}
-          <div className={styles.phone}>
-            <div className={styles.phoneNotch} />
-            <div className={styles.phoneScreen}>
-
-              {/* IG status bar */}
-              <div className={styles.igStatusBar}>
-                <span>9:41</span>
-                <span className={styles.igStatusIcons}>
-                  <span className={styles.igSignal} />
-                  <span className={styles.igBattery} />
-                </span>
-              </div>
-
-              {/* IG header */}
-              <div className={styles.igHeader}>
-                <div className={styles.igAvatar}>
-                  <Image src="/logo.png" alt="" width={16} height={16} />
-                </div>
-                <div className={styles.igHeaderInfo}>
-                  <span className={styles.igHandle}>bloomstudio</span>
-                  <span className={styles.igLocation}>Sponsored</span>
-                </div>
-                <MoreHorizontal size={16} className={styles.igMore} />
-              </div>
-
-              {/* IG post image — clean monochrome surface with the
-                  Reel badge + drop title. Replaced previous double
-                  radial-gradient placeholder which read as generated. */}
-              <div className={styles.igPost}>
-                <div className={styles.igPostOverlay}>
-                  <span className={styles.igReelBadge}>
-                    <Sparkles size={10} /> Reel
-                  </span>
-                  <span className={styles.igPostMeta}>NEW DROP</span>
-                </div>
-              </div>
-
-              {/* IG action row */}
-              <div className={styles.igActions}>
-                <div className={styles.igActionsLeft}>
-                  <Heart size={18} fill="#EF4444" stroke="#EF4444" />
-                  <MessageCircle size={18} />
-                  <Send size={18} />
-                </div>
-                <Bookmark size={18} className={styles.igBookmark} />
-              </div>
-
-              {/* IG caption + comments */}
-              <div className={styles.igCaption}>
-                <strong>bloomstudio</strong> Drop is live 🔥 Comment <em>LINK</em> to get yours
-              </div>
-
-              <div className={styles.igComment}>
-                <div className={styles.igCommentAvatar}>S</div>
-                <div className={styles.igCommentBody}>
-                  <span className={styles.igCommentName}>sarah.k</span>
-                  <span className={styles.igCommentText}>
-                    <span className={styles.igCommentKw}>LINK</span>
-                  </span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Floating "trigger matched" pill — single line, iconified */}
-          <div className={styles.triggerPill}>
-            <span className={styles.triggerPillIcon}>
-              <Zap size={11} strokeWidth={2.6} />
-            </span>
-            <div className={styles.triggerPillBody}>
-              <span className={styles.triggerPillTitle}>Trigger matched</span>
-              <span className={styles.triggerPillTime}>2.4s · DM queued</span>
-            </div>
-          </div>
-
-          {/* Floating DM push-notification — looks like a real iOS push */}
-          <div className={styles.dmFloat}>
-            <div className={styles.dmHeaderRow}>
-              <div className={styles.dmAppIcon}>
-                <span className={styles.dmAppIconInner}>
-                  <MessageCircle size={11} fill="#fff" strokeWidth={0} />
-                </span>
-              </div>
-              <span className={styles.dmAppName}>Instagram</span>
-              <span className={styles.dmTime}>now</span>
-            </div>
-            <div className={styles.dmContent}>
-              <span className={styles.dmFrom}>@bloomstudio</span>
-              <p className={styles.dmMsg}>Hey! Here&apos;s your link 🔗 Thanks for commenting.</p>
-            </div>
-          </div>
-
-          {/* Floating stat pill */}
-          <div className={styles.statFloat}>
-            <div className={styles.statFloatIcon}><Heart size={13} fill="#10B981" strokeWidth={0} /></div>
-            <div>
-              <div className={styles.statFloatVal}>98.4%</div>
-              <div className={styles.statFloatLbl}>delivery rate</div>
-            </div>
-          </div>
-
+      {/* MOBILE photo — in flow, capped, aspect-ratio container so it stacks
+          naturally below the text. Bottom mask fades into the band. */}
+      <div className="relative z-[2] block px-6 pb-12 lg:hidden">
+        <div className="relative mx-auto aspect-[1973/2189] w-full max-w-[560px] overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={HERO_PHOTO}
+            alt="AutoDM creator"
+            className="absolute inset-0 h-full w-full object-cover object-bottom"
+            style={{
+              maskImage:
+                'linear-gradient(to bottom, black 90%, transparent 100%)',
+              WebkitMaskImage:
+                'linear-gradient(to bottom, black 90%, transparent 100%)',
+            }}
+            loading="eager"
+            fetchPriority="high"
+          />
         </div>
+      </div>
+
+      {/* DESKTOP photo — container width MATCHES the PNG's native aspect
+          (1973/2189 ≈ 0.901). With h-screen, width = 90vh, so the image
+          fills the column edge-to-edge with no empty crimson on either
+          side and no cropping. max-w-[55vw] caps it on portrait/square
+          viewports so the column never overflows the viewport width. */}
+      <div className="hidden lg:absolute lg:right-0 lg:bottom-0 lg:z-[2] lg:block lg:h-screen lg:w-[90vh] lg:max-w-[55vw]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={HERO_PHOTO}
+          alt="AutoDM creator"
+          className="absolute inset-0 h-full w-full object-cover object-bottom"
+          style={{
+            maskImage:
+              'linear-gradient(to bottom, black 92%, transparent 100%)',
+            WebkitMaskImage:
+              'linear-gradient(to bottom, black 92%, transparent 100%)',
+          }}
+        />
       </div>
     </section>
   );

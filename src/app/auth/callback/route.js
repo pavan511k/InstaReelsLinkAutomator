@@ -11,7 +11,8 @@ import { TRIAL_DAYS } from '@/lib/plans';
  * 1. Exchanges the one-time code for a session.
  * 2. Provisions a user_plans row with a 30-day trial if one doesn't exist yet.
  *    (ignoreDuplicates: true — safe to call multiple times, never overwrites a paid plan.)
- * 3. Redirects to /dashboard where TrialBanner will immediately be visible.
+ * 3. Redirects to /dashboard where the inline trial banner + sidebar plan
+ *    badge will immediately reflect the trial status.
  */
 export async function GET(request) {
     const { searchParams, origin } = new URL(request.url);

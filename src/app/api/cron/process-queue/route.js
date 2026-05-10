@@ -213,10 +213,13 @@ export async function GET(request) {
                     // Use the captured username when available; fall back to a
                     // friendly 'there' so we never substitute the numeric IGSID
                     // into a user-facing message ("Hey 17841405...").
-                    const personal = item.recipient_username || 'there';
+                    // {first_name} prefers the fetched display-name first word
+                    // (recipient_first_name), then the username, then 'there'.
+                    const usernameForCtx  = item.recipient_username || 'there';
+                    const firstNameForCtx = item.recipient_first_name || 'there';
                     const context  = {
-                        username:   personal,
-                        first_name: personal,
+                        username:   usernameForCtx,
+                        first_name: firstNameForCtx,
                         comment_id: item.comment_id || '',
                     };
 
@@ -257,16 +260,17 @@ export async function GET(request) {
                     }
 
                     await supabase.from('dm_sent_log').insert({
-                        automation_id:      item.automation_id,
-                        post_id:            item.post_id,
-                        recipient_ig_id:    item.recipient_ig_id,
-                        recipient_username: item.recipient_username,
-                        comment_id:         item.comment_id,
-                        comment_text:       item.comment_text,
-                        status:             'sent',
-                        flow_step:          flowStepValue,
-                        platform:           item.platform || 'instagram',
-                        sent_at:            now.toISOString(),
+                        automation_id:        item.automation_id,
+                        post_id:              item.post_id,
+                        recipient_ig_id:      item.recipient_ig_id,
+                        recipient_username:   item.recipient_username,
+                        recipient_first_name: item.recipient_first_name,
+                        comment_id:           item.comment_id,
+                        comment_text:         item.comment_text,
+                        status:               'sent',
+                        flow_step:            flowStepValue,
+                        platform:             item.platform || 'instagram',
+                        sent_at:              now.toISOString(),
                     });
 
                     // Mark queue item done

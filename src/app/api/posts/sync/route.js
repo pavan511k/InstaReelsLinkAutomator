@@ -65,6 +65,11 @@ export async function POST() {
                     permalink: p.permalink || '',
                     timestamp: p.timestamp,
                     is_story: false,
+                    // Engagement counts may be undefined on the API response
+                    // (older accounts, certain media types). Coerce to null
+                    // so the column accepts the value.
+                    like_count:     typeof p.like_count     === 'number' ? p.like_count     : null,
+                    comments_count: typeof p.comments_count === 'number' ? p.comments_count : null,
                     synced_at: new Date().toISOString(),
                 })));
 
@@ -138,16 +143,84 @@ export async function POST() {
             }, {}),
         );
 
-        // Upsert posts (insert or update on conflict)
+        // Upsert posts (insert or update on conflict). If the engagement
+        // columns (`like_count`/`comments_count`) don't exist yet (the
+        // migration `add-post-engagement.sql` hasn't run on this DB),
+        // Postgres rejects the whole batch — strip those fields and
+        // retry once so sync still works on a pre-migration DB.
         if (deduped.length > 0) {
-            const { error: upsertError } = await supabase
+            let { error: upsertError } = await supabase
                 .from('instagram_posts')
                 .upsert(deduped, { onConflict: 'ig_post_id' });
+
+            if (upsertError) {
+                const msg = upsertError.message || '';
+                const isMissingEngagement =
+                    /like_count|comments_count/i.test(msg) || /column .* does not exist/i.test(msg);
+                if (isMissingEngagement) {
+                    const stripped = deduped.map(({ like_count, comments_count, ...rest }) => rest);
+                    ({ error: upsertError } = await supabase
+                        .from('instagram_posts')
+                        .upsert(stripped, { onConflict: 'ig_post_id' }));
+                }
+            }
 
             if (upsertError) {
                 console.error('Failed to save posts:', upsertError);
                 return NextResponse.json({ error: 'Failed to save posts' }, { status: 500 });
             }
+        }
+
+        // ── Next-Post binding ───────────────────────────────────────────
+        // builder_v2 automations saved with postTargetMode='next' wait
+        // here for the first post the user publishes AFTER the
+        // automation was created. We bind to the oldest such post and
+        // flip the mode to 'specific' so the binding is one-shot.
+        // Idempotent — already-bound rows have post_id != null and
+        // don't match the filter.
+        try {
+            const { data: pendingNext } = await supabase
+                .from('dm_automations')
+                .select('id, created_at, trigger_config')
+                .eq('user_id', user.id)
+                .eq('dm_type', 'builder_v2')
+                .eq('is_active', true)
+                .is('post_id', null)
+                .filter('trigger_config->>postTargetMode', 'eq', 'next');
+
+            if (pendingNext && pendingNext.length > 0) {
+                const accountIds = accounts.map((a) => a.id);
+                for (const auto of pendingNext) {
+                    const { data: candidates } = await supabase
+                        .from('instagram_posts')
+                        .select('id, timestamp')
+                        .in('account_id', accountIds)
+                        .eq('is_story', false)
+                        .gt('timestamp', auto.created_at)
+                        .order('timestamp', { ascending: true })
+                        .limit(1);
+                    const target = candidates?.[0];
+                    if (!target) continue;
+                    const nextTrigger = { ...(auto.trigger_config || {}), postTargetMode: 'specific' };
+                    const { error: bindErr } = await supabase
+                        .from('dm_automations')
+                        .update({
+                            post_id:        target.id,
+                            trigger_config: nextTrigger,
+                            updated_at:     new Date().toISOString(),
+                        })
+                        .eq('id', auto.id);
+                    if (bindErr) {
+                        console.warn(`[Sync] Failed to bind next-post automation ${auto.id}:`, bindErr.message);
+                    } else {
+                        console.log(`[Sync] Bound next-post automation ${auto.id} to post ${target.id}`);
+                    }
+                }
+            }
+        } catch (bindErr) {
+            // Non-fatal — sync still succeeds, automations stay pending
+            // and will retry on the next sync run.
+            console.warn('[Sync] Next-post binding pass failed:', bindErr.message);
         }
 
         // Reconcile expired/deleted stories per account.
@@ -204,7 +277,11 @@ export async function POST() {
  * useIgApi=false → Facebook Page Access Token    → graph.facebook.com
  */
 async function fetchInstagramPosts(igUserId, accessToken, useIgApi = false) {
-    const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp';
+    // like_count + comments_count are surfaced on /media for IG Business
+    // accounts (both via FB Graph and IG Graph). Reels and posts both
+    // populate these; Stories don't, which is why fetchInstagramStories
+    // intentionally omits them.
+    const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count';
     const base = useIgApi ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
     const response = await fetch(
         `${base}/${GRAPH_API_VERSION}/${igUserId}/media?fields=${fields}&limit=100&access_token=${accessToken}`

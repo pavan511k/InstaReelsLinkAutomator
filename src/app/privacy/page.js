@@ -29,7 +29,7 @@ export default function PrivacyPolicy() {
 
             <div className={styles.container}>
                 <h1>Privacy Policy</h1>
-                <span className={styles.updated}>Last updated: March 21, 2026</span>
+                <span className={styles.updated}>Last updated: May 10, 2026</span>
 
                 <p className={styles.intro}>
                     This Privacy Notice for AutoDM (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) describes how
@@ -122,7 +122,7 @@ export default function PrivacyPolicy() {
                         <li><strong>Follow Gate:</strong> To verify that a commenter has followed your account before sending a reward link, using Meta's follower verification API (Pro feature)</li>
                         <li><strong>Email lead capture:</strong> To collect and store email addresses that commenters voluntarily share in reply to your automated DM prompt (Pro feature)</li>
                         <li><strong>Click tracking:</strong> To generate short redirect URLs and count clicks on links sent in automated DMs so you can measure engagement</li>
-                        <li><strong>Analytics:</strong> To provide performance metrics including DMs sent, link clicks, click-through rate (CTR), and A/B test results</li>
+                        <li><strong>Analytics:</strong> To provide performance metrics including DMs sent and link clicks per automation</li>
                         <li><strong>Email communications:</strong> To send account verification emails, trial notifications, and service updates via Supabase Auth and Resend</li>
                         <li><strong>Security and compliance:</strong> To detect and prevent abuse, enforce our Terms of Service, and comply with applicable laws</li>
                     </ul>

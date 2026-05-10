@@ -13,6 +13,15 @@ export const TRIAL_DAYS    = 30;   // days of free Pro trial for new signups
 export const PRO_PRICE_INR = 299;  // monthly price in INR (kept for legacy refs)
 
 /**
+ * Automation count cap on free tier. Hitting this should funnel users
+ * into the Pricing modal — checked client-side (UI gating) AND server-side
+ * (POST /api/automations/builder). Counts only `dm_automations` rows
+ * owned by the user; archived/deleted rows do not count.
+ */
+export const FREE_AUTOMATION_LIMIT = 5;
+export const PRO_AUTOMATION_LIMIT  = null; // unlimited
+
+/**
  * Carousel slide caps per plan.
  */
 export const FREE_SLIDE_LIMIT = 3;
@@ -111,6 +120,19 @@ export function getDmLimit(effectivePlan) {
         return PRO_DM_LIMIT; // unlimited
     }
     return FREE_DM_LIMIT;
+}
+
+/**
+ * Returns the automation count limit for an effective plan string.
+ * Returns null for unlimited plans (pro / trial / business).
+ * @param {'free' | 'trial' | 'pro' | 'business'} effectivePlan
+ * @returns {number|null}
+ */
+export function getAutomationLimit(effectivePlan) {
+    if (effectivePlan === 'pro' || effectivePlan === 'business' || effectivePlan === 'trial') {
+        return PRO_AUTOMATION_LIMIT; // unlimited
+    }
+    return FREE_AUTOMATION_LIMIT;
 }
 
 /**
