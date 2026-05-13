@@ -358,8 +358,17 @@ export async function checkUserIsFollower(igAccountId, checkUserId, accessToken)
     // take 3-10 seconds to reflect a brand-new follow. Without this, users
     // who follow + immediately tap YES get falsely marked "not following".
     await new Promise((r) => setTimeout(r, 6000));
-    result = await walk();
-    return result === true;
+    const retry = await walk();
+    if (retry === true) return true;
+
+    // If BOTH attempts hit an API error (walk() returned null) we don't
+    // actually know whether the user follows -- collapsing null to false
+    // here would make every token glitch / API hiccup fire the follow
+    // gate, gating legitimate users unfairly. Surface null so the caller
+    // can treat it as "skip the gate, send the DM anyway" (which is the
+    // documented intent at the call site).
+    if (result === null && retry === null) return null;
+    return false;
 }
 
 /**
