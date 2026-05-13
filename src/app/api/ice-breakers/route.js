@@ -253,7 +253,7 @@ export async function DELETE(request) {
     try {
         const { data: account } = await supabase
             .from('connected_accounts')
-            .select('id, access_token, fb_page_id, fb_page_access_token, default_config')
+            .select('id, access_token, ig_user_id, fb_page_id, fb_page_access_token, default_config')
             .eq('id', accountId)
             .eq('user_id', user.id)
             .maybeSingle();
@@ -261,7 +261,12 @@ export async function DELETE(request) {
         if (!account) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
 
         const token    = account.fb_page_access_token || account.access_token;
-        const pageOrIg = account.fb_page_id;
+        // Mirror the POST handler: fall back to ig_user_id for IG-Business-
+        // Login-only accounts (no FB page). Without this fallback, IG-only
+        // accounts silently skip the Meta DELETE — local config clears but
+        // the openers keep rendering in Instagram.
+        const pageOrIg = account.fb_page_id || account.ig_user_id;
+        const iceBase  = account.fb_page_access_token ? GRAPH : GRAPH_IG_BASE;
 
         // Clear from Meta. Per Meta's IG ice_breakers docs:
         //   - access_token MUST be on the query string (sending it in the
@@ -270,28 +275,58 @@ export async function DELETE(request) {
         //   - body contains ONLY { fields: ['ice_breakers'] }
         // Errors are logged so a silent "didn't actually delete" doesn't
         // sit hidden behind a non-fatal catch.
+        const tokenSig  = token ? `${token.slice(0, 8)}...${token.slice(-6)} (len=${token.length})` : '(none)';
+        const tokenType = account.fb_page_access_token === token ? 'fb_page_access_token' : 'ig_access_token';
+
         if (pageOrIg && token) {
             const deleteUrl =
-                `${GRAPH}/${pageOrIg}/messenger_profile`
+                `${iceBase}/${pageOrIg}/messenger_profile`
                 + `?platform=instagram`
                 + `&access_token=${encodeURIComponent(token)}`;
+            const urlForLog = deleteUrl.replace(/access_token=[^&]+/, 'access_token=<MASKED>');
+
+            console.log('[IceBreakers/DELETE] Meta request prep:', JSON.stringify({
+                url:        urlForLog,
+                pageOrIg,
+                base:       iceBase,
+                token_type: tokenType,
+                token_sig:  tokenSig,
+            }));
+
             try {
+                const requestBody = JSON.stringify({ fields: ['ice_breakers'] });
+                console.log('[IceBreakers/DELETE] body:', requestBody);
+
                 const res = await fetch(deleteUrl, {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fields: ['ice_breakers'] }),
+                    body: requestBody,
                 });
+                const rawText = await res.text();
+                let data;
+                try { data = JSON.parse(rawText); } catch { data = { _raw: rawText }; }
+
+                console.log('[IceBreakers/DELETE] Meta response:', JSON.stringify({
+                    status:     res.status,
+                    statusText: res.statusText,
+                    ok:         res.ok,
+                    body:       data,
+                }));
+
                 if (!res.ok) {
-                    const data = await res.json().catch(() => ({}));
                     console.warn(
-                        '[IceBreakers] Meta DELETE failed:',
+                        '[IceBreakers/DELETE] Meta DELETE failed:',
                         data.error?.message || `status ${res.status}`,
-                        JSON.stringify(data),
                     );
                 }
             } catch (err) {
-                console.warn('[IceBreakers] Meta DELETE threw:', err.message);
+                console.warn('[IceBreakers/DELETE] Meta DELETE threw:', err.message);
             }
+        } else {
+            console.warn('[IceBreakers/DELETE] Skipping Meta DELETE -- missing pageOrIg or token:', JSON.stringify({
+                hasPageOrIg: !!pageOrIg,
+                hasToken:    !!token,
+            }));
         }
 
         // Clear locally
