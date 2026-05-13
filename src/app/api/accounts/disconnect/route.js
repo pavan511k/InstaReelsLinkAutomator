@@ -89,12 +89,17 @@ export async function POST(request) {
             .in('account_id', accountIds)
             .in('status', ['pending', 'processing']);
 
-        // 6. CLEAR in-flight follow-gate flows
-        //    — dm_followup_queue: users who were asked to follow but haven't replied yet
+        // 6. CLEAR in-flight gate flows
+        //    — dm_followup_queue covers two gate states:
+        //        'awaiting_confirmation' → follow-gate (user asked to follow first)
+        //        'awaiting_opening_tap'  → opening-message button gate
+        //      Both are partial-unique-indexed; leaving rows behind blocks the
+        //      same (automation, recipient) pair from re-entering the flow on
+        //      reconnect via PG 23505.
         await db.from('dm_followup_queue')
             .delete()
             .in('account_id', accountIds)
-            .eq('status', 'awaiting_confirmation');
+            .in('status', ['awaiting_confirmation', 'awaiting_opening_tap']);
 
         // 7. CLEAR in-flight email collection flows
         //    — email_collect_queue: users who were asked for their email but haven't replied
