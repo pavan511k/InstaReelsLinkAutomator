@@ -141,10 +141,10 @@ async function processJob(supabase, job) {
     let sent = 0, failed = 0, processedThisBatch = 0, wasThrottled = false;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
 
-    // Fetch the owner's plan once per batch — applyBranding needs it to
-    // decide between the default "Sent with AutoDM" suffix and a Pro custom
-    // suffix. Falls back to 'free' if the row is missing so branding still
-    // appends.
+    // Fetch the owner's plan once per batch — applyBranding gates branding
+    // on the plan: free plans get the minimal "— autodm.pro" tag, Pro plans
+    // get their custom branding string (if set) or nothing. Falls back to
+    // 'free' if the row is missing.
     let userPlan = 'free';
     try {
         const { data: planRow } = await supabase

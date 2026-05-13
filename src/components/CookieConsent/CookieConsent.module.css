@@ -1,3 +1,8 @@
+/* ================================================================
+   CookieConsent — single-theme (light). Black-default + orange-
+   highlight palette, matches /coming-soon and /admin/email.
+   ================================================================ */
+
 .overlay {
     position: fixed;
     bottom: 0;
@@ -11,39 +16,34 @@
 }
 
 .banner {
-    background: var(--bg-card, #1a1a2e);
-    border: 1px solid var(--border, #2a2a4a);
+    background: #FFFFFF;
+    border: 1px solid #E5E5E5;
     border-radius: 16px;
     padding: 24px;
     max-width: 560px;
     width: 100%;
-    box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.4);
+    box-shadow:
+        0 -4px 32px rgba(15, 23, 42, 0.06),
+        0  8px 24px rgba(15, 23, 42, 0.05);
     pointer-events: auto;
     animation: slideUp 0.4s ease-out;
 }
 
 @keyframes slideUp {
-    from {
-        transform: translateY(100%);
-        opacity: 0;
-    }
-
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
 }
 
 .title {
     font-size: 1rem;
     font-weight: 600;
     margin: 0 0 8px;
-    color: var(--text-primary, #fff);
+    color: #171717;
 }
 
 .description {
     font-size: 0.85rem;
-    color: var(--text-secondary, #a0a0c0);
+    color: #525252;
     line-height: 1.5;
     margin: 0 0 16px;
 }
@@ -53,10 +53,10 @@
     flex-direction: column;
     gap: 12px;
     margin-bottom: 16px;
-    padding: 12px;
-    border-radius: 10px;
-    background: var(--bg-hover, rgba(255, 255, 255, 0.03));
-    border: 1px solid var(--border, #2a2a4a);
+    padding: 14px;
+    border-radius: 12px;
+    background: #FAFAFA;
+    border: 1px solid #E5E5E5;
 }
 
 .preferenceItem {
@@ -68,40 +68,40 @@
 
 .checkbox {
     margin-top: 3px;
-    accent-color: var(--primary, #6366f1);
+    accent-color: #F97316;
 }
 
 .prefLabel {
     font-size: 0.85rem;
     font-weight: 600;
-    color: var(--text-primary, #fff);
+    color: #171717;
     margin-right: 6px;
 }
 
 .prefRequired {
     font-size: 0.7rem;
-    padding: 1px 6px;
+    padding: 2px 7px;
     border-radius: 4px;
-    background: var(--primary, #6366f1);
+    background: #171717;
     color: #fff;
-    font-weight: 500;
+    font-weight: 600;
     vertical-align: middle;
 }
 
 .prefOptional {
     font-size: 0.7rem;
-    padding: 1px 6px;
+    padding: 2px 7px;
     border-radius: 4px;
-    background: var(--bg-hover, #2a2a4a);
-    color: var(--text-secondary, #a0a0c0);
+    background: #F5F5F5;
+    color: #525252;
     font-weight: 500;
     vertical-align: middle;
 }
 
 .prefDesc {
     font-size: 0.78rem;
-    color: var(--text-secondary, #a0a0c0);
-    line-height: 1.4;
+    color: #525252;
+    line-height: 1.45;
     margin: 4px 0 0;
 }
 
@@ -109,46 +109,43 @@
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+    flex-wrap: wrap;
 }
 
 .acceptBtn,
 .essentialBtn,
 .customizeBtn {
-    padding: 8px 16px;
+    padding: 9px 16px;
     border-radius: 8px;
     font-size: 0.83rem;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     border: none;
-    transition: all 0.2s ease;
+    transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
+/* Highlight — Accept All / Save Preferences */
 .acceptBtn {
-    background: #7C3AED;
+    background: #F97316;
     color: #fff;
-    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.45);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 4px 14px rgba(249,115,22,0.30);
 }
+.acceptBtn:hover  { background: #EA580C; box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 6px 18px rgba(234,88,12,0.40); }
+.acceptBtn:focus-visible { outline: 2px solid #FB923C; outline-offset: 2px; }
 
-.acceptBtn:hover {
-    background: #6D28D9;
-    box-shadow: 0 4px 18px rgba(124, 58, 237, 0.6);
-}
-
+/* Default — Essential Only / Back */
 .essentialBtn {
-    background: transparent;
-    border: 1px solid var(--border, #2a2a4a);
-    color: var(--text-primary, #fff);
+    background: #171717;
+    color: #fff;
+    border: 1px solid #171717;
 }
+.essentialBtn:hover { background: #000; border-color: #000; }
+.essentialBtn:focus-visible { outline: 2px solid #404040; outline-offset: 2px; }
 
-.essentialBtn:hover {
-    background: var(--bg-hover, rgba(255, 255, 255, 0.05));
-}
-
+/* Tertiary — Customize */
 .customizeBtn {
     background: transparent;
-    color: var(--text-secondary, #a0a0c0);
+    color: #525252;
 }
-
-.customizeBtn:hover {
-    color: var(--text-primary, #fff);
-}
+.customizeBtn:hover { color: #171717; }
+.customizeBtn:focus-visible { outline: 2px solid #D4D4D4; outline-offset: 2px; }

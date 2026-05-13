@@ -73,6 +73,34 @@ function button(text, href) {
 // ── Divider ───────────────────────────────────────────────────────────────────
 const divider = `<hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:28px 0;" />`;
 
+// ── Ad-hoc admin send ─────────────────────────────────────────────────────────
+// Backs the /admin/email tool. Caller provides recipients + content;
+// optionally wraps the HTML body in the branded layout() so admin emails
+// match the rest of AutoDM's transactional style. Returns the Resend
+// response so callers can log the resend_id.
+export async function sendCustomEmail({
+    to,
+    cc = [],
+    bcc = [],
+    subject,
+    html,
+    text,
+    branded = false,
+}) {
+    const wrappedHtml = branded && html ? layout(html) : html;
+
+    return getResend().emails.send({
+        from: FROM,
+        to,
+        // Resend rejects empty arrays for cc/bcc — pass undefined when none.
+        cc:  cc.length  > 0 ? cc  : undefined,
+        bcc: bcc.length > 0 ? bcc : undefined,
+        subject,
+        html: wrappedHtml,
+        text,
+    });
+}
+
 // ── 1. Welcome email (sent after signup) ─────────────────────────────────────
 export async function sendWelcomeEmail({ to, name }) {
     const firstName = (name || to.split('@')[0]).split(' ')[0];

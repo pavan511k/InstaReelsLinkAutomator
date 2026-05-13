@@ -31,6 +31,7 @@ is safe and will not overwrite data.
 | 14 | `14_user_plans.sql` | **Single source of truth for billing plans** |
 | 15 | `15_data_deletion_requests.sql` | Meta Platform data deletion compliance |
 | 16 | `16_storage_dm_images.sql` | Storage bucket for DM slide images |
+| 17 | `17_admin_email_log.sql` | Audit log for the admin /admin/email tool |
 
 > **Order matters.** Each table references tables created by earlier scripts
 > via foreign keys. Running out of order will produce FK constraint errors.

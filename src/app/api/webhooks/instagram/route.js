@@ -149,6 +149,24 @@ async function processWebhookEvents(body) {
         for (const msg of entryItem.messaging || []) {
             if (msg.message && !msg.message.is_echo) {
                 await handleIncomingDMReply(supabase, accountId, msg);
+            } else if (msg.postback?.payload) {
+                // Postback events fire when a user taps a button inside a
+                // template (e.g. the follow-gate buttons sent by
+                // sendFollowGateDM). Meta delivers these on a separate
+                // shape -- `msg.postback.payload` instead of
+                // `msg.message.quick_reply.payload` -- so normalise into
+                // the message-event shape before dispatch. Same
+                // downstream logic then catches CONFIRMED_FOLLOW /
+                // NOT_FOLLOWING / ICE_BREAKER_* payloads regardless of
+                // how Meta delivered them.
+                await handleIncomingDMReply(supabase, accountId, {
+                    ...msg,
+                    message: {
+                        text: msg.postback.title || '',
+                        quick_reply: { payload: msg.postback.payload },
+                        mid: msg.postback.mid || null,
+                    },
+                });
             }
         }
 
@@ -170,11 +188,25 @@ async function processWebhookEvents(body) {
 // ─── DM Reply Handler ────────────────────────────────────────────────────────
 
 async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
-    const senderId   = messagingEvent.sender?.id;
-    const msgText    = messagingEvent.message?.text?.toLowerCase().trim() || '';
-    const msgPayload = messagingEvent.message?.quick_reply?.payload || '';
+    const senderId    = messagingEvent.sender?.id;
+    const msgText     = messagingEvent.message?.text?.toLowerCase().trim() || '';
+    const msgPayload  = messagingEvent.message?.quick_reply?.payload || '';
+    const attachments = messagingEvent.message?.attachments || [];
+    const inboundMid  = messagingEvent.message?.mid || null;
 
-    if (!senderId || !msgText) return;
+    if (!senderId) return;
+
+    // ── Story mention delivered as a DM ─────────────────────
+    // Meta delivers story mentions through this `messages` webhook (not
+    // the legacy `mentions` change-field path): the event has no text
+    // body, just an attachment with type='story_mention'. Dispatch
+    // BEFORE the text guard below or these get silently dropped.
+    if (attachments.some((a) => a?.type === 'story_mention')) {
+        await handleStoryMentionDM(supabase, igAccountId, senderId, inboundMid);
+        return;
+    }
+
+    if (!msgText) return;
 
     console.log(`[Webhook] Incoming DM from ${senderId}: "${msgText}"`);
 
@@ -198,8 +230,21 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
     }
 
     // ── Ice breaker tap ─────────────────────────────────────
+    // Two paths because Meta is inconsistent:
+    //   1. Payload-based -- Meta is supposed to deliver a
+    //      quick_reply.payload when a user taps an ice-breaker chip.
+    //      This is the deterministic path when it works.
+    //   2. Text-fallback -- in practice Meta sometimes delivers
+    //      ice-breaker taps as plain text with no payload (often when
+    //      the openers were configured on the IG Business Inbox side
+    //      rather than via our /api/ice-breakers route). Match by the
+    //      configured question text. Exact match only so this doesn't
+    //      intercept follow-up-gate YES/NO replies or keyword DMs.
     if (msgPayload?.startsWith('ICE_BREAKER_')) {
-        await handleIceBreakerResponse(supabase, igAccountId, senderId, msgPayload);
+        const handled = await handleIceBreakerResponse(supabase, igAccountId, senderId, msgPayload);
+        if (handled) return;
+    }
+    if (msgText && await handleIceBreakerByText(supabase, igAccountId, senderId, msgText)) {
         return;
     }
 
@@ -233,28 +278,6 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
         );
         if (dmAutoHandled) return;
         await handleEmailCollectorReply(supabase, senderId, msgText);
-        return;
-    }
-
-    const isExplicitNo =
-        msgPayload === 'NOT_FOLLOWING' ||
-        msgText === 'no' || msgText === 'not yet' || msgText === '\u274c no, not yet';
-
-    if (isExplicitNo) {
-        console.log(`[Webhook] User ${senderId} tapped NO — keeping queue open`);
-        const account2  = queueEntry.connected_accounts;
-        const token2    = account2.fb_page_access_token || account2.access_token;
-        const igSender2 = queueEntry.ig_sender_id;
-        try {
-            const declineMsg = queueEntry.decline_message ||
-                "No worries! Follow us first, then tap \u2705 Yes when you're ready! \ud83d\ude4c";
-            const useIgApi2 = !account2.fb_page_access_token;
-            // Plain text — re-prompting with YES/NO chips feels pushy.
-            // Queue stays open; if the user types 'yes' later, normal flow resumes.
-            await sendTextDM(igSender2, senderId, declineMsg, token2, useIgApi2);
-        } catch (err) {
-            console.warn('[Webhook] Failed to send no-response message:', err.message);
-        }
         return;
     }
 
@@ -437,18 +460,9 @@ async function handleQuickReplyTap(supabase, senderId, msgPayload) {
         username:   usernameForReply,
         first_name: firstNameForReply,
     });
-    // Inline branding logic — applyBranding lives in send-dm.js but isn't
-    // exported. We mirror its behaviour here: free → suffix with URL, Pro →
-    // respect dm_config.branding (custom or empty for unbrand).
-    const isPro = plan === 'pro' || plan === 'business' || plan === 'trial';
-    const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://autodm.pro').replace(/\/$/, '');
-    if (isPro) {
-        const custom = (automation.dm_config?.branding || '').trim();
-        if (custom && !body.trimEnd().endsWith(custom)) body = `${body.trimEnd()}\n\n— ${custom}`;
-    } else {
-        const suffix = `— Sent with AutoDM · ${APP_URL}`;
-        if (!body.trimEnd().endsWith(suffix)) body = `${body.trimEnd()}\n\n${suffix}`;
-    }
+    // Centralized branding via applyBranding (was duplicated inline here
+    // when applyBranding wasn't exported -- it is now, so we just call it).
+    body = applyBranding(body, automation.dm_config || {}, plan);
 
     try {
         await sendTextDM(account.ig_user_id, senderId, body, token, useIg);
@@ -1062,12 +1076,12 @@ async function processAutomationForComment(supabase, post, commentText, commente
                         { username: commenterUsername || 'there', first_name: out.firstName || 'there' },
                     );
                     try {
-                        await sendFollowGateDM(
-                            account.ig_user_id, commenterId, gateMessage, token,
-                            !account.fb_page_access_token, commentId,
-                            { confirmTitle: settings.askToFollowButtonText || "I'm following!" },
-                        );
-                        await supabase.from('dm_followup_queue').insert({
+                        // INSERT into dm_followup_queue FIRST -- the partial
+                        // unique index idx_followup_queue_unique_inflight makes
+                        // this the atomic dedup gate. Concurrent webhook
+                        // deliveries hit 23505 and bail before firing a
+                        // duplicate gate DM. Send moves below the gate.
+                        const { error: enqErr } = await supabase.from('dm_followup_queue').insert({
                             automation_id:         activeAutomation.id,
                             account_id:            post.account_id,
                             recipient_ig_id:       commenterId,
@@ -1086,6 +1100,30 @@ async function processAutomationForComment(supabase, post, commentText, commente
                             link_dm_type:          'builder_v2',
                             link_dm_config:        activeAutomation.dm_config,
                         });
+                        if (enqErr) {
+                            if (enqErr.code === '23505') {
+                                console.log(`[Webhook] Gate flow already in-flight (dedup race) for ${commenterId}`);
+                                out.fired = true;
+                                return out;
+                            }
+                            throw enqErr;
+                        }
+                        // Won the dedup race -- now send the gate DM. Roll
+                        // back the inflight row on send failure so the user
+                        // isn't stuck awaiting_confirmation with no DM.
+                        try {
+                            await sendFollowGateDM(
+                                account.ig_user_id, commenterId, gateMessage, token,
+                                !account.fb_page_access_token, commentId,
+                                { confirmTitle: settings.askToFollowButtonText || "I'm following!" },
+                            );
+                        } catch (sendErr) {
+                            await supabase.from('dm_followup_queue').delete()
+                                .eq('automation_id', activeAutomation.id)
+                                .eq('recipient_ig_id', commenterId)
+                                .eq('status', 'awaiting_confirmation');
+                            throw sendErr;
+                        }
                         await supabase.from('dm_sent_log').insert({
                             automation_id:        activeAutomation.id,
                             post_id:              post.id,
@@ -1110,10 +1148,54 @@ async function processAutomationForComment(supabase, post, commentText, commente
             // the normal builder_v2 enqueue path below. No gate sent.
         }
 
-        // ── All other types — reply immediately (if enabled), enqueue the DM ──
-        // commentReplyEnabled defaults to true: undefined / null on legacy
-        // rows must keep the existing "always reply" behavior. The user has
-        // to explicitly set it to false to suppress the reply.
+        // Enqueue the DM FIRST -- atomic dedup gate.
+        // Meta retries webhooks within 1-2s on slow handlers, so the same
+        // comment_id can arrive 2-3 times concurrently. The early SELECT
+        // dedup checks above are best-effort; the *atomic* boundary is the
+        // unique index idx_dm_queue_dedup on (status, automation_id,
+        // comment_id). Whichever delivery wins this INSERT proceeds; the
+        // rest get 23505 and bail. Code below this point runs ONCE per
+        // comment. Anything that fires above it (e.g. the public comment
+        // reply) can fire N times -- which is exactly the bug that used
+        // to ship 3 public comment replies for a single comment while
+        // the DM (correctly gated by this index) only went out once.
+        const { error: enqErr } = await supabase.from('dm_queue').insert({
+            user_id:              automation.user_id,
+            account_id:           post.account_id,
+            automation_id:        automation.id,
+            post_id:              post.id,
+            recipient_ig_id:      commenterId,
+            recipient_username:   commenterUsername,
+            recipient_first_name: out.firstName,
+            comment_id:           commentId,
+            comment_text:         commentText,
+            platform,
+            dm_type:              activeAutomation.dm_type,
+            dm_config:            activeAutomation.dm_config,
+            tracking_map:         trackingMap,
+            user_plan:            userPlan,
+            queue_reason:         'overflow',
+            priority:             5,
+            status:               'pending',
+            scheduled_after:      new Date(Date.now() + delayMs).toISOString(),
+        });
+
+        if (enqErr) {
+            if (enqErr.code === '23505') {
+                // Another concurrent delivery already won. Bail without
+                // posting the public comment reply or running any of the
+                // downstream queue-trigger / alert / A-B winner work.
+                console.log(`[Webhook] DM already queued (dedup race) for ${commenterId} on comment ${commentId}`);
+                out.fired = true;
+                return out;
+            }
+            throw enqErr;
+        }
+
+        // Public comment reply (post-dedup-gate, runs ONCE per comment).
+        // commentReplyEnabled defaults to true on legacy rows: undefined /
+        // null must keep the existing "always reply" behavior. The user
+        // has to explicitly set it to false to suppress the reply.
         // For builder_v2 rows, public reply is gated by `replyPublicly`
         // and randomly picked from the `publicReplies` pool (only entries
         // currently flagged enabled). Legacy rows keep their existing
@@ -1143,40 +1225,6 @@ async function processAutomationForComment(supabase, post, commentText, commente
             }
         } else {
             console.log('[Webhook] Comment reply skipped \u2014 disabled on this automation');
-        }
-
-        const { error: enqErr } = await supabase.from('dm_queue').insert({
-            user_id:              automation.user_id,
-            account_id:           post.account_id,
-            automation_id:        automation.id,
-            post_id:              post.id,
-            recipient_ig_id:      commenterId,
-            recipient_username:   commenterUsername,
-            recipient_first_name: out.firstName,
-            comment_id:           commentId,
-            comment_text:         commentText,
-            platform,
-            dm_type:              activeAutomation.dm_type,
-            dm_config:            activeAutomation.dm_config,
-            tracking_map:         trackingMap,
-            user_plan:            userPlan,
-            queue_reason:         'overflow',
-            priority:             5,
-            status:               'pending',
-            scheduled_after:      new Date(Date.now() + delayMs).toISOString(),
-        });
-
-        // Concurrent webhook deliveries can both pass the existingQueue check
-        // and race here. The unique idx_dm_queue_dedup catches the duplicate
-        // (Postgres error 23505); treat that as "already queued, skip" rather
-        // than logging a misleading 'failed' row in dm_sent_log.
-        if (enqErr) {
-            if (enqErr.code === '23505') {
-                console.log(`[Webhook] DM already queued (dedup race) for ${commenterId} on comment ${commentId}`);
-                out.fired = true;
-                return out;
-            }
-            throw enqErr;
         }
 
         console.log(`[Webhook] DM enqueued for ${commenterId}${abVariant ? ` (variant ${abVariant})` : ''}`);
@@ -1336,9 +1384,11 @@ async function handleFollowUpAutomation(supabase, automation, post, commenterId,
         // Private Reply (recipient.comment_id) bypasses the 24h messaging
         // window for the first comment-triggered DM. useIgApi stays at its
         // pre-existing default (false) — adding it isn't in scope here.
-        await sendFollowGateDM(igSenderId, commenterId, gateMessage, accessToken, false, commentId);
-
-        await supabase.from('dm_followup_queue').insert({
+        // INSERT into dm_followup_queue FIRST -- partial unique index
+        // idx_followup_queue_unique_inflight makes this the atomic dedup
+        // gate so concurrent webhook deliveries can't fire a duplicate
+        // gate DM. Send moves below the gate; rollback on send failure.
+        const { error: enqErr } = await supabase.from('dm_followup_queue').insert({
             automation_id:         automation.id,
             account_id:            post.account_id,
             recipient_ig_id:       commenterId,
@@ -1351,6 +1401,25 @@ async function handleFollowUpAutomation(supabase, automation, post, commenterId,
             link_dm_type:          dmConfig.linkDmType || 'message_template',
             link_dm_config:        dmConfig.linkDmConfig || { message: dmConfig.linkMessage || '' },
         });
+        if (enqErr) {
+            if (enqErr.code === '23505') {
+                console.log(`[Webhook] Follow-gate already in-flight (dedup race) for ${commenterId}`);
+                return;
+            }
+            throw enqErr;
+        }
+
+        // Won the dedup race -- send the gate DM. On send failure, roll
+        // back the inflight row so the user isn't stuck awaiting confirmation.
+        try {
+            await sendFollowGateDM(igSenderId, commenterId, gateMessage, accessToken, false, commentId);
+        } catch (sendErr) {
+            await supabase.from('dm_followup_queue').delete()
+                .eq('automation_id', automation.id)
+                .eq('recipient_ig_id', commenterId)
+                .eq('status', 'awaiting_confirmation');
+            throw sendErr;
+        }
 
         await supabase.from('dm_sent_log').insert({
             automation_id:        automation.id, post_id: post.id,
@@ -1411,9 +1480,11 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
     try {
         // Private Reply for the comment-triggered first DM — bypasses the
         // 24h window the standard recipient.id path requires.
-        await sendTextDM(igSenderId, commenterId, askMessage, accessToken, useIgApi, commentId);
-
-        await supabase.from('email_collect_queue').insert({
+        // INSERT into email_collect_queue FIRST -- partial unique index
+        // idx_email_queue_unique_inflight makes this the atomic dedup
+        // gate so concurrent webhook deliveries can't fire a duplicate
+        // email-ask DM. Send moves below the gate; rollback on failure.
+        const { error: enqErr } = await supabase.from('email_collect_queue').insert({
             automation_id:        automation.id,
             account_id:           post.account_id,
             recipient_ig_id:      commenterId,
@@ -1421,6 +1492,25 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
             confirmation_message: dmConfig.emailConfirmMessage || '',
             status:               'awaiting_email',
         });
+        if (enqErr) {
+            if (enqErr.code === '23505') {
+                console.log(`[Webhook/Email] Email collection already in-flight (dedup race) for ${commenterId}`);
+                return;
+            }
+            throw enqErr;
+        }
+
+        // Won the dedup race -- send the email-ask DM. On send failure,
+        // roll back the inflight row so the user isn't stuck awaiting_email.
+        try {
+            await sendTextDM(igSenderId, commenterId, askMessage, accessToken, useIgApi, commentId);
+        } catch (sendErr) {
+            await supabase.from('email_collect_queue').delete()
+                .eq('automation_id', automation.id)
+                .eq('recipient_ig_id', commenterId)
+                .eq('status', 'awaiting_email');
+            throw sendErr;
+        }
 
         await supabase.from('dm_sent_log').insert({
             automation_id:        automation.id, post_id: post.id,
@@ -1795,6 +1885,106 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
     }
 }
 
+// Story mention delivered as a DM (current IG Messaging API path).
+// Meta sends a `messages` webhook with `attachments[0].type='story_mention'`
+// and no text body. The mentioner is `senderId`; there's no media_id on
+// this path (the attachment payload.url is an opaque CDN URL), so dedup
+// uses a 5-minute window per recipient instead of (recipient, media_id).
+// That window also catches Meta retries on the same mention and any
+// overlap with the legacy mentions-change-field handler above.
+async function handleStoryMentionDM(supabase, igAccountId, senderId, inboundMid) {
+    const { data: account } = await supabase
+        .from('connected_accounts')
+        .select('id, user_id, access_token, fb_page_access_token, ig_user_id, default_config')
+        .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
+    if (!account) return;
+
+    const mentionConfig = account.default_config?.mentionDm;
+    if (!mentionConfig?.enabled || !mentionConfig?.message?.trim()) {
+        console.log(`[Webhook/MentionDM] No mentionDm config or disabled -- skipping`);
+        return;
+    }
+
+    // Pro gate -- Story Mention Auto-DM is Pro/Trial only. Saved configs
+    // from a previously-Pro account stop firing on downgrade.
+    const userPlan = await getUserPlan(supabase, account.user_id);
+    if (userPlan !== 'pro' && userPlan !== 'business' && userPlan !== 'trial') {
+        console.log(`[Webhook/MentionDM] Skipping -- user is on ${userPlan} plan`);
+        return;
+    }
+
+    // Cross-path dedup window.
+    const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
+    const { data: recent } = await supabase
+        .from('dm_sent_log').select('id')
+        .is('automation_id', null)
+        .eq('recipient_ig_id', senderId)
+        .eq('comment_text', '[story mention]')
+        .gte('sent_at', cutoff)
+        .limit(1);
+    if (recent && recent.length > 0) {
+        console.log(`[Webhook/MentionDM] Recent reply already sent to ${senderId} -- skipping`);
+        return;
+    }
+
+    // Monthly billing limit (same gate as the comment-trigger path)
+    const dmLimit = getDmLimit(userPlan);
+    if (dmLimit !== null) {
+        const mc = await getMonthlyDmCount(supabase, account.user_id);
+        if (mc >= dmLimit) {
+            console.log(`[Webhook/MentionDM] Monthly DM limit reached -- skipping`);
+            return;
+        }
+    }
+
+    const mentionToken = account.fb_page_access_token || account.access_token;
+    const useIgApi     = !account.fb_page_access_token;
+
+    // Username + first-name lookup in a single Graph call so we can do
+    // {username} and {first_name} substitution without surfacing the
+    // numeric IGSID. Best-effort -- failure falls back to "there".
+    let mentionerHandle    = null;
+    let mentionerFirstName = null;
+    try {
+        const userRes = await fetch(
+            `${graphBase(useIgApi)}/${senderId}?fields=username,name&access_token=${encodeURIComponent(mentionToken)}`
+        );
+        if (userRes.ok) {
+            const userData = await userRes.json();
+            mentionerHandle    = userData?.username || null;
+            mentionerFirstName = extractFirstName(userData?.name);
+        }
+    } catch { /* non-fatal */ }
+
+    const message = applyBranding(
+        resolveMessageVariables(mentionConfig.message, {
+            username:   mentionerHandle    || 'there',
+            first_name: mentionerFirstName || 'there',
+        }),
+        mentionConfig,
+        userPlan,
+    );
+
+    try {
+        await sendTextDM(account.ig_user_id, senderId, message, mentionToken, useIgApi);
+        await supabase.from('dm_sent_log').insert({
+            automation_id:        null,
+            post_id:              null,
+            recipient_ig_id:      senderId,
+            recipient_username:   mentionerHandle,
+            recipient_first_name: mentionerFirstName,
+            comment_id:           inboundMid ? `story_mention:${inboundMid}` : null,
+            comment_text:         '[story mention]',
+            status:               'sent',
+            platform:             'instagram',
+            sent_at:              new Date().toISOString(),
+        });
+        console.log(`[Webhook/MentionDM] Reply sent to ${senderId}`);
+    } catch (err) {
+        console.error('[Webhook/MentionDM] Send failed:', err.message);
+    }
+}
+
 // ─── Global Triggers ─────────────────────────────────────────────────────────
 
 async function processGlobalTriggers(supabase, post, commentText, commenterId, commentId, platform, perPostFired = false, commenterUsername = null, commenterFirstName = null) {
@@ -1937,6 +2127,47 @@ async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload
         return true;
     } catch (err) {
         console.error('[IceBreaker] Failed to send response:', err.message);
+        return false;
+    }
+}
+
+// Fallback path for ice-breaker taps that arrive without quick_reply.payload.
+// Matches the inbound message text against each configured ice-breaker
+// question. Returns true if a match fired so the dispatcher stops.
+//
+// Normalisation: lowercase + trim + strip trailing punctuation. Covers the
+// common variations Meta delivers (with / without a question mark, etc).
+async function handleIceBreakerByText(supabase, igAccountId, senderId, msgText) {
+    const { data: account } = await supabase
+        .from('connected_accounts')
+        .select('id, user_id, access_token, ig_user_id, default_config')
+        .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
+    if (!account) return false;
+
+    const iceBreakers = account.default_config?.iceBreakers || [];
+    if (iceBreakers.length === 0) return false;
+
+    const normalise = (s) => (s || '').toLowerCase().trim().replace(/[?!.,\s]+$/g, '');
+    const target    = normalise(msgText);
+    if (!target) return false;
+
+    const matched = iceBreakers.find((ib) => normalise(ib.question) === target);
+    if (!matched?.responseMessage?.trim()) return false;
+
+    // Same Pro gate as the payload path -- only run after we know there's
+    // a match so unrelated DMs do not pay the user_plans query cost.
+    const userPlan = await getUserPlan(supabase, account.user_id);
+    if (userPlan !== 'pro' && userPlan !== 'business' && userPlan !== 'trial') {
+        console.log(`[IceBreaker:textMatch] Skipping -- user is on ${userPlan} plan`);
+        return false;
+    }
+
+    try {
+        await sendTextDM(account.ig_user_id, senderId, matched.responseMessage, account.access_token, true);
+        console.log(`[IceBreaker:textMatch] Response sent for "${matched.title || matched.question}" to ${senderId} (matched on text)`);
+        return true;
+    } catch (err) {
+        console.error('[IceBreaker:textMatch] Failed to send response:', err.message);
         return false;
     }
 }

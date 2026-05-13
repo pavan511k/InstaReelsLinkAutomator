@@ -40,6 +40,16 @@ CREATE INDEX IF NOT EXISTS idx_email_queue_recipient
     ON email_collect_queue (recipient_ig_id, status)
     WHERE status = 'awaiting_email';
 
+-- Atomic dedup for concurrent webhook deliveries. Two parallel handlers
+-- for the same (automation, recipient) both insert an 'awaiting_email' row
+-- -- only one wins this partial unique index, the rest get 23505 and bail
+-- before sending a duplicate email-ask DM. Mirrors idx_dm_queue_dedup on
+-- dm_queue. Required for the in-handler reorder that fires the DM only
+-- after a successful INSERT.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_email_queue_unique_inflight
+    ON email_collect_queue (automation_id, recipient_ig_id)
+    WHERE status = 'awaiting_email';
+
 CREATE OR REPLACE FUNCTION update_email_collect_queue_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;

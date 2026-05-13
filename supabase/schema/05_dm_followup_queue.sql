@@ -53,6 +53,16 @@ CREATE INDEX IF NOT EXISTS idx_followup_queue_recipient
 CREATE INDEX IF NOT EXISTS idx_followup_queue_automation
     ON dm_followup_queue (automation_id);
 
+-- Atomic dedup for concurrent webhook deliveries. Two parallel handlers
+-- for the same (automation, recipient) both insert a 'awaiting_confirmation'
+-- row -- only one wins this partial unique index, the rest get 23505 and
+-- bail before sending a duplicate gate DM. Mirrors idx_dm_queue_dedup on
+-- dm_queue. Required for the in-handler reorder that fires the DM only
+-- after a successful INSERT.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_followup_queue_unique_inflight
+    ON dm_followup_queue (automation_id, recipient_ig_id)
+    WHERE status = 'awaiting_confirmation';
+
 -- Auto-update updated_at
 CREATE OR REPLACE FUNCTION update_followup_queue_updated_at()
 RETURNS TRIGGER AS $$

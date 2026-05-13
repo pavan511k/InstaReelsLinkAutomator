@@ -27,13 +27,13 @@ export default function DisconnectModal({ isOpen, onClose, onConfirm, isDisconne
             <AlertTriangle className="h-7 w-7" strokeWidth={2} />
           </span>
         </div>
-        <h3 className="mt-5 text-center text-xl font-bold text-neutral-900">
+        <h3 className="mt-5 text-left text-xl font-bold text-neutral-900">
           Disconnect this account?
         </h3>
-        <p className="mt-2 text-center text-sm leading-relaxed text-neutral-600">
+        <p className="mt-2 text-left text-sm leading-relaxed text-neutral-600">
           Per <strong className="text-neutral-900">Meta policy</strong>, disconnecting permanently deletes all Platform Data fetched from Instagram/Facebook:
         </p>
-        <ul className="mx-auto mt-4 max-w-sm list-disc space-y-1.5 pl-6 text-sm text-neutral-700">
+        <ul className="mt-4 list-disc space-y-1.5 pl-6 text-sm text-neutral-700">
           <li>All synced posts, reels, and stories</li>
           <li>Profile info, usernames, and media data</li>
           <li>Stored access tokens</li>
@@ -50,7 +50,7 @@ export default function DisconnectModal({ isOpen, onClose, onConfirm, isDisconne
             type="button"
             onClick={onClose}
             disabled={isDisconnecting}
-            className="inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-60 transition-colors"
+            className="inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-200 hover:border-neutral-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 disabled:opacity-60 transition-all duration-150"
           >
             Cancel
           </button>
@@ -58,7 +58,7 @@ export default function DisconnectModal({ isOpen, onClose, onConfirm, isDisconne
             type="button"
             onClick={onConfirm}
             disabled={isDisconnecting}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-black hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150"
           >
             {isDisconnecting
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />

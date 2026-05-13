@@ -241,7 +241,7 @@ export async function GET(request) {
             await syncPostsForUser(userId);
             console.log('[OAuth Callback] Auto-sync completed after connection');
         } catch (syncErr) {
-            // Non-critical — user can manually sync later via the Posts page.
+            // Non-critical — user can manually re-sync later from the automation builder.
             console.warn('[OAuth Callback] Auto-sync failed (non-critical):', syncErr.message);
         }
 
@@ -253,8 +253,10 @@ export async function GET(request) {
             console.warn('[OAuth Callback] Webhook subscription failed (non-critical):', subErr.message);
         }
 
-        // Send new users straight to Posts & Reels so they can configure automations immediately
-        return NextResponse.redirect(`${appUrl}/posts?connected=${connectionType}`);
+        // Send new users straight to /automations so they can configure their
+        // first automation immediately. (Legacy /posts page was removed in the
+        // builder refactor — the same use case is now covered there.)
+        return NextResponse.redirect(`${appUrl}/automations?connected=${connectionType}`);
     } catch (err) {
         console.error('OAuth callback error:', err);
         // Pass the thrown error message as the 'error' query param so ConnectAccount.js

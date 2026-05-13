@@ -794,11 +794,11 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
               <AlertTriangle className="h-7 w-7" strokeWidth={2} />
             </span>
           </div>
-          <h3 className="mt-5 text-center text-xl font-bold text-neutral-900">Delete your account?</h3>
-          <p className="mt-2 text-center text-sm leading-relaxed text-neutral-600">
+          <h3 className="mt-5 text-left text-xl font-bold text-neutral-900">Delete your account?</h3>
+          <p className="mt-2 text-left text-sm leading-relaxed text-neutral-600">
             This action <strong className="text-neutral-900">cannot be undone</strong>. It permanently deletes your account and removes all associated data:
           </p>
-          <ul className="mx-auto mt-4 max-w-sm list-disc space-y-1.5 pl-6 text-sm text-neutral-700">
+          <ul className="mt-4 list-disc space-y-1.5 pl-6 text-sm text-neutral-700">
             <li>All connected Instagram/Facebook accounts</li>
             <li>All synced posts and stories</li>
             <li>All DM automations and analytics</li>
@@ -848,7 +848,7 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
                 setDeleteError('');
               }}
               disabled={isDeleting}
-              className="inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-60 transition-colors"
+              className="inline-flex items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-200 hover:border-neutral-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 disabled:opacity-60 transition-all duration-150"
             >
               Cancel
             </button>
@@ -856,7 +856,7 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
               type="button"
               onClick={handleDeleteAccount}
               disabled={isDeleting || deleteEmail !== user?.email}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-black hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-700 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 transition-all duration-150"
             >
               {isDeleting
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />

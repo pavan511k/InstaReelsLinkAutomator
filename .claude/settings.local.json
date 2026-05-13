@@ -54,7 +54,12 @@
       "Bash(grep -oE 'Don&#x27;t have an account[^\"]{0,30}')",
       "Bash(rm -f route.js)",
       "Bash(rm -rf activate expire)",
-      "Read(//c/c/Code/SelfProjLearning/InstaReelsLinkAutomator/src/app/api/**)"
+      "Read(//c/c/Code/SelfProjLearning/InstaReelsLinkAutomator/src/app/api/**)",
+      "Bash(npx --no-install eslint src/app/admin src/app/api/admin src/app/coming-soon src/middleware.js src/lib/email.js)",
+      "Bash(node_modules/.bin/eslint src/app/admin src/app/api/admin src/middleware.js src/lib/email.js)",
+      "Bash(node_modules/.bin/eslint src/app/coming-soon/page.js)",
+      "Bash(node_modules/.bin/eslint src/components/CookieConsent)",
+      "Bash(node_modules/.bin/eslint src/app/api/auth/meta/callback/route.js)"
     ]
   }
 }

@@ -15,10 +15,13 @@ function PaymentResult() {
     const orderId      = searchParams.get('order_id');
     const planId       = searchParams.get('plan') || 'pro';
 
-    const [status, setStatus] = useState('verifying'); // verifying | paid | failed | error
+    // Derive the no-orderId failure case at init time instead of calling
+    // setStatus inside the effect (avoids react-hooks/set-state-in-effect
+    // plus the wasted verifying→error render on mount).
+    const [status, setStatus] = useState(orderId ? 'verifying' : 'error'); // verifying | paid | failed | error
 
     useEffect(() => {
-        if (!orderId) { setStatus('error'); return; }
+        if (!orderId) return;
 
         const verify = async () => {
             try {
@@ -55,8 +58,8 @@ function PaymentResult() {
                         Your AutoDM Pro subscription is now active. Follow Gate, save &amp; load templates, unlimited carousel slides, and priority support are all unlocked.
                     </p>
                     <div className={styles.actions}>
-                        <Link href="/posts" className={styles.btnPrimary}>
-                            Go to Posts &amp; Reels <ArrowRight size={16} />
+                        <Link href="/automations" className={styles.btnPrimary}>
+                            Go to Automations <ArrowRight size={16} />
                         </Link>
                         <Link href="/dashboard" className={styles.btnSecondary}>
                             View dashboard

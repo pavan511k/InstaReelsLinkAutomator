@@ -122,15 +122,22 @@ export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, ac
         throw new Error('Multi-CTA requires at least one button with a label and URL');
     }
 
-    // Subtitle reflects the unified branding toggle. Generic-template
-    // subtitle has its own 80-char cap, so we slice the suffix.
+    // Subtitle rules mirror applyBranding: opt-out wins; Pro shows only
+    // their own custom branding (no AutoDM push on paid plans); free tier
+    // gets the minimal "autodm.pro" tag. The em-dash convention for plain
+    // DMs is dropped here because the template subtitle is already a
+    // visually distinct line under the title.
     let subtitle;
     if (dmConfig?.appendBranding === false) {
         subtitle = undefined;
     } else {
         const isPro = plan === 'pro' || plan === 'business' || plan === 'trial';
-        const customBranding = isPro ? (dmConfig?.branding || '').trim() : '';
-        subtitle = (customBranding || 'Sent with AutoDM').slice(0, 80);
+        if (isPro) {
+            const customBranding = (dmConfig?.branding || '').trim();
+            subtitle = customBranding ? customBranding.slice(0, 80) : undefined;
+        } else {
+            subtitle = 'autodm.pro';
+        }
     }
 
     // Meta's generic_template caps title at 80 chars. We hard-truncate so
@@ -183,10 +190,14 @@ export async function sendButtonTemplateDM(igUserId, recipientId, slides, access
     const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
     const url = `${base}/${igUserId}/messages`;
 
+    // Per-slide branding mirrors applyBranding:
+    //   - opt-out wins (no subtitle suffix added)
+    //   - Pro: only their custom string (paid plans don't get an AutoDM push)
+    //   - free: minimal "autodm.pro" tag
     const isPro = plan === 'pro' || plan === 'business' || plan === 'trial';
     const customBranding = isPro ? (dmConfig?.branding || '').trim() : '';
-    const shouldAppend   = dmConfig?.appendBranding !== false;
-    const brandLabel     = customBranding || 'Sent with AutoDM';
+    const brandLabel     = isPro ? customBranding : 'autodm.pro';
+    const shouldAppend   = dmConfig?.appendBranding !== false && !!brandLabel;
 
     const cappedSlides = (slides || []).slice(0, META_MAX_CARDS);
     if ((slides || []).length > META_MAX_CARDS) {
@@ -403,13 +414,21 @@ export async function sendHeartReaction(igUserId, recipientId, messageId, access
 }
 
 export async function sendFollowGateDM(igUserId, recipientId, message, accessToken, useIgApi = false, commentId = null, opts = {}) {
-    // Send with confirm/decline quick reply chips so the user doesn't
-    // need to type anything. The confirm chip title is customizable
-    // via `opts.confirmTitle` (the new builder lets users pre-fill it
-    // with copy like "I'm following!"). Payload stays
-    // CONFIRMED_FOLLOW so the existing webhook handler matches the
-    // tap regardless of title text. Title length is capped at 20
-    // chars by Meta's quick-reply spec.
+    // Send as a button template (template_type: 'button') so the
+    // confirm/decline buttons render INSIDE the message bubble rather
+    // than as floating chips below it. The confirm button title is
+    // customizable via `opts.confirmTitle` (the builder pre-fills with
+    // copy like "I'm following!"). Payloads stay CONFIRMED_FOLLOW /
+    // NOT_FOLLOWING so the existing webhook handler matches button taps
+    // the same way it used to match the quick-reply chip taps.
+    //
+    // Title length is capped at 20 chars by Meta's button spec; message
+    // text can be up to 640 chars.
+    //
+    // NOTE: postback button taps deliver as `messaging[].postback.payload`
+    // (not `messaging[].message.quick_reply.payload`), so the dispatch
+    // loop in app/api/webhooks/instagram/route.js normalizes those into
+    // the message-event shape before invoking handleIncomingDMReply.
     const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
     const url = `${base}/${igUserId}/messages`;
 
@@ -422,19 +441,20 @@ export async function sendFollowGateDM(igUserId, recipientId, message, accessTok
         body: JSON.stringify({
             recipient: buildRecipient(recipientId, commentId),
             message: {
-                text: message,
-                quick_replies: [
-                    {
-                        content_type: 'text',
-                        title: confirmTitle,
-                        payload: 'CONFIRMED_FOLLOW',
+                attachment: {
+                    type: 'template',
+                    payload: {
+                        template_type: 'button',
+                        text: (message || '').slice(0, 640),
+                        buttons: [
+                            {
+                                type: 'postback',
+                                title: confirmTitle,
+                                payload: 'CONFIRMED_FOLLOW',
+                            },
+                        ],
                     },
-                    {
-                        content_type: 'text',
-                        title: '❌ No, not yet',
-                        payload: 'NOT_FOLLOWING',
-                    },
-                ],
+                },
             },
             access_token: accessToken,
         }),
@@ -452,16 +472,6 @@ export function resolveMessageVariables(template, context) {
 }
 
 /**
- * Append the branding suffix to a plain-text DM body. Behaviour mirrors
- * sendButtonTemplateDM's subtitle handling so message_template and
- * button_template are consistent for free vs Pro users.
- *
- *   Free: always appends "— Sent with AutoDM · <APP_URL>" (URL becomes
- *         a clickable link inside the IG/FB DM thread automatically).
- *   Pro:  if dm_config.branding is set, append that as-is. If they cleared
- *         the field, no append.
- */
-/**
  * Normalise a user-entered URL — auto-prepend https:// if the user typed
  * "amazon.in/foo" instead of a full URL. Meta rejects naked hostnames and
  * the resulting error is opaque to creators.
@@ -473,39 +483,34 @@ function normaliseUrl(raw) {
     return `https://${u}`;
 }
 
-/**
- * Default branding suffix shown to recipients when appendBranding is true and
- * no Pro custom override is set. Exported so the live phone preview renders
- * the exact same string the recipient will see.
- */
-export function defaultBrandingSuffix() {
-    const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://autodm.pro').replace(/\/$/, '');
-    return `— Sent with AutoDM · ${APP_URL}`;
-}
+// Minimal one-line attribution for free-tier DMs. Instagram auto-detects
+// the bare domain and renders it as a tappable link without us adding any
+// "https://" preamble that would make it look like a spam footer.
+export const FREE_BRANDING_SUFFIX = '— autodm.pro';
 
 export function applyBranding(message, dmConfig, plan) {
     const trimmed = (message || '').trimEnd();
 
-    // Single source of truth: dm_config.appendBranding (default true). When
-    // false, send the message as-is regardless of plan. Old rows without the
-    // field default to true, preserving prior behavior.
+    // Rules:
+    //   - dmConfig.appendBranding === false  -> always clean (explicit opt-out)
+    //   - Pro/Trial + dmConfig.branding set  -> append the user's custom line
+    //   - Pro/Trial + no custom branding     -> clean (paid plans don't get
+    //                                          our default branding pushed)
+    //   - free / non-Pro                     -> minimal "— autodm.pro" footer
     if (dmConfig?.appendBranding === false) return trimmed;
 
     const isPro = plan === 'pro' || plan === 'business' || plan === 'trial';
 
-    // Pro power-user override: a custom branding string still wins when set.
     if (isPro) {
         const custom = (dmConfig?.branding || '').trim();
-        if (custom) {
-            const customLine = `— ${custom}`;
-            if (trimmed.endsWith(custom) || trimmed.endsWith(customLine)) return trimmed;
-            return `${trimmed}\n\n${customLine}`;
-        }
+        if (!custom) return trimmed;
+        const customLine = `— ${custom}`;
+        if (trimmed.endsWith(custom) || trimmed.endsWith(customLine)) return trimmed;
+        return `${trimmed}\n\n${customLine}`;
     }
 
-    const suffix = defaultBrandingSuffix();
-    if (trimmed.endsWith(suffix)) return trimmed;
-    return `${trimmed}\n\n${suffix}`;
+    if (trimmed.endsWith(FREE_BRANDING_SUFFIX)) return trimmed;
+    return `${trimmed}\n\n${FREE_BRANDING_SUFFIX}`;
 }
 
 /**
@@ -574,43 +579,73 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
             // New flow-builder shape:
             //   dm_config = { message, imageUrl, buttons, openingEnabled,
             //                 openingMessage, openingButtonText, ... }
-            // We collapse the opening block into the body for now (sending
-            // the interactive opening as a separate quick-reply with
-            // postback handling lands in a follow-up). Routing rules:
+            //
+            // When openingEnabled is set, send the opening as its OWN
+            // message bubble first, then the main DM as a second bubble.
+            // (Previously these were concatenated into one body, which
+            // made the recipient see a single giant blob.)
+            //
+            // The askToFollow gate flow intentionally keeps the
+            // concatenation in sendRewardDM (route.js) -- the gate
+            // already used a message slot so a third bubble would be
+            // too noisy.
+            //
+            // Main-DM routing rules below:
             //   • image + buttons   → button_template (one slide)
             //   • image only        → button_template (one slide, no buttons)
             //   • buttons only      → multi_cta
             //   • text only         → message_template
             const validButtons = (dm_config.buttons || []).filter((b) => b.label && b.url);
             const imageUrl     = dm_config.imageUrl || null;
-            const fullMessage  = [
-                dm_config.openingEnabled ? dm_config.openingMessage : null,
-                dm_config.message,
-            ].filter((s) => typeof s === 'string' && s.trim()).join('\n\n');
-            const message = resolveMessageVariables(fullMessage, context);
+            const mainMessage  = resolveMessageVariables(dm_config.message || '', context);
+
+            // Meta's Private Reply (recipient.comment_id) can be used at
+            // most once per comment, so after the opening DM uses it we
+            // switch the main DM to recipient.id. The opening DM also
+            // opens the 24h messaging window, so the main DM still
+            // delivers without needing Private Reply.
+            let privateReplyCommentId = commentId;
+
+            const openingMsg = dm_config.openingEnabled
+                && typeof dm_config.openingMessage === 'string'
+                && dm_config.openingMessage.trim()
+                    ? resolveMessageVariables(dm_config.openingMessage, context)
+                    : null;
+
+            if (openingMsg) {
+                try {
+                    await sendTextDM(igUserId, recipientId, openingMsg, accessToken, useIgApi, privateReplyCommentId);
+                    privateReplyCommentId = null;
+                } catch (err) {
+                    // Non-fatal: log and continue so the main DM still
+                    // goes out even if the opener fails. privateReplyCommentId
+                    // stays set so the main DM can still attempt Private Reply.
+                    console.warn('[sendAutomatedDM] Opening message send failed (continuing with main DM):', err.message);
+                }
+            }
 
             if (imageUrl) {
                 const slide = {
                     headline:    'AutoDM',
-                    description: message,
+                    description: mainMessage,
                     imageUrl,
                     ...(validButtons.length > 0 && {
                         buttons: validButtons.map((b) => ({ type: 'url', label: b.label, value: b.url })),
                     }),
                 };
-                return sendButtonTemplateDM(igUserId, recipientId, [slide], accessToken, trackingMap, plan, useIgApi, dm_config, commentId);
+                return sendButtonTemplateDM(igUserId, recipientId, [slide], accessToken, trackingMap, plan, useIgApi, dm_config, privateReplyCommentId);
             }
             if (validButtons.length > 0) {
                 return sendMultiCtaDM(
-                    igUserId, recipientId, message,
+                    igUserId, recipientId, mainMessage,
                     validButtons.map((b) => ({ label: b.label, url: b.url })),
-                    accessToken, trackingMap, plan, useIgApi, dm_config, commentId,
+                    accessToken, trackingMap, plan, useIgApi, dm_config, privateReplyCommentId,
                 );
             }
             return sendTextDM(
                 igUserId, recipientId,
-                applyBranding(message, dm_config, plan),
-                accessToken, useIgApi, commentId,
+                applyBranding(mainMessage, dm_config, plan),
+                accessToken, useIgApi, privateReplyCommentId,
             );
         }
 
