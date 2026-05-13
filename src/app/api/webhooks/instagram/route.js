@@ -1194,7 +1194,6 @@ async function processAutomationForComment(supabase, post, commentText, commente
                             // don't have a second editable field cluttering
                             // the builder UI.
                             nudge_message:         gateMessage,
-                            decline_message:       "No worries! Follow us and reply YES whenever you're ready 🙌",
                             confirmation_keywords: ['yes', 'done', 'followed', 'ok'],
                             max_retries:           3,
                             // YES handler reads these to dispatch the reward
@@ -1288,7 +1287,6 @@ async function processAutomationForComment(supabase, post, commentText, commente
                     status:                'awaiting_opening_tap',
                     gate_message:          openingResolved,
                     nudge_message:         openingResolved,
-                    decline_message:       '',
                     confirmation_keywords: [
                         openingBtnText.toLowerCase(),
                         'yes', 'send', 'send me the link', 'ok',
@@ -1595,7 +1593,6 @@ async function handleFollowUpAutomation(supabase, automation, post, commenterId,
             ig_sender_id:          igSenderId,
             gate_message:          gateMessage,
             nudge_message:         dmConfig.nudgeMessage || "We couldn't verify your follow yet \ud83d\ude48",
-            decline_message:       dmConfig.declineMessage || "No worries! Follow us and tap \u2705 Yes whenever you're ready \ud83d\ude4c",
             confirmation_keywords: ['yes', 'done', 'followed', 'ok'],
             max_retries:           dmConfig.maxRetries || 3,
             link_dm_type:          dmConfig.linkDmType || 'message_template',
@@ -2095,24 +2092,38 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
 async function handleStoryMentionDM(supabase, igAccountId, senderId, inboundMid) {
     console.log(`[Webhook/MentionDM] Triggered: igAccount=${igAccountId} sender=${senderId} mid=${inboundMid}`);
 
-    // Account lookup. For IG-Business-Login accounts the webhook entry.id is
-    // the ig_user_id. For FB-linked accounts where Meta delivers the IG
-    // event under the Page's id, fall back to fb_page_id so we still find
-    // the connected_accounts row.
-    let { data: account } = await supabase
+    // Account lookup. Match on either column -- IG Business Login stores
+    // the value in ig_user_id; an FB-linked path may deliver the IG event
+    // under the Page's id which lives in fb_page_id. We do NOT filter by
+    // is_active here: the queue processor doesn't, so excluding inactive
+    // rows would mean normal comment-triggered DMs succeed while story
+    // mentions silently fail (the bug you hit). When multiple rows match
+    // we prefer the active one but fall back to the most recent overall.
+    const { data: matches } = await supabase
         .from('connected_accounts')
-        .select('id, user_id, access_token, fb_page_access_token, ig_user_id, fb_page_id, default_config')
-        .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
-    if (!account) {
-        const fbLookup = await supabase
+        .select('id, user_id, access_token, fb_page_access_token, ig_user_id, fb_page_id, default_config, is_active')
+        .or(`ig_user_id.eq.${igAccountId},fb_page_id.eq.${igAccountId}`)
+        .order('updated_at', { ascending: false });
+
+    if (!matches || matches.length === 0) {
+        // Diagnostic: dump a sample of stored ids so it's obvious from the
+        // log whether the column even has the value we're querying against.
+        const { data: sample } = await supabase
             .from('connected_accounts')
-            .select('id, user_id, access_token, fb_page_access_token, ig_user_id, fb_page_id, default_config')
-            .eq('fb_page_id', igAccountId).eq('is_active', true).maybeSingle();
-        account = fbLookup.data;
-    }
-    if (!account) {
-        console.log(`[Webhook/MentionDM] No connected_accounts row matched igAccountId=${igAccountId} (tried ig_user_id and fb_page_id) -- skipping`);
+            .select('id, ig_user_id, fb_page_id, is_active')
+            .order('updated_at', { ascending: false })
+            .limit(5);
+        const stored = (sample || []).map((s) =>
+            `{id:${s.id} ig:${s.ig_user_id} fb:${s.fb_page_id} active:${s.is_active}}`
+        ).join(' ');
+        console.log(`[Webhook/MentionDM] No row matched queried igAccountId=${igAccountId}. Sample of recent rows: ${stored || '(none)'} -- skipping`);
         return;
+    }
+
+    const account = matches.find((m) => m.is_active === true) || matches[0];
+    console.log(`[Webhook/MentionDM] Account row matched: id=${account.id} stored.ig_user_id=${account.ig_user_id} stored.fb_page_id=${account.fb_page_id} is_active=${account.is_active} (queried=${igAccountId})`);
+    if (!account.is_active) {
+        console.warn(`[Webhook/MentionDM] Using INACTIVE account row id=${account.id} -- consider reconnecting in the dashboard so tokens stay fresh`);
     }
 
     const mentionConfig = account.default_config?.mentionDm;
