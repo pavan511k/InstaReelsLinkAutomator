@@ -71,6 +71,18 @@ export async function POST(request) {
     // Read raw body so we can verify Meta's HMAC over the exact bytes sent.
     const rawBody = await request.text();
 
+    // Touch-log so we can prove from Vercel logs whether Meta actually
+    // reached the endpoint at all. If you tap an ice-breaker / button and
+    // do NOT see this line within a few seconds, the webhook subscription
+    // is the problem (not the handler) -- hit /api/accounts/resubscribe
+    // or reconnect the account.
+    console.log('[Webhook] POST received', JSON.stringify({
+        bodyBytes:  Buffer.byteLength(rawBody, 'utf8'),
+        hasSig:     !!request.headers.get('x-hub-signature-256'),
+        ua:         request.headers.get('user-agent') || null,
+        bodyPreview: rawBody.slice(0, 400),
+    }));
+
     // ── Verify X-Hub-Signature-256 — fail closed ──────────────────
     // Meta signs the raw body with the App Secret. Without this check, anyone
     // can POST forged events here and trigger DMs. Reference:
@@ -2359,37 +2371,70 @@ async function processGlobalTriggers(supabase, post, commentText, commenterId, c
 // ─── Ice Breaker Handler ──────────────────────────────────────────────────────
 
 async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload) {
-    if (!payload?.startsWith('ICE_BREAKER_')) return false;
+    console.log('[IceBreaker] handleIceBreakerResponse entry ' + JSON.stringify({
+        igAccountId, senderId, payload,
+        startsWithPrefix: !!payload && payload.startsWith('ICE_BREAKER_'),
+    }));
 
-    const { data: account } = await supabase
+    if (!payload || !payload.startsWith('ICE_BREAKER_')) {
+        console.log('[IceBreaker] Rejecting: payload does not start with ICE_BREAKER_');
+        return false;
+    }
+
+    const { data: account, error: accountErr } = await supabase
         .from('connected_accounts')
         .select('id, user_id, access_token, ig_user_id, default_config')
         .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
-    if (!account) return false;
+
+    if (accountErr) console.warn('[IceBreaker] connected_accounts lookup error: ' + accountErr.message);
+    if (!account) {
+        console.warn('[IceBreaker] No active connected_account for ig_user_id=' + igAccountId);
+        return false;
+    }
 
     // Runtime Pro gate — Welcome Openers is a Pro feature. If the user
     // downgrades, their saved openers stop responding (they can still see
     // and delete them via /welcome-openers).
     const userPlan = await getUserPlan(supabase, account.user_id);
     if (userPlan !== 'pro' && userPlan !== 'business' && userPlan !== 'trial') {
-        console.log(`[IceBreaker] Skipping — user is on ${userPlan} plan`);
+        console.log('[IceBreaker] Skipping — user is on ' + userPlan + ' plan');
         return false;
     }
 
-    const iceBreakers = account.default_config?.iceBreakers || [];
-    const matched = iceBreakers.find((ib) => ib.payload === payload);
+    const iceBreakers = (account.default_config && account.default_config.iceBreakers) || [];
+    console.log('[IceBreaker] Stored iceBreakers: ' + JSON.stringify(
+        iceBreakers.map((ib) => ({
+            title:                  ib.title,
+            payload:                ib.payload,
+            responseMessagePreview: (ib.responseMessage || '').slice(0, 60),
+        }))
+    ));
 
-    if (!matched?.responseMessage?.trim()) {
-        console.log(`[IceBreaker] No matching ice breaker for payload: ${payload}`);
+    const matched = iceBreakers.find((ib) => ib.payload === payload);
+    if (!matched) {
+        console.warn('[IceBreaker] No payload match. inbound=' + payload +
+            ' configuredPayloads=' + JSON.stringify(iceBreakers.map((ib) => ib.payload)));
+        return false;
+    }
+    if (!matched.responseMessage || !matched.responseMessage.trim()) {
+        console.warn('[IceBreaker] Matched but responseMessage is empty: ' + JSON.stringify(matched));
         return false;
     }
 
     try {
-        await sendTextDM(account.ig_user_id, senderId, matched.responseMessage, account.access_token, true);
-        console.log(`[IceBreaker] \u2705 Response sent for "${matched.title}" to ${senderId}`);
+        console.log('[IceBreaker] Sending response DM ' + JSON.stringify({
+            from:    account.ig_user_id,
+            to:      senderId,
+            title:   matched.title,
+            payload: matched.payload,
+            preview: matched.responseMessage.slice(0, 80),
+        }));
+        const dmResult = await sendTextDM(account.ig_user_id, senderId, matched.responseMessage, account.access_token, true);
+        console.log('[IceBreaker] sendTextDM returned: ' + JSON.stringify(dmResult));
+        console.log('[IceBreaker] Response sent for "' + matched.title + '" to ' + senderId);
         return true;
     } catch (err) {
-        console.error('[IceBreaker] Failed to send response:', err.message);
+        console.error('[IceBreaker] Failed to send response: ' + err.message, err.stack);
         return false;
     }
 }
@@ -2401,36 +2446,55 @@ async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload
 // Normalisation: lowercase + trim + strip trailing punctuation. Covers the
 // common variations Meta delivers (with / without a question mark, etc).
 async function handleIceBreakerByText(supabase, igAccountId, senderId, msgText) {
+    console.log('[IceBreaker:textMatch] entry ' + JSON.stringify({ igAccountId, senderId, msgText }));
+
     const { data: account } = await supabase
         .from('connected_accounts')
         .select('id, user_id, access_token, ig_user_id, default_config')
         .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
-    if (!account) return false;
+    if (!account) {
+        console.warn('[IceBreaker:textMatch] No active connected_account for ig_user_id=' + igAccountId);
+        return false;
+    }
 
-    const iceBreakers = account.default_config?.iceBreakers || [];
-    if (iceBreakers.length === 0) return false;
+    const iceBreakers = (account.default_config && account.default_config.iceBreakers) || [];
+    if (iceBreakers.length === 0) {
+        console.log('[IceBreaker:textMatch] No ice breakers configured');
+        return false;
+    }
 
-    const normalise = (s) => (s || '').toLowerCase().trim().replace(/[?!.,\s]+$/g, '');
+    const normalise = (str) => (str || '').toLowerCase().trim().replace(/[?!.,\s]+$/g, '');
     const target    = normalise(msgText);
     if (!target) return false;
 
-    const matched = iceBreakers.find((ib) => normalise(ib.question) === target);
-    if (!matched?.responseMessage?.trim()) return false;
+    // FIX: stored field is `title`, NOT `question`. The Meta payload uses
+    // `question` in the wire format but we persist locally as `title`.
+    // Previously this read `ib.question` which is always undefined.
+    const matched = iceBreakers.find((ib) => normalise(ib.title) === target);
 
-    // Same Pro gate as the payload path -- only run after we know there's
-    // a match so unrelated DMs do not pay the user_plans query cost.
+    console.log('[IceBreaker:textMatch] target="' + target + '" matched=' + (matched ? 'yes' : 'no') +
+        ' candidates=' + JSON.stringify(iceBreakers.map((ib) => normalise(ib.title))));
+
+    if (!matched || !matched.responseMessage || !matched.responseMessage.trim()) {
+        return false;
+    }
+
     const userPlan = await getUserPlan(supabase, account.user_id);
     if (userPlan !== 'pro' && userPlan !== 'business' && userPlan !== 'trial') {
-        console.log(`[IceBreaker:textMatch] Skipping -- user is on ${userPlan} plan`);
+        console.log('[IceBreaker:textMatch] Skipping — user is on ' + userPlan + ' plan');
         return false;
     }
 
     try {
-        await sendTextDM(account.ig_user_id, senderId, matched.responseMessage, account.access_token, true);
-        console.log(`[IceBreaker:textMatch] Response sent for "${matched.title || matched.question}" to ${senderId} (matched on text)`);
+        console.log('[IceBreaker:textMatch] Sending response DM ' + JSON.stringify({
+            from: account.ig_user_id, to: senderId, title: matched.title,
+            preview: matched.responseMessage.slice(0, 80),
+        }));
+        const dmResult = await sendTextDM(account.ig_user_id, senderId, matched.responseMessage, account.access_token, true);
+        console.log('[IceBreaker:textMatch] sendTextDM returned: ' + JSON.stringify(dmResult));
         return true;
     } catch (err) {
-        console.error('[IceBreaker:textMatch] Failed to send response:', err.message);
+        console.error('[IceBreaker:textMatch] Failed to send response: ' + err.message, err.stack);
         return false;
     }
 }
