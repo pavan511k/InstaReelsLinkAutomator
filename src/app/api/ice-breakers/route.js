@@ -125,44 +125,91 @@ export async function POST(request) {
             ],
         };
 
+        // Aggressive diagnostic logging (user granted permission to include
+        // sensitive data). Token is masked to first 8 / last 6 chars.
+        const tokenSig  = token ? `${token.slice(0, 8)}...${token.slice(-6)} (len=${token.length})` : '(none)';
+        const tokenType = account.fb_page_access_token === token ? 'fb_page_access_token' : 'ig_access_token';
+        const urlForLog = metaUrl.replace(/access_token=[^&]+/, 'access_token=<MASKED>');
+
         let metaPushSuccess = false;
         let metaError = null;
 
         if (pageOrIg && token) {
+            console.log('[IceBreakers] Meta request prep:', JSON.stringify({
+                method:       validated.length === 0 ? 'DELETE' : 'POST',
+                url:          urlForLog,
+                pageOrIg,
+                base:         iceBase,
+                token_type:   tokenType,
+                token_sig:    tokenSig,
+                payload_size: validated.length,
+            }));
+
             try {
                 if (validated.length === 0) {
+                    const requestBody = JSON.stringify({ fields: ['ice_breakers'] });
+                    console.log('[IceBreakers] DELETE body:', requestBody);
+
                     const res = await fetch(metaUrl, {
                         method: 'DELETE',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ fields: ['ice_breakers'] }),
+                        body: requestBody,
                     });
-                    const data = await res.json().catch(() => ({}));
+                    const rawText = await res.text();
+                    let data;
+                    try { data = JSON.parse(rawText); } catch { data = { _raw: rawText }; }
+
+                    console.log('[IceBreakers] DELETE response:', JSON.stringify({
+                        status:     res.status,
+                        statusText: res.statusText,
+                        ok:         res.ok,
+                        body:       data,
+                    }));
+
                     if (res.ok) {
                         metaPushSuccess = true;
-                        console.log('[IceBreakers] Cleared from Meta:', JSON.stringify(data));
+                        console.log('[IceBreakers] Cleared from Meta (response above).');
                     } else {
                         metaError = data.error?.message || `Meta DELETE failed (${res.status})`;
-                        console.warn('[IceBreakers] Meta clear failed:', metaError, JSON.stringify(data));
+                        console.warn('[IceBreakers] Meta clear failed:', metaError);
                     }
                 } else {
+                    const requestBody = JSON.stringify(metaPayload);
+                    console.log('[IceBreakers] POST body:', requestBody);
+
                     const res = await fetch(metaUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(metaPayload),
+                        body: requestBody,
                     });
-                    const data = await res.json().catch(() => ({}));
+                    const rawText = await res.text();
+                    let data;
+                    try { data = JSON.parse(rawText); } catch { data = { _raw: rawText }; }
+
+                    console.log('[IceBreakers] POST response:', JSON.stringify({
+                        status:     res.status,
+                        statusText: res.statusText,
+                        ok:         res.ok,
+                        body:       data,
+                    }));
+
                     if (res.ok && data.result === 'success') {
                         metaPushSuccess = true;
                         console.log(`[IceBreakers] Saved ${validated.length} to Meta`);
                     } else {
                         metaError = data.error?.message || `Meta API error (${res.status})`;
-                        console.warn('[IceBreakers] Meta push failed:', metaError, JSON.stringify(data));
+                        console.warn('[IceBreakers] Meta push failed:', metaError);
                     }
                 }
             } catch (err) {
                 metaError = err.message;
                 console.warn('[IceBreakers] Meta push threw:', metaError);
             }
+        } else {
+            console.warn('[IceBreakers] Skipping Meta push -- missing pageOrIg or token:', JSON.stringify({
+                hasPageOrIg: !!pageOrIg,
+                hasToken:    !!token,
+            }));
         }
 
         // Always save locally in default_config regardless of Meta result
