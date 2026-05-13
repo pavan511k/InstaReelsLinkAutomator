@@ -3,7 +3,8 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { graphBase } from '@/lib/meta-graph';
 import {
-    sendAutomatedDM, sendFollowGateDM, checkUserIsFollower, sendHeartReaction,
+    sendAutomatedDM, sendFollowGateDM, sendOpeningGateDM,
+    checkUserIsFollower, sendHeartReaction,
     resolveMessageVariables, replyToComment,
     sendTextDM, sendButtonTemplateDM, sendQuickReplyDM, sendMultiCtaDM,
     applyBranding,
@@ -196,12 +197,20 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 
     if (!senderId) return;
 
+    // Diagnostic: summarise the inbound event so log readers can tell at a
+    // glance whether Meta delivered a text DM, a quick-reply tap, a story
+    // mention, etc. The attachment-type array is the smoking gun for the
+    // "my mention auto-DM isn't firing" debug case.
+    const attachmentTypes = attachments.map((a) => a?.type).filter(Boolean);
+    console.log(`[Webhook] DM event from ${senderId} on account ${igAccountId}: has_text=${!!msgText} payload=${msgPayload || 'none'} attachments=${JSON.stringify(attachmentTypes)}`);
+
     // ── Story mention delivered as a DM ─────────────────────
     // Meta delivers story mentions through this `messages` webhook (not
     // the legacy `mentions` change-field path): the event has no text
     // body, just an attachment with type='story_mention'. Dispatch
     // BEFORE the text guard below or these get silently dropped.
     if (attachments.some((a) => a?.type === 'story_mention')) {
+        console.log(`[Webhook] Story mention detected from ${senderId}, routing to handler`);
         await handleStoryMentionDM(supabase, igAccountId, senderId, inboundMid);
         return;
     }
@@ -257,12 +266,17 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
         return;
     }
 
-    // Look for a pending follow-up queue entry for this user
+    // Look for a pending follow-up queue entry for this user. Two flows
+    // share this table:
+    //   - awaiting_confirmation -> follow gate (tap = verify follower)
+    //   - awaiting_opening_tap  -> opening-message gate (tap = send main DM)
+    // We pick the most-recent row; concurrent gates for the same user
+    // are prevented by partial unique indexes on each status.
     const { data: queueEntry } = await supabase
         .from('dm_followup_queue')
         .select('*, connected_accounts(access_token, fb_page_access_token, ig_user_id)')
         .eq('recipient_ig_id', senderId)
-        .eq('status', 'awaiting_confirmation')
+        .in('status', ['awaiting_confirmation', 'awaiting_opening_tap'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -278,6 +292,83 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
         );
         if (dmAutoHandled) return;
         await handleEmailCollectorReply(supabase, senderId, msgText);
+        return;
+    }
+
+    // ── Opening-message button gate (status='awaiting_opening_tap') ───
+    // The OPENING_TAP postback fires when the user taps the opening
+    // button. Typed confirmation keywords (e.g. the button title) also
+    // match for forgiveness. On match, send the main DM via sendRewardDM
+    // with openingEnabled=false so the opening isn't re-sent, then mark
+    // the row link_sent. No match -> silent (queue stays open).
+    if (queueEntry.status === 'awaiting_opening_tap') {
+        const openingKeywords = queueEntry.confirmation_keywords || [];
+        const isOpeningTap =
+            msgPayload === 'OPENING_TAP'
+            || openingKeywords.some((kw) => msgText.includes((kw || '').toLowerCase()));
+
+        if (!isOpeningTap) {
+            console.log('[Webhook] Opening-tap: input did not match payload or keywords -- ignoring');
+            return;
+        }
+
+        const openingAccount   = queueEntry.connected_accounts;
+        const openingToken     = openingAccount.fb_page_access_token || openingAccount.access_token;
+        const openingUseIgApi  = !openingAccount.fb_page_access_token;
+        const openingIgSender  = queueEntry.ig_sender_id;
+
+        // Resolve plan for branding / templates
+        let openingRewardPlan = 'free';
+        try {
+            const { data: autoForPlan } = await supabase
+                .from('dm_automations').select('user_id')
+                .eq('id', queueEntry.automation_id).maybeSingle();
+            if (autoForPlan?.user_id) openingRewardPlan = await getUserPlan(supabase, autoForPlan.user_id);
+        } catch { /* defaults to free */ }
+
+        // Build click-tracking map so reward links resolve through /r/<code>
+        let openingTracking = {};
+        try {
+            const appUrlForOpening = process.env.NEXT_PUBLIC_APP_URL || '';
+            const { data: linkCodes } = await supabase
+                .from('dm_link_codes').select('code, original_url')
+                .eq('automation_id', queueEntry.automation_id)
+                .limit(500);
+            for (const row of (linkCodes || [])) {
+                openingTracking[row.original_url] = `${appUrlForOpening}/r/${row.code}`;
+            }
+        } catch { /* non-fatal */ }
+
+        // Strip openingEnabled so sendRewardDM doesn't re-send the opening
+        // bubble (the user already saw it before tapping the button).
+        const rewardConfig = { ...(queueEntry.link_dm_config || {}), openingEnabled: false };
+
+        try {
+            await sendRewardDM(
+                openingIgSender, senderId, queueEntry.link_dm_type,
+                rewardConfig, openingToken, openingTracking,
+                openingRewardPlan, openingUseIgApi,
+            );
+
+            await supabase.from('dm_followup_queue')
+                .update({ status: 'link_sent', updated_at: new Date().toISOString() })
+                .eq('id', queueEntry.id);
+
+            await supabase.from('dm_sent_log').insert({
+                automation_id:   queueEntry.automation_id,
+                post_id:         null,
+                recipient_ig_id: senderId,
+                comment_id:      null,
+                comment_text:    `[opening tap: ${msgText.slice(0, 60)}]`,
+                status:          'sent',
+                platform:        openingUseIgApi ? 'instagram' : 'facebook',
+                sent_at:         new Date().toISOString(),
+            });
+
+            console.log('[Webhook] Opening tap: main DM sent, queue marked link_sent');
+        } catch (err) {
+            console.error('[Webhook] Opening tap: failed to send main DM:', err.message);
+        }
         return;
     }
 
@@ -512,22 +603,34 @@ async function sendRewardDM(igSenderId, recipientId, dmType, dmConfig, accessTok
         case 'multi_cta':
             return sendMultiCtaDM(igSenderId, recipientId, dmConfig.message || '', dmConfig.buttons || [], accessToken, trackingMap, plan, useIgApi, dmConfig);
         case 'builder_v2': {
-            // Mirror the builder_v2 dispatch in sendAutomatedDM so the
-            // gate's reward path delivers the same DM the recipient
-            // would have gotten without the gate. Opening message is
-            // merged into the body (it doesn't get its own bubble in
-            // the gate flow — the gate already used a message slot).
+            // Mirror the builder_v2 dispatch in sendAutomatedDM: when an
+            // opening message is configured, send it as its own bubble
+            // first, then the main DM. (Used to concatenate them into a
+            // single body which made the recipient see one big blob.)
             const validButtons = (dmConfig.buttons || []).filter((b) => b.label && b.url);
             const imageUrl     = dmConfig.imageUrl || null;
-            const fullMessage  = [
-                dmConfig.openingEnabled ? dmConfig.openingMessage : null,
-                dmConfig.message,
-            ].filter((s) => typeof s === 'string' && s.trim()).join('\n\n');
+            const mainMessage  = dmConfig.message || '';
+
+            const openingMsg = dmConfig.openingEnabled
+                && typeof dmConfig.openingMessage === 'string'
+                && dmConfig.openingMessage.trim()
+                    ? dmConfig.openingMessage
+                    : null;
+
+            if (openingMsg) {
+                try {
+                    await sendTextDM(igSenderId, recipientId, openingMsg, accessToken, useIgApi);
+                } catch (err) {
+                    // Non-fatal -- log and continue so the main DM still
+                    // goes out even if the opener fails to send.
+                    console.warn('[sendRewardDM] Opening message send failed (continuing with main DM):', err.message);
+                }
+            }
 
             if (imageUrl) {
                 const slide = {
                     headline:    'AutoDM',
-                    description: fullMessage,
+                    description: mainMessage,
                     imageUrl,
                     ...(validButtons.length > 0 && {
                         buttons: validButtons.map((b) => ({ type: 'url', label: b.label, value: b.url })),
@@ -537,14 +640,14 @@ async function sendRewardDM(igSenderId, recipientId, dmType, dmConfig, accessTok
             }
             if (validButtons.length > 0) {
                 return sendMultiCtaDM(
-                    igSenderId, recipientId, fullMessage,
+                    igSenderId, recipientId, mainMessage,
                     validButtons.map((b) => ({ label: b.label, url: b.url })),
                     accessToken, trackingMap, plan, useIgApi, dmConfig,
                 );
             }
             return sendTextDM(
                 igSenderId, recipientId,
-                applyBranding(fullMessage, dmConfig, plan),
+                applyBranding(mainMessage, dmConfig, plan),
                 accessToken, useIgApi,
             );
         }
@@ -1148,98 +1251,195 @@ async function processAutomationForComment(supabase, post, commentText, commente
             // the normal builder_v2 enqueue path below. No gate sent.
         }
 
-        // Enqueue the DM FIRST -- atomic dedup gate.
-        // Meta retries webhooks within 1-2s on slow handlers, so the same
-        // comment_id can arrive 2-3 times concurrently. The early SELECT
-        // dedup checks above are best-effort; the *atomic* boundary is the
-        // unique index idx_dm_queue_dedup on (status, automation_id,
-        // comment_id). Whichever delivery wins this INSERT proceeds; the
-        // rest get 23505 and bail. Code below this point runs ONCE per
-        // comment. Anything that fires above it (e.g. the public comment
-        // reply) can fire N times -- which is exactly the bug that used
-        // to ship 3 public comment replies for a single comment while
-        // the DM (correctly gated by this index) only went out once.
-        const { error: enqErr } = await supabase.from('dm_queue').insert({
-            user_id:              automation.user_id,
-            account_id:           post.account_id,
-            automation_id:        automation.id,
-            post_id:              post.id,
-            recipient_ig_id:      commenterId,
-            recipient_username:   commenterUsername,
-            recipient_first_name: out.firstName,
-            comment_id:           commentId,
-            comment_text:         commentText,
-            platform,
-            dm_type:              activeAutomation.dm_type,
-            dm_config:            activeAutomation.dm_config,
-            tracking_map:         trackingMap,
-            user_plan:            userPlan,
-            queue_reason:         'overflow',
-            priority:             5,
-            status:               'pending',
-            scheduled_after:      new Date(Date.now() + delayMs).toISOString(),
-        });
+        const isBuilderV2 = activeAutomation.dm_type === 'builder_v2';
 
-        if (enqErr) {
-            if (enqErr.code === '23505') {
-                // Another concurrent delivery already won. Bail without
-                // posting the public comment reply or running any of the
-                // downstream queue-trigger / alert / A-B winner work.
-                console.log(`[Webhook] DM already queued (dedup race) for ${commenterId} on comment ${commentId}`);
-                out.fired = true;
-                return out;
+        // ── Atomic dedup BEFORE any user-visible action ───────────
+        // Goal: under Meta webhook retries only ONE delivery proceeds.
+        // We claim the comment via INSERT FIRST, then do user-visible
+        // work (comment reply + DM). Two claim targets depending on flow:
+        //   - openingGateOn → INSERT dm_followup_queue (idx_followup_queue_unique_opening_inflight)
+        //   - else          → INSERT dm_queue with HELD scheduled_after
+        //                     (idx_dm_queue_dedup). The "held" timestamp
+        //                     stops the natural cron from dispatching
+        //                     the DM until we UPDATE it back below.
+        //                     This gives us atomic dedup + correct
+        //                     ordering + zero artificial DM delay.
+        const openingBtnText = (activeAutomation.dm_config?.openingButtonText || '').trim();
+        const openingMsgRaw  = (activeAutomation.dm_config?.openingMessage    || '').trim();
+        const openingGateOn  = isBuilderV2
+            && activeAutomation.dm_config?.openingEnabled
+            && openingBtnText.length > 0
+            && openingMsgRaw.length > 0;
+
+        const HOLD_MS = 30_000;
+        let openingResolved = null;
+        let openingGateClaimed = false;
+
+        if (openingGateOn) {
+            openingResolved = resolveMessageVariables(openingMsgRaw, context);
+
+            const { error: openingEnqErr } = await supabase
+                .from('dm_followup_queue')
+                .insert({
+                    automation_id:         activeAutomation.id,
+                    account_id:            post.account_id,
+                    recipient_ig_id:       commenterId,
+                    ig_sender_id:          account.ig_user_id,
+                    status:                'awaiting_opening_tap',
+                    gate_message:          openingResolved,
+                    nudge_message:         openingResolved,
+                    decline_message:       '',
+                    confirmation_keywords: [
+                        openingBtnText.toLowerCase(),
+                        'yes', 'send', 'send me the link', 'ok',
+                    ],
+                    max_retries:           1,
+                    link_dm_type:          'builder_v2',
+                    link_dm_config:        activeAutomation.dm_config,
+                });
+
+            if (openingEnqErr) {
+                if (openingEnqErr.code === '23505') {
+                    console.log(`[Webhook] Opening gate already in-flight (dedup race) for ${commenterId}`);
+                    out.fired = true;
+                    return out;
+                }
+                console.warn('[Webhook] Opening gate insert failed (falling through to normal DM):', openingEnqErr.message);
+                // Fall through to normal-flow path below.
+            } else {
+                openingGateClaimed = true;
             }
-            throw enqErr;
         }
 
-        // Public comment reply (post-dedup-gate, runs ONCE per comment).
-        // commentReplyEnabled defaults to true on legacy rows: undefined /
-        // null must keep the existing "always reply" behavior. The user
-        // has to explicitly set it to false to suppress the reply.
-        // For builder_v2 rows, public reply is gated by `replyPublicly`
-        // and randomly picked from the `publicReplies` pool (only entries
-        // currently flagged enabled). Legacy rows keep their existing
-        // commentReplyEnabled-defaults-true behavior.
-        const isBuilderV2 = activeAutomation.dm_type === 'builder_v2';
+        if (!openingGateClaimed) {
+            // Normal flow: INSERT dm_queue with scheduled_after held
+            // HOLD_MS in the future. Cron filters by scheduled_after<=now
+            // so it skips this row until we UPDATE below. That keeps the
+            // DM from racing the comment reply we're about to send.
+            const { error: enqErr } = await supabase.from('dm_queue').insert({
+                user_id:              automation.user_id,
+                account_id:           post.account_id,
+                automation_id:        automation.id,
+                post_id:              post.id,
+                recipient_ig_id:      commenterId,
+                recipient_username:   commenterUsername,
+                recipient_first_name: out.firstName,
+                comment_id:           commentId,
+                comment_text:         commentText,
+                platform,
+                dm_type:              activeAutomation.dm_type,
+                dm_config:            activeAutomation.dm_config,
+                tracking_map:         trackingMap,
+                user_plan:            userPlan,
+                queue_reason:         'overflow',
+                priority:             5,
+                status:               'pending',
+                scheduled_after:      new Date(Date.now() + HOLD_MS).toISOString(),
+            });
+
+            if (enqErr) {
+                if (enqErr.code === '23505') {
+                    console.log(`[Webhook] DM already queued (dedup race) for ${commenterId} on comment ${commentId}`);
+                    out.fired = true;
+                    return out;
+                }
+                throw enqErr;
+            }
+        }
+
+        // ── Comment reply (only the dedup winner reaches here) ────
+        // Atomic dedup above guarantees at most one public reply per
+        // comment regardless of Meta webhook retries.
         const commentReplyEnabled = isBuilderV2
             ? Boolean(settingsConfig.replyPublicly)
             : (settingsConfig.commentReplyEnabled !== false);
         if (commentReplyEnabled) {
-            const DEFAULT_COMMENT_REPLY = 'Hey! Just sent you a DM \ud83d\udce9 \u2014 check your inbox.';
             let replyMsg = null;
             if (isBuilderV2 && Array.isArray(settingsConfig.publicReplies)) {
                 const enabledReplies = settingsConfig.publicReplies
                     .filter((r) => r && r.enabled && typeof r.text === 'string' && r.text.trim());
                 if (enabledReplies.length > 0) {
-                    // Random pick \u2014 the same fan getting two DMs in a row
-                    // sees a different public reply each time.
+                    // Random pick so a fan commenting twice doesn't
+                    // see the same reply both times.
                     replyMsg = enabledReplies[Math.floor(Math.random() * enabledReplies.length)].text;
                 }
             }
-            replyMsg = replyMsg || settingsConfig.replyMessage || settingsConfig.autoReplyText || DEFAULT_COMMENT_REPLY;
+            replyMsg = replyMsg
+                || settingsConfig.replyMessage
+                || settingsConfig.autoReplyText
+                || 'Hey! Just sent you a DM -- check your inbox.';
             try {
                 await replyToComment(commentId, resolveMessageVariables(replyMsg, context), token, useIgApi);
                 console.log('[Webhook] Comment reply sent');
             } catch (replyErr) {
                 console.warn('[Webhook] Comment reply failed (non-fatal):', replyErr.message);
             }
-        } else {
-            console.log('[Webhook] Comment reply skipped \u2014 disabled on this automation');
         }
+
+        // ── Path-specific post-dedup work ─────────────────────────
+
+        if (openingGateClaimed) {
+            // Opening-gate path: send the button-template DM. Roll back
+            // the inflight row on send failure so the user isn't stuck
+            // awaiting_opening_tap with no DM received.
+            try {
+                await sendOpeningGateDM(
+                    account.ig_user_id, commenterId, openingResolved,
+                    openingBtnText, token,
+                    !account.fb_page_access_token, commentId,
+                );
+                await supabase.from('dm_sent_log').insert({
+                    automation_id:        activeAutomation.id,
+                    post_id:              post.id,
+                    recipient_ig_id:      commenterId,
+                    recipient_username:   commenterUsername,
+                    recipient_first_name: out.firstName,
+                    comment_id:           commentId,
+                    comment_text:         commentText,
+                    status:               'sent',
+                    platform,
+                    sent_at:              new Date().toISOString(),
+                });
+                console.log(`[Webhook] Opening-gate DM sent for ${commenterId}; awaiting tap`);
+            } catch (sendErr) {
+                await supabase.from('dm_followup_queue').delete()
+                    .eq('automation_id', activeAutomation.id)
+                    .eq('recipient_ig_id', commenterId)
+                    .eq('status', 'awaiting_opening_tap');
+                console.warn('[Webhook] Opening-gate send failed:', sendErr.message);
+            }
+            out.fired = true;
+            return out;
+        }
+
+        // Normal-flow path: activate the dm_queue row by UPDATEing
+        // scheduled_after to now + delayMs. Cron then picks it up
+        // immediately (or after delayMs if delayMessage is on). If
+        // this UPDATE fails for any transient reason the row sits at
+        // now+HOLD_MS and the natural cron tick picks it up after
+        // 30s -- DM is delayed but not lost.
+        await supabase.from('dm_queue').update({
+            scheduled_after: new Date(Date.now() + delayMs).toISOString(),
+        })
+            .eq('automation_id', automation.id)
+            .eq('recipient_ig_id', commenterId)
+            .eq('comment_id', commentId)
+            .eq('status', 'pending');
 
         console.log(`[Webhook] DM enqueued for ${commenterId}${abVariant ? ` (variant ${abVariant})` : ''}`);
 
-        // Trigger immediate queue processing for non-delayed DMs so the DM
-        // goes out in ~1s instead of waiting up to 1 minute for the next cron.
-        if(!delayMs) {
+        // Trigger immediate queue processing for non-delayed DMs so the
+        // DM goes out within ~1-2s rather than waiting up to a minute
+        // for the next natural cron tick.
+        if (!delayMs) {
             const cronSecret = process.env.CRON_SECRET || '';
             after( async () => {
                 try {
-                    await fetch(`${appUrl}/api/cron/process-queue`, { 
+                    await fetch(`${appUrl}/api/cron/process-queue`, {
                         headers: { Authorization: `Bearer ${cronSecret}` },
                     });
                 } catch (err) {
-                    /* non-fatal - cron will still pick it up*/
+                    /* non-fatal - the natural cron will still pick it up */
                     console.error('[Webhook] Failed to trigger immediate queue processing:', err.message);
                 }
             });
@@ -1893,11 +2093,27 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
 // That window also catches Meta retries on the same mention and any
 // overlap with the legacy mentions-change-field handler above.
 async function handleStoryMentionDM(supabase, igAccountId, senderId, inboundMid) {
-    const { data: account } = await supabase
+    console.log(`[Webhook/MentionDM] Triggered: igAccount=${igAccountId} sender=${senderId} mid=${inboundMid}`);
+
+    // Account lookup. For IG-Business-Login accounts the webhook entry.id is
+    // the ig_user_id. For FB-linked accounts where Meta delivers the IG
+    // event under the Page's id, fall back to fb_page_id so we still find
+    // the connected_accounts row.
+    let { data: account } = await supabase
         .from('connected_accounts')
-        .select('id, user_id, access_token, fb_page_access_token, ig_user_id, default_config')
+        .select('id, user_id, access_token, fb_page_access_token, ig_user_id, fb_page_id, default_config')
         .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
-    if (!account) return;
+    if (!account) {
+        const fbLookup = await supabase
+            .from('connected_accounts')
+            .select('id, user_id, access_token, fb_page_access_token, ig_user_id, fb_page_id, default_config')
+            .eq('fb_page_id', igAccountId).eq('is_active', true).maybeSingle();
+        account = fbLookup.data;
+    }
+    if (!account) {
+        console.log(`[Webhook/MentionDM] No connected_accounts row matched igAccountId=${igAccountId} (tried ig_user_id and fb_page_id) -- skipping`);
+        return;
+    }
 
     const mentionConfig = account.default_config?.mentionDm;
     if (!mentionConfig?.enabled || !mentionConfig?.message?.trim()) {

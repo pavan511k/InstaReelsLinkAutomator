@@ -63,6 +63,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_followup_queue_unique_inflight
     ON dm_followup_queue (automation_id, recipient_ig_id)
     WHERE status = 'awaiting_confirmation';
 
+-- Same atomic dedup pattern for the opening-message button-gate flow
+-- (status='awaiting_opening_tap'). The opening-button gate works like
+-- the follow gate but without a follower check: bot sends opening as
+-- a button template, user taps, bot sends the main DM.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_followup_queue_unique_opening_inflight
+    ON dm_followup_queue (automation_id, recipient_ig_id)
+    WHERE status = 'awaiting_opening_tap';
+
 -- Auto-update updated_at
 CREATE OR REPLACE FUNCTION update_followup_queue_updated_at()
 RETURNS TRIGGER AS $$

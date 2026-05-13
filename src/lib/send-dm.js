@@ -465,6 +465,51 @@ export async function sendFollowGateDM(igUserId, recipientId, message, accessTok
 }
 
 /**
+ * Opening-message button gate. Sends a button template card with the
+ * opening text and a single postback button. Tapping the button fires
+ * an OPENING_TAP webhook event which the dispatcher catches to send
+ * the main DM via sendRewardDM. Mirrors sendFollowGateDM structurally
+ * (template_type: 'button' + a single postback button) -- only the
+ * payload string and button title source differ.
+ *
+ * Title cap: 20 chars per Meta's button spec. Text cap: 640 chars.
+ */
+export async function sendOpeningGateDM(igUserId, recipientId, message, buttonText, accessToken, useIgApi = false, commentId = null) {
+    const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
+    const url = `${base}/${igUserId}/messages`;
+
+    const title = (buttonText || '').toString().trim().slice(0, 20) || 'Continue';
+
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            recipient: buildRecipient(recipientId, commentId),
+            message: {
+                attachment: {
+                    type: 'template',
+                    payload: {
+                        template_type: 'button',
+                        text: (message || '').slice(0, 640),
+                        buttons: [
+                            {
+                                type: 'postback',
+                                title,
+                                payload: 'OPENING_TAP',
+                            },
+                        ],
+                    },
+                },
+            },
+            access_token: accessToken,
+        }),
+    });
+
+    await throwIfMetaError(res, 'Failed to send opening-gate DM');
+    return res.json();
+}
+
+/**
  * Resolve {variable} placeholders in a message template
  */
 export function resolveMessageVariables(template, context) {
@@ -529,7 +574,18 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
     // Comment-triggered first DMs need Private Replies (recipient.comment_id)
     // to bypass the 24h messaging window. Only applies to Instagram —
     // Facebook stays on the standard messages endpoint per the comment below.
-    const commentId = (platform === 'instagram' && context?.comment_id) ? context.comment_id : null;
+    // Private Reply (recipient.comment_id) only works with a real Meta
+    // comment_id. Several flows store synthetic dedup keys in the queue
+    // -- e.g. `story_reply:<mid>` for story replies (which are DMs, not
+    // comments) -- and passing those to Meta makes it return "The
+    // requested user cannot be found." Synthetic IDs are namespaced with
+    // a "<flow>:<id>" shape; real Meta comment_ids are numeric and never
+    // contain a colon, so filter on that.
+    const rawCommentId = context?.comment_id || '';
+    const isSyntheticCommentId = rawCommentId.includes(':');
+    const commentId = (platform === 'instagram' && rawCommentId && !isSyntheticCommentId)
+        ? rawCommentId
+        : null;
 
     console.log(`[sendAutomatedDM:debug] platform=${platform} dm_type=${dm_type} igUserId=${igUserId} recipient=${recipientId} useIgApi=${useIgApi} privateReply=${!!commentId}`);
 

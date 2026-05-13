@@ -59,7 +59,11 @@
       "Bash(node_modules/.bin/eslint src/app/admin src/app/api/admin src/middleware.js src/lib/email.js)",
       "Bash(node_modules/.bin/eslint src/app/coming-soon/page.js)",
       "Bash(node_modules/.bin/eslint src/components/CookieConsent)",
-      "Bash(node_modules/.bin/eslint src/app/api/auth/meta/callback/route.js)"
+      "Bash(node_modules/.bin/eslint src/app/api/auth/meta/callback/route.js)",
+      "Bash(awk NR>=288 && NR<=380 {printf \"%4d: %s\\\\n\", NR, $0} *)",
+      "Bash(awk NR>=1244 && NR<=1455 {printf \"%4d: %s\\\\n\", NR, $0} *)",
+      "Bash(awk NR>=1244 && NR<=1450 {printf \"%4d: %s\\\\n\", NR, $0} *)",
+      "Bash(awk NR>=183 && NR<=235 {printf \"%4d: %s\\\\n\", NR, $0} *)"
     ]
   }
 }

@@ -283,28 +283,34 @@ export async function GET(request) {
  */
 async function subscribeToWebhookEvents(accountData) {
     if (accountData.platform === 'instagram') {
+        // messaging_postbacks: required to receive button-template postback
+        // events (follow-gate, opening-message, ice-breaker taps). Without
+        // this, ice-breaker taps never reach our webhook handler.
         const url =
             `${GRAPH_IG_BASE}/${accountData.ig_user_id}/subscribed_apps` +
-            `?subscribed_fields=comments%2Cmessages%2Cmentions` +
+            `?subscribed_fields=comments%2Cmessages%2Cmessaging_postbacks%2Cmentions` +
             `&access_token=${encodeURIComponent(accountData.access_token)}`;
         const res  = await fetch(url, { method: 'POST' });
         const data = await res.json();
         if (!res.ok || !data.success) {
             console.warn('[OAuth] IG webhook subscription response:', JSON.stringify(data));
         } else {
-            console.log('[OAuth] ✅ Instagram webhook subscribed (comments + messages)');
+            console.log('[OAuth] ✅ Instagram webhook subscribed (comments + messages + messaging_postbacks + mentions)');
         }
     } else if (accountData.fb_page_id && accountData.fb_page_access_token) {
+        // On the FB Page side, instagram_comments is the IG-comment event;
+        // feed catches FB Page comments; messages + messaging_postbacks cover
+        // DMs and button-template tap events for the linked IG account.
         const url =
             `${GRAPH_FB_BASE}/${accountData.fb_page_id}/subscribed_apps` +
-            `?subscribed_fields=feed%2Cmessages%2Cfeed` +
+            `?subscribed_fields=instagram_comments%2Cmessages%2Cmessaging_postbacks%2Cfeed` +
             `&access_token=${encodeURIComponent(accountData.fb_page_access_token)}`;
         const res  = await fetch(url, { method: 'POST' });
         const data = await res.json();
         if (!res.ok || !data.success) {
             console.warn('[OAuth] FB page webhook subscription response:', JSON.stringify(data));
         } else {
-            console.log('[OAuth] ✅ Facebook page webhook subscribed (feed + messages)');
+            console.log('[OAuth] ✅ Facebook page webhook subscribed (instagram_comments + messages + messaging_postbacks + feed)');
         }
     }
 }

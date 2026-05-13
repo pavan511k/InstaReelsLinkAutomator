@@ -41,9 +41,11 @@ export async function POST() {
         try {
             if (account.platform === 'instagram' && account.ig_user_id && account.access_token) {
                 // Instagram Business Login — subscribe via graph.instagram.com
+                // messaging_postbacks: required for button-template tap events
+                // (follow-gate, opening-message, ice-breaker taps).
                 const url =
                     `${GRAPH_IG_BASE}/${account.ig_user_id}/subscribed_apps` +
-                    `?subscribed_fields=comments%2Cmessages%2Cmentions` +
+                    `?subscribed_fields=comments%2Cmessages%2Cmessaging_postbacks%2Cmentions` +
                     `&access_token=${encodeURIComponent(account.access_token)}`;
                 const res  = await fetch(url, { method: 'POST' });
                 const data = await res.json();
@@ -59,7 +61,7 @@ export async function POST() {
                 // Facebook Login — subscribe the Page via graph.facebook.com
                 const url =
                     `${GRAPH_FB_BASE}/${account.fb_page_id}/subscribed_apps` +
-                    `?subscribed_fields=instagram_comments%2Cmessages%2Cfeed` +
+                    `?subscribed_fields=instagram_comments%2Cmessages%2Cmessaging_postbacks%2Cfeed` +
                     `&access_token=${encodeURIComponent(account.fb_page_access_token)}`;
                 const res  = await fetch(url, { method: 'POST' });
                 const data = await res.json();
