@@ -137,20 +137,56 @@ export async function POST(request) {
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 async function processWebhookEvents(body) {
+    // Diagnostic: dump the full incoming envelope so we can see exactly
+    // what Meta sent (e.g. confirm postback events for button taps are
+    // being delivered, or that story-mention attachments are shaped as
+    // expected). User has explicitly granted permission to log sensitive
+    // data while debugging.
+    console.log('[Webhook] Raw incoming payload:', JSON.stringify(body));
+
     const { object, entry } = body;
 
-    if (object !== 'instagram' && object !== 'page') return;
+    if (object !== 'instagram' && object !== 'page') {
+        console.log(`[Webhook] Ignoring envelope with object=${object} (only instagram + page handled)`);
+        return;
+    }
 
     const supabase = createServiceClient();
 
     for (const entryItem of entry || []) {
         const accountId = entryItem.id;
+        const msgCount    = (entryItem.messaging || []).length;
+        const changeCount = (entryItem.changes   || []).length;
+        console.log(`[Webhook] Entry id=${accountId} messaging.count=${msgCount} changes.count=${changeCount}`);
 
         // ── Incoming DM replies (messages) ─────────────────────────────
         for (const msg of entryItem.messaging || []) {
+            // Diagnostic: log the shape of each messaging event so we can
+            // tell at a glance whether Meta sent a message (DM, story
+            // mention attachment, quick-reply tap), a postback (button
+            // tap), or something else (read receipts, etc.).
+            const eventShape = {
+                hasMessage:   !!msg.message,
+                isEcho:       !!msg.message?.is_echo,
+                hasPostback:  !!msg.postback,
+                hasReferral:  !!msg.referral,
+                hasReaction:  !!msg.reaction,
+                hasRead:      !!msg.read,
+                sender:       msg.sender?.id,
+                payload:      msg.message?.quick_reply?.payload || msg.postback?.payload,
+                attachments:  (msg.message?.attachments || []).map((a) => a?.type),
+            };
+            console.log('[Webhook] Messaging event shape:', JSON.stringify(eventShape));
+
             if (msg.message && !msg.message.is_echo) {
                 await handleIncomingDMReply(supabase, accountId, msg);
             } else if (msg.postback?.payload) {
+                console.log('[Webhook] Postback event received -- routing through handleIncomingDMReply:', JSON.stringify({
+                    sender:  msg.sender?.id,
+                    title:   msg.postback.title,
+                    payload: msg.postback.payload,
+                    mid:     msg.postback.mid,
+                }));
                 // Postback events fire when a user taps a button inside a
                 // template (e.g. the follow-gate buttons sent by
                 // sendFollowGateDM). Meta delivers these on a separate
