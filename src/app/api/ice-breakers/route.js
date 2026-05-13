@@ -87,21 +87,43 @@ export async function POST(request) {
                 payload:         `ICE_BREAKER_${i}_${Date.now()}`,
             }));
 
-        // Push to Meta messenger_profile
-        // Ice breakers are set per locale. We use en_US as default.
-        const metaPayload = {
-            ice_breakers: validated.map((ib) => ({
-                question: ib.title,
-                payload:  ib.payload,
-            })),
-        };
+        // Push to Meta messenger_profile.
+        //
+        // CRITICAL: Meta's IG ice_breakers payload is NOT a flat array of
+        // {question, payload}. Per the docs, ice_breakers is an array of
+        // locale-bucket objects, each with a `call_to_actions` array and
+        // a (required) `locale`. `platform: 'instagram'` must also be in
+        // the body, not just the query string. Sending the wrong shape
+        // makes Meta accept the call but silently break the postback
+        // delivery -- the icons render in the IG inbox but tapping fires
+        // nothing, AND a DELETE later won't match because the original
+        // POST didn't actually configure ice breakers correctly.
+        //
+        // Clearing: even with a correct POST format, Meta does not clear
+        // ice_breakers when you POST an empty array. You MUST send a
+        // DELETE with `fields: ['ice_breakers']`.
+        //
+        // Auth: per Meta's curl example access_token rides on the query
+        // string (NOT the body) and platform appears in BOTH the query
+        // string and the body. Sending access_token in the body has been
+        // empirically rejected by Meta on this endpoint.
+        const metaUrl =
+            `${iceBase}/${pageOrIg}/messenger_profile`
+            + `?platform=instagram`
+            + `&access_token=${encodeURIComponent(token)}`;
 
-        // Meta requires platform=instagram on messenger_profile when the
-        // payload is for IG (ice_breakers etc.). Also: clearing requires
-        // a DELETE with fields=['ice_breakers'] -- a POST with an empty
-        // ice_breakers array does NOT reliably clear them per Meta's
-        // docs, which is why "remove all" silently leaves stale entries.
-        const metaUrl = `${iceBase}/${pageOrIg}/messenger_profile?platform=instagram`;
+        const metaPayload = {
+            platform: 'instagram',
+            ice_breakers: [
+                {
+                    call_to_actions: validated.map((ib) => ({
+                        question: ib.title,
+                        payload:  ib.payload,
+                    })),
+                    locale: 'default',
+                },
+            ],
+        };
 
         let metaPushSuccess = false;
         let metaError = null;
@@ -112,27 +134,29 @@ export async function POST(request) {
                     const res = await fetch(metaUrl, {
                         method: 'DELETE',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ fields: ['ice_breakers'], access_token: token }),
+                        body: JSON.stringify({ fields: ['ice_breakers'] }),
                     });
-                    const data = await res.json();
+                    const data = await res.json().catch(() => ({}));
                     if (res.ok) {
                         metaPushSuccess = true;
+                        console.log('[IceBreakers] Cleared from Meta:', JSON.stringify(data));
                     } else {
-                        metaError = data.error?.message || 'Meta DELETE failed';
-                        console.warn('[IceBreakers] Meta clear failed:', metaError);
+                        metaError = data.error?.message || `Meta DELETE failed (${res.status})`;
+                        console.warn('[IceBreakers] Meta clear failed:', metaError, JSON.stringify(data));
                     }
                 } else {
                     const res = await fetch(metaUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...metaPayload, access_token: token }),
+                        body: JSON.stringify(metaPayload),
                     });
-                    const data = await res.json();
+                    const data = await res.json().catch(() => ({}));
                     if (res.ok && data.result === 'success') {
                         metaPushSuccess = true;
+                        console.log(`[IceBreakers] Saved ${validated.length} to Meta`);
                     } else {
-                        metaError = data.error?.message || 'Meta API error';
-                        console.warn('[IceBreakers] Meta push failed:', metaError);
+                        metaError = data.error?.message || `Meta API error (${res.status})`;
+                        console.warn('[IceBreakers] Meta push failed:', metaError, JSON.stringify(data));
                     }
                 }
             } catch (err) {
@@ -192,17 +216,35 @@ export async function DELETE(request) {
         const token    = account.fb_page_access_token || account.access_token;
         const pageOrIg = account.fb_page_id;
 
-        // Clear from Meta. platform=instagram is required per Meta's IG
-        // messenger_profile docs; without it the DELETE may target a
-        // different surface and the IG ice breakers stay live.
+        // Clear from Meta. Per Meta's IG ice_breakers docs:
+        //   - access_token MUST be on the query string (sending it in the
+        //     body has been rejected on this endpoint)
+        //   - platform=instagram MUST be in the query string
+        //   - body contains ONLY { fields: ['ice_breakers'] }
+        // Errors are logged so a silent "didn't actually delete" doesn't
+        // sit hidden behind a non-fatal catch.
         if (pageOrIg && token) {
+            const deleteUrl =
+                `${GRAPH}/${pageOrIg}/messenger_profile`
+                + `?platform=instagram`
+                + `&access_token=${encodeURIComponent(token)}`;
             try {
-                await fetch(`${GRAPH}/${pageOrIg}/messenger_profile?platform=instagram`, {
+                const res = await fetch(deleteUrl, {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fields: ['ice_breakers'], access_token: token }),
+                    body: JSON.stringify({ fields: ['ice_breakers'] }),
                 });
-            } catch { /* non-fatal */ }
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    console.warn(
+                        '[IceBreakers] Meta DELETE failed:',
+                        data.error?.message || `status ${res.status}`,
+                        JSON.stringify(data),
+                    );
+                }
+            } catch (err) {
+                console.warn('[IceBreakers] Meta DELETE threw:', err.message);
+            }
         }
 
         // Clear locally
