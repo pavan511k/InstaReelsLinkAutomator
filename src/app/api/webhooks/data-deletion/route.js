@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { scrubPlatformDataReferences } from '@/lib/platform-data-scrub';
 
 /**
  * Meta Data Deletion Request Callback
@@ -173,6 +174,12 @@ async function deleteUserPlatformData(appScopedUserId, confirmationCode) {
             .from('instagram_posts')
             .delete()
             .in('account_id', accountIds);
+
+        // Anonymize Platform Data identifiers on historical send/lead/click rows.
+        // Per Meta Platform Terms 3(d)(i) we must remove IGSIDs and IG profile
+        // data on revoke. Aggregate counts (rows themselves) are retained so
+        // the user's analytics history survives a future reconnect.
+        await scrubPlatformDataReferences(supabase, accountIds);
 
         // Scrub Platform Data from connected_accounts
         await supabase
