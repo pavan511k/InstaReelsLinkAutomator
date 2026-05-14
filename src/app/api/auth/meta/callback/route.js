@@ -298,19 +298,25 @@ async function subscribeToWebhookEvents(accountData) {
             console.log('[OAuth] ✅ Instagram webhook subscribed (comments + messages + messaging_postbacks + mentions)');
         }
     } else if (accountData.fb_page_id && accountData.fb_page_access_token) {
-        // On the FB Page side, instagram_comments is the IG-comment event;
-        // feed catches FB Page comments; messages + messaging_postbacks cover
-        // DMs and button-template tap events for the linked IG account.
+        // FB Page object subscription. Meta's Page-object subscribed_fields
+        // does NOT include `instagram_comments` — listing it makes Meta reject
+        // the entire request with error 100, dropping `messages` and
+        // `messaging_postbacks` too. IG events from a linked IG Business
+        // account come via the Instagram-object subscription, not here.
+        //
+        //   feed                  → FB Page post comments
+        //   messages              → DMs to the Page (inbound)
+        //   messaging_postbacks   → button-template tap events from Page DMs
         const url =
             `${GRAPH_FB_BASE}/${accountData.fb_page_id}/subscribed_apps` +
-            `?subscribed_fields=instagram_comments%2Cmessages%2Cmessaging_postbacks%2Cfeed` +
+            `?subscribed_fields=feed%2Cmessages%2Cmessaging_postbacks` +
             `&access_token=${encodeURIComponent(accountData.fb_page_access_token)}`;
         const res  = await fetch(url, { method: 'POST' });
         const data = await res.json();
         if (!res.ok || !data.success) {
             console.warn('[OAuth] FB page webhook subscription response:', JSON.stringify(data));
         } else {
-            console.log('[OAuth] ✅ Facebook page webhook subscribed (instagram_comments + messages + messaging_postbacks + feed)');
+            console.log('[OAuth] ✅ Facebook page webhook subscribed (feed + messages + messaging_postbacks)');
         }
     }
 }
