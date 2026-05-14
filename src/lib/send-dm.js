@@ -4,6 +4,7 @@
  */
 import { applyTracking, attachRecipient } from '@/lib/click-tracking';
 import { GRAPH_FB_BASE as GRAPH_API_BASE, GRAPH_IG_BASE } from '@/lib/meta-graph';
+import { isValidButtonUrl } from '@/lib/url-validate';
 
 // App URL is needed by attachRecipient to tell our short URLs apart from
 // arbitrary third-party URLs in the trackingMap. Computed once per import.
@@ -110,7 +111,17 @@ export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, ac
     const url = `${base}/${igUserId}/messages`;
 
     const validButtons = (buttons || [])
-        .filter((b) => b.label?.trim() && b.url?.trim())
+        .filter((b) => {
+            if (!b.label?.trim() || !b.url?.trim()) return false;
+            if (!isValidButtonUrl(b.url)) {
+                // Legacy / hand-edited row with a malformed URL. Drop the
+                // button so the whole send doesn't fail with Meta's generic
+                // "The provided Url is invalid" error.
+                console.warn(`[sendMultiCtaDM] Dropping button "${b.label}" — invalid URL: ${b.url}`);
+                return false;
+            }
+            return true;
+        })
         .slice(0, 3) // Instagram max 3 buttons per element
         .map((b) => ({
             type: 'web_url',
@@ -657,7 +668,14 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
             //   • image only        → button_template (one slide, no buttons)
             //   • buttons only      → multi_cta
             //   • text only         → message_template
-            const validButtons = (dm_config.buttons || []).filter((b) => b.label && b.url);
+            const validButtons = (dm_config.buttons || []).filter((b) => {
+                if (!b.label || !b.url) return false;
+                if (!isValidButtonUrl(b.url)) {
+                    console.warn(`[sendAutomatedDM/builder_v2] Dropping button "${b.label}" — invalid URL: ${b.url}`);
+                    return false;
+                }
+                return true;
+            });
             const imageUrl     = dm_config.imageUrl || null;
             const mainMessage  = resolveMessageVariables(dm_config.message || '', context);
 
