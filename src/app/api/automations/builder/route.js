@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { getUserEffectivePlan } from '@/lib/plan-server';
 import { isProOrTrial, getAutomationLimit } from '@/lib/plans';
+import { isValidButtonUrl } from '@/lib/url-validate';
 
 /**
  * /api/automations/builder
@@ -168,6 +169,23 @@ function validateBody(body) {
         if (!body.emailThanksMessage?.trim()) return 'Add the thank-you message that confirms capture.';
     } else if (!dmMessage?.trim()) {
         return 'DM message text is required.';
+    }
+
+    // Button-URL validation. Meta rejects malformed URLs at DM-send time
+    // with a generic "The provided Url is invalid" error, so we surface
+    // the same constraint here at save time. A URL like `https://shopnow`
+    // passes browser-side HTML5 validation (it's a syntactically valid
+    // URL) but Meta requires a real hostname with a TLD.
+    if (Array.isArray(body.linkButtons)) {
+        for (const btn of body.linkButtons) {
+            if (!btn || typeof btn !== 'object') continue;
+            // Skip empty rows — those get filtered out elsewhere.
+            if (!btn.url || !btn.url.trim()) continue;
+            if (!isValidButtonUrl(btn.url)) {
+                const label = btn.label?.trim() ? `"${btn.label.trim()}"` : 'one of the buttons';
+                return `The URL for ${label} is invalid: "${btn.url}". Use a full URL like https://example.com — include the scheme and a real domain (with a dot).`;
+            }
+        }
     }
 
     return null;
