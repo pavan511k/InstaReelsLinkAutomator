@@ -171,7 +171,12 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
 
   const handleRefreshConnection = (account) => {
     setRefreshingId(account.id);
-    const type = account.platform === 'both' ? 'both' : account.platform;
+    // 'both' is a retired platform value (combined IG + FB connection is no
+    // longer offered for new connections). For legacy rows that still have
+    // platform='both', map the reconnect to Instagram — the primary platform.
+    // The user can disconnect afterwards and connect Facebook instead if
+    // that's what they actually want.
+    const type = account.platform === 'both' ? 'instagram' : account.platform;
     window.location.href = `/api/auth/meta/connect?type=${type}`;
   };
 
