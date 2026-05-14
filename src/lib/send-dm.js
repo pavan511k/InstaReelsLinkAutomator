@@ -316,59 +316,56 @@ export async function replyToComment(commentId, message, accessToken, useIgApi =
 /**
  * Check whether a specific user is following our Instagram Business Account.
  *
- * Strategy: the user JUST followed (they replied "Yes" after following),
- * so they will be in the first 1-2 pages of the followers endpoint.
- * We check up to 200 recent followers — practical and fast.
+ * Uses the IG User Profile endpoint with the `is_user_follow_business`
+ * field. This is the documented Meta way to answer "does this IGSID
+ * follow my business?" -- it's one call, not paginated.
  *
- * @param {string} igAccountId  — our IG Business Account ID
- * @param {string} checkUserId  — the IG user ID we're looking for
- * @param {string} accessToken  — page access token
- * @returns {Promise<boolean>}
+ * Permission: `instagram_business_manage_messages` (already approved).
+ * Token base: graph.instagram.com when authenticated via IG Business
+ * Login, graph.facebook.com when authenticated via Facebook Login.
+ * Sending the IG token to graph.facebook.com (the previous behaviour)
+ * returns "Invalid OAuth access token" and silently disabled the gate.
+ *
+ * @param {string} igAccountId  — our IG Business Account ID (unused but kept for compat)
+ * @param {string} checkUserId  — the IGSID we're checking
+ * @param {string} accessToken  — IG or FB page access token
+ * @param {boolean} [useIgApi=false] — true => graph.instagram.com; false => graph.facebook.com
+ * @returns {Promise<boolean|null>} true=follower, false=not, null=API failure (caller skips gate)
  */
-export async function checkUserIsFollower(igAccountId, checkUserId, accessToken) {
-    // Walk up to 5 pages of 100 = 500 most recent followers. Real Follow Gate
-    // users follow + immediately tap YES, so they're at the top of the list,
-    // but paginating deeper covers small-creator scenarios where multiple
-    // people follow at the same time and push the new one a few pages back.
-    const MAX_PAGES = 5;
+export async function checkUserIsFollower(igAccountId, checkUserId, accessToken, useIgApi = false) {
+    const base = useIgApi ? GRAPH_IG_BASE : GRAPH_API_BASE;
+    const url  = `${base}/${checkUserId}` +
+        `?fields=is_user_follow_business` +
+        `&access_token=${encodeURIComponent(accessToken)}`;
 
-    const walk = async () => {
-        let url = `${GRAPH_API_BASE}/${igAccountId}/followers?fields=id&limit=100&access_token=${encodeURIComponent(accessToken)}`;
-        for (let page = 0; page < MAX_PAGES; page++) {
-            const res = await fetch(url);
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                console.warn('[FollowCheck] API error:', err.error?.message || res.status);
-                return null;  // signal "API failed" vs "not found"
-            }
-            const data = await res.json();
-            const followers = data.data || [];
-            if (followers.some((f) => f.id === checkUserId)) return true;
-            if (!data.paging?.next) break;
-            url = data.paging.next;
+    const urlForLog = url.replace(/access_token=[^&]+/, 'access_token=<MASKED>');
+    console.log('[FollowCheck] GET ' + urlForLog);
+
+    try {
+        const res = await fetch(url);
+        const rawText = await res.text();
+        let data;
+        try { data = JSON.parse(rawText); } catch { data = { _raw: rawText }; }
+
+        console.log('[FollowCheck] Response ' + JSON.stringify({
+            status: res.status, ok: res.ok, body: data,
+        }));
+
+        if (!res.ok) {
+            console.warn('[FollowCheck] API error: ' + (data.error?.message || res.status));
+            return null;
         }
-        return false;
-    };
 
-    // First attempt — covers users who already followed before tapping YES.
-    let result = await walk();
-    if (result === true) return true;
+        if (typeof data.is_user_follow_business !== 'boolean') {
+            console.warn('[FollowCheck] No is_user_follow_business in response (insufficient perms?)');
+            return null;
+        }
 
-    // Retry once after a propagation delay. Meta's /followers endpoint can
-    // take 3-10 seconds to reflect a brand-new follow. Without this, users
-    // who follow + immediately tap YES get falsely marked "not following".
-    await new Promise((r) => setTimeout(r, 6000));
-    const retry = await walk();
-    if (retry === true) return true;
-
-    // If BOTH attempts hit an API error (walk() returned null) we don't
-    // actually know whether the user follows -- collapsing null to false
-    // here would make every token glitch / API hiccup fire the follow
-    // gate, gating legitimate users unfairly. Surface null so the caller
-    // can treat it as "skip the gate, send the DM anyway" (which is the
-    // documented intent at the call site).
-    if (result === null && retry === null) return null;
-    return false;
+        return data.is_user_follow_business;
+    } catch (err) {
+        console.warn('[FollowCheck] threw: ' + err.message);
+        return null;
+    }
 }
 
 /**
