@@ -1346,12 +1346,58 @@ async function processAutomationForComment(supabase, post, commentText, commente
 
             if (openingEnqErr) {
                 if (openingEnqErr.code === '23505') {
-                    console.log(`[Webhook] Opening gate already in-flight (dedup race) for ${commenterId}`);
-                    out.fired = true;
-                    return out;
+                    // Row exists. Differentiate Meta's 1-2s retry from a
+                    // stale abandoned flow: if the existing row's updated_at
+                    // is recent (< OPENING_DEDUP_WINDOW_MS), treat as a true
+                    // duplicate delivery and bail. Otherwise the user is
+                    // re-engaging (often after deleting the chat) so refresh
+                    // the row in place and re-send the opener -- otherwise
+                    // they'd be permanently locked out of the reward DM.
+                    const OPENING_DEDUP_WINDOW_MS = 15_000;
+                    const { data: existing } = await supabase
+                        .from('dm_followup_queue')
+                        .select('id, updated_at')
+                        .eq('automation_id', activeAutomation.id)
+                        .eq('recipient_ig_id', commenterId)
+                        .eq('status', 'awaiting_opening_tap')
+                        .maybeSingle();
+
+                    const ageMs = existing
+                        ? Date.now() - new Date(existing.updated_at).getTime()
+                        : 0;
+
+                    if (!existing || ageMs < OPENING_DEDUP_WINDOW_MS) {
+                        console.log(`[Webhook] Opening gate dedup (Meta retry suspected, age=${ageMs}ms) for ${commenterId}`);
+                        out.fired = true;
+                        return out;
+                    }
+
+                    // Stale flow -- user re-engaging. UPDATE in place; the
+                    // updated_at trigger will refresh the freshness clock.
+                    // We also re-write link_dm_config in case the automation
+                    // config has changed since the original opener.
+                    const { error: refreshErr } = await supabase
+                        .from('dm_followup_queue')
+                        .update({
+                            gate_message:   openingResolved,
+                            nudge_message:  openingResolved,
+                            link_dm_config: activeAutomation.dm_config,
+                            retry_count:    0,
+                        })
+                        .eq('id', existing.id);
+
+                    if (refreshErr) {
+                        console.warn('[Webhook] Failed to refresh stale opening gate row:', refreshErr.message);
+                        out.fired = true;
+                        return out;
+                    }
+
+                    console.log(`[Webhook] Opening gate re-engaged (prev row was ${Math.round(ageMs/1000)}s stale) for ${commenterId}`);
+                    openingGateClaimed = true;
+                } else {
+                    console.warn('[Webhook] Opening gate insert failed (falling through to normal DM):', openingEnqErr.message);
+                    // Fall through to normal-flow path below.
                 }
-                console.warn('[Webhook] Opening gate insert failed (falling through to normal DM):', openingEnqErr.message);
-                // Fall through to normal-flow path below.
             } else {
                 openingGateClaimed = true;
             }
@@ -1915,6 +1961,8 @@ async function handleDmAutoResponder(supabase, igAccountId, senderId, msgText, i
         .from('connected_accounts')
         .select('id, user_id, ig_user_id, fb_page_access_token, access_token, default_config')
         .eq('ig_user_id', igAccountId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
     if (!account) return false;
 
@@ -2042,7 +2090,8 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
     const { data: account } = await supabase
         .from('connected_accounts')
         .select('id, user_id, access_token, fb_page_access_token, ig_user_id, default_config')
-        .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
+        .eq('ig_user_id', igAccountId).eq('is_active', true)
+        .order('updated_at', { ascending: false }).limit(1).maybeSingle();
 
     if (!account) return;
 
@@ -2384,7 +2433,8 @@ async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload
     const { data: account, error: accountErr } = await supabase
         .from('connected_accounts')
         .select('id, user_id, access_token, ig_user_id, default_config')
-        .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
+        .eq('ig_user_id', igAccountId).eq('is_active', true)
+        .order('updated_at', { ascending: false }).limit(1).maybeSingle();
 
     if (accountErr) console.warn('[IceBreaker] connected_accounts lookup error: ' + accountErr.message);
     if (!account) {
@@ -2451,7 +2501,8 @@ async function handleIceBreakerByText(supabase, igAccountId, senderId, msgText) 
     const { data: account } = await supabase
         .from('connected_accounts')
         .select('id, user_id, access_token, ig_user_id, default_config')
-        .eq('ig_user_id', igAccountId).eq('is_active', true).maybeSingle();
+        .eq('ig_user_id', igAccountId).eq('is_active', true)
+        .order('updated_at', { ascending: false }).limit(1).maybeSingle();
     if (!account) {
         console.warn('[IceBreaker:textMatch] No active connected_account for ig_user_id=' + igAccountId);
         return false;
