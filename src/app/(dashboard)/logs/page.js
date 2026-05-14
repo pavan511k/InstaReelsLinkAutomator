@@ -22,35 +22,35 @@ export default async function LogsPage() {
 
         automations = userAutomations || [];
 
-        if (automations.length > 0) {
-            const allIds = automations.map((a) => a.id);
+        // Aggregate counts — filter by user_id, NOT automation_id. dm_automations
+        // hard-delete sets dm_sent_log.automation_id to NULL via FK, so rows from
+        // deleted automations would be excluded otherwise. Also covers cases where
+        // automation_id is intentionally null (story mention, chip tap, opening
+        // tap reward, follow-confirmation reward).
+        const { count: sentCount } = await supabase
+            .from('dm_sent_log')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('status', 'sent');
 
-            // Aggregate counts
-            const { count: sentCount } = await supabase
-                .from('dm_sent_log')
-                .select('id', { count: 'exact', head: true })
-                .in('automation_id', allIds)
-                .eq('status', 'sent');
+        const { count: failCount } = await supabase
+            .from('dm_sent_log')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('status', 'failed');
 
-            const { count: failCount } = await supabase
-                .from('dm_sent_log')
-                .select('id', { count: 'exact', head: true })
-                .in('automation_id', allIds)
-                .eq('status', 'failed');
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const { count: todayCount } = await supabase
+            .from('dm_sent_log')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('status', 'sent')
+            .gte('sent_at', todayStart.toISOString());
 
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
-            const { count: todayCount } = await supabase
-                .from('dm_sent_log')
-                .select('id', { count: 'exact', head: true })
-                .in('automation_id', allIds)
-                .eq('status', 'sent')
-                .gte('sent_at', todayStart.toISOString());
-
-            totalSent   = sentCount  || 0;
-            totalFailed = failCount  || 0;
-            todaySent   = todayCount || 0;
-        }
+        totalSent   = sentCount  || 0;
+        totalFailed = failCount  || 0;
+        todaySent   = todayCount || 0;
     } catch {
         // dm_sent_log may not exist yet
     }
