@@ -54,16 +54,27 @@ export default function LeadsContent({ connectedAccounts = [], isPro = false }) 
     const q = search.trim().toLowerCase();
     if (!q) return leads;
     return leads.filter((l) => {
-      const haystack = [l.email, l.recipient_ig_id].filter(Boolean).join(' ').toLowerCase();
+      const haystack = [
+        l.email,
+        l.recipient_ig_id,
+        l.recipient_first_name,
+        l.recipient_username,
+      ].filter(Boolean).join(' ').toLowerCase();
       return haystack.includes(q);
     });
   }, [leads, search]);
 
   const exportCsv = () => {
     if (!filteredLeads.length) return;
-    const header = 'email,ig_user_id,captured_at\n';
+    const header = 'first_name,username,email,ig_user_id,captured_at\n';
     const rows = filteredLeads.map((l) =>
-      [csvCell(l.email), csvCell(l.recipient_ig_id), csvCell(l.confirmed_at)].join(',')
+      [
+        csvCell(l.recipient_first_name),
+        csvCell(l.recipient_username),
+        csvCell(l.email),
+        csvCell(l.recipient_ig_id),
+        csvCell(l.confirmed_at),
+      ].join(',')
     ).join('\n');
     const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
@@ -187,7 +198,7 @@ export default function LeadsContent({ connectedAccounts = [], isPro = false }) 
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by email or IG ID…"
+                placeholder="Search by name, username, email or IG ID…"
                 className="block h-10 w-full rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-[#E63946] focus:outline-none focus:ring-2 focus:ring-[#E63946]/20 transition-colors"
               />
             </div>
@@ -201,46 +212,67 @@ export default function LeadsContent({ connectedAccounts = [], isPro = false }) 
           <div className="overflow-x-auto rounded-2xl border border-neutral-200 bg-white shadow-sm">
             <table className="w-full table-fixed border-collapse text-left">
               <colgroup>
-                <col className="w-[44%]" />
-                <col className="hidden w-[36%] sm:table-column" />
-                <col className="w-[20%]" />
+                <col className="w-[28%]" />
+                <col className="w-[37%]" />
+                <col className="hidden w-[20%] sm:table-column" />
+                <col className="w-[15%]" />
               </colgroup>
               <thead>
                 <tr className="border-b border-neutral-100 bg-neutral-50/60 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                  <th className="px-5 py-3.5">Lead</th>
                   <th className="px-5 py-3.5">Email</th>
-                  <th className="hidden px-4 py-3.5 sm:table-cell">IG User</th>
+                  <th className="hidden px-4 py-3.5 sm:table-cell">IG ID</th>
                   <th className="px-5 py-3.5 text-right">Captured</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 {filteredLeads.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="px-5 py-10 text-center text-sm text-neutral-500">
+                    <td colSpan={4} className="px-5 py-10 text-center text-sm text-neutral-500">
                       No leads match your search.
                     </td>
                   </tr>
-                ) : filteredLeads.map((lead) => (
-                  <tr key={lead.id} className="transition-colors hover:bg-neutral-50">
-                    <td className="px-5 py-3.5">
-                      <a
-                        href={`mailto:${lead.email}`}
-                        className="truncate font-mono text-sm text-neutral-900 hover:text-[#E63946] hover:underline"
-                      >
-                        {lead.email}
-                      </a>
-                    </td>
-                    <td className="hidden px-4 py-3.5 sm:table-cell">
-                      <span className="font-mono text-[12px] text-neutral-600">
-                        {lead.recipient_ig_id || '—'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right text-[12px] text-neutral-600 whitespace-nowrap">
-                      {new Date(lead.confirmed_at).toLocaleDateString('en-US', {
-                        day: 'numeric', month: 'short', year: 'numeric',
-                      })}
-                    </td>
-                  </tr>
-                ))}
+                ) : filteredLeads.map((lead) => {
+                  const displayName = (lead.recipient_first_name || '').trim();
+                  const handle      = (lead.recipient_username   || '').trim();
+                  const hasIdentity = displayName || handle;
+                  return (
+                    <tr key={lead.id} className="transition-colors hover:bg-neutral-50">
+                      <td className="px-5 py-3.5">
+                        {hasIdentity ? (
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-neutral-900">
+                              {displayName || (handle ? `@${handle}` : '—')}
+                            </div>
+                            {displayName && handle && (
+                              <div className="truncate text-[11px] text-neutral-500">@{handle}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[12px] text-neutral-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <a
+                          href={`mailto:${lead.email}`}
+                          className="truncate font-mono text-sm text-neutral-900 hover:text-[#E63946] hover:underline"
+                        >
+                          {lead.email}
+                        </a>
+                      </td>
+                      <td className="hidden px-4 py-3.5 sm:table-cell">
+                        <span className="font-mono text-[11px] text-neutral-500">
+                          {lead.recipient_ig_id || '—'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right text-[12px] text-neutral-600 whitespace-nowrap">
+                        {new Date(lead.confirmed_at).toLocaleDateString('en-US', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
