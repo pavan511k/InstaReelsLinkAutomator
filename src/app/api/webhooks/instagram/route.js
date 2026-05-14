@@ -322,7 +322,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
     // are prevented by partial unique indexes on each status.
     const { data: queueEntry } = await supabase
         .from('dm_followup_queue')
-        .select('*, connected_accounts(access_token, fb_page_access_token, ig_user_id)')
+        .select('*, connected_accounts(access_token, fb_page_access_token, ig_user_id, fb_page_id)')
         .eq('recipient_ig_id', senderId)
         .in('status', ['awaiting_confirmation', 'awaiting_opening_tap'])
         .order('created_at', { ascending: false })
@@ -565,7 +565,7 @@ async function handleQuickReplyTap(supabase, senderId, msgPayload) {
             id, automation_id, recipient_username, recipient_first_name, platform, sent_at,
             dm_automations!inner(
                 id, user_id, dm_type, dm_config,
-                connected_accounts!inner(id, access_token, fb_page_access_token, ig_user_id)
+                connected_accounts!inner(id, access_token, fb_page_access_token, ig_user_id, fb_page_id)
             )
         `)
         .eq('recipient_ig_id', senderId)
@@ -613,7 +613,7 @@ async function handleQuickReplyTap(supabase, senderId, msgPayload) {
     body = applyBranding(body, automation.dm_config || {}, plan);
 
     try {
-        await sendTextDM(account.ig_user_id, senderId, body, token, useIg);
+        await sendTextDM(account.ig_user_id || account.fb_page_id, senderId, body, token, useIg);
 
         await supabase.from('dm_sent_log').insert({
             automation_id:        automation.id,
@@ -1313,7 +1313,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
                         // user isn't stuck awaiting_confirmation with no DM.
                         try {
                             await sendFollowGateDM(
-                                account.ig_user_id, commenterId, gateMessage, token,
+                                account.ig_user_id || account.fb_page_id, commenterId, gateMessage, token,
                                 !account.fb_page_access_token, commentId,
                                 { confirmTitle: settings.askToFollowButtonText || "I'm following!" },
                             );
@@ -1526,7 +1526,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
             // awaiting_opening_tap with no DM received.
             try {
                 await sendOpeningGateDM(
-                    account.ig_user_id, commenterId, openingResolved,
+                    account.ig_user_id || account.fb_page_id, commenterId, openingResolved,
                     openingBtnText, token,
                     !account.fb_page_access_token, commentId,
                 );
@@ -1886,7 +1886,7 @@ const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
 async function handleEmailCollectorReply(supabase, senderId, msgText) {
     const { data: queueEntry } = await supabase
         .from('email_collect_queue')
-        .select('*, connected_accounts(access_token, ig_user_id)')
+        .select('*, connected_accounts(access_token, fb_page_access_token, ig_user_id, fb_page_id)')
         .eq('recipient_ig_id', senderId).eq('status', 'awaiting_email')
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
@@ -1899,10 +1899,12 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
     if (!emailMatch) {
         console.log('[Webhook] DM reply has no valid email address');
         try {
-            const account      = queueEntry.connected_accounts;
+            const account       = queueEntry.connected_accounts;
+            const replyToken    = account.fb_page_access_token || account.access_token;
+            const replyFromId   = account.ig_user_id || account.fb_page_id;
             const replyUseIgApi = !account.fb_page_access_token;
-            await sendTextDM(account.ig_user_id, senderId,
-                'Please reply with a valid email address (e.g. you@example.com) \ud83d\udce7', account.access_token, replyUseIgApi);
+            await sendTextDM(replyFromId, senderId,
+                'Please reply with a valid email address (e.g. you@example.com) \ud83d\udce7', replyToken, replyUseIgApi);
         } catch { /* non-critical */ }
         return;
     }
@@ -1910,7 +1912,9 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
     const email       = emailMatch[0].toLowerCase();
     const account     = queueEntry.connected_accounts;
     const token       = account.fb_page_access_token || account.access_token;
-    const igSender    = account.ig_user_id;
+    // Fall back to fb_page_id so the thank-you DM sends correctly when the
+    // capture happened on a FB-only account (ig_user_id is NULL).
+    const igSender    = account.ig_user_id || account.fb_page_id;
     const replyUseIgApi = !account.fb_page_access_token;
 
     console.log(`[Webhook] Captured email ${email} from ${senderId}`);

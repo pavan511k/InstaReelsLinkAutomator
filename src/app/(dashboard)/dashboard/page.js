@@ -189,7 +189,16 @@ export default async function DashboardPage() {
     const greeting       = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
     if (connectedAccounts.length === 0) {
-        return <ConnectAccount />;
+        // FB closed-beta gate: tell the connect UI whether this user is
+        // allowed to initiate a Facebook OAuth right now. Non-allowlisted
+        // users see the FB tile as "Coming soon" while FB_BETA_MODE is on.
+        // Mirrors the server gate in /api/auth/meta/connect.
+        const FB_BETA_MODE = process.env.FB_BETA_MODE === 'true';
+        const allowedEmails = (process.env.ALLOWED_EMAILS || '')
+            .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+        const userEmail = (user?.email || '').toLowerCase();
+        const fbAllowed = !FB_BETA_MODE || allowedEmails.includes(userEmail);
+        return <ConnectAccount fbAllowed={fbAllowed} />;
     }
 
     const setupPosts  = allPosts.filter((p) => p.status === 'setup');
