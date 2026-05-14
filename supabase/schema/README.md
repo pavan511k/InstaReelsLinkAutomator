@@ -3,7 +3,7 @@
 This folder contains the complete SQL schema for AutoDM, split into
 **one file per table** so each can be read, reviewed, or re-run independently.
 
-Run these scripts **in order** (01 → 16) in the Supabase SQL Editor when
+Run these scripts **in order** (01 → 18) in the Supabase SQL Editor when
 setting up a fresh database. Every script is idempotent — it uses
 `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, and
 `ON CONFLICT DO NOTHING`, so re-running a script on an existing database
@@ -32,6 +32,7 @@ is safe and will not overwrite data.
 | 15 | `15_data_deletion_requests.sql` | Meta Platform data deletion compliance |
 | 16 | `16_storage_dm_images.sql` | Storage bucket for DM slide images |
 | 17 | `17_admin_email_log.sql` | Audit log for the admin /admin/email tool |
+| 18 | `18_contacts_rpc.sql` | `contacts_for_user(uuid)` RPC powering /contacts |
 
 > **Order matters.** Each table references tables created by earlier scripts
 > via foreign keys. Running out of order will produce FK constraint errors.
