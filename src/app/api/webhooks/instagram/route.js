@@ -2113,10 +2113,23 @@ async function handleDmAutoResponder(supabase, igAccountId, senderId, msgText, i
     // (billing gate, idempotency, enqueue) works without divergence.
     const fakePost = { id: null, account_id: account.id };
 
+    // Resolve the platform from the matched account row. igAccountId here
+    // comes from the webhook envelope's entry.id — for IG events it's the
+    // IG Business Account ID; for FB events it's the FB Page ID. Matching
+    // against the right column on the account tells us which platform
+    // triggered the event so dm_queue gets the correct platform stored.
+    // Without this, FB DM Auto-Responder rows land in dm_queue with
+    // platform='instagram' (the function default) and the cron later
+    // tries to use account.ig_user_id (NULL on FB-only) as the sender,
+    // ending in "Object with ID 'null' does not exist."
+    const platformForEvent = (account.fb_page_id && account.fb_page_id === igAccountId)
+        ? 'facebook'
+        : 'instagram';
+
     try {
         await processAutomationForComment(
             supabase, fakePost, msgText, senderId, syntheticCommentId,
-            'instagram', null, null, inboundMid, matched,
+            platformForEvent, null, null, inboundMid, matched,
         );
         return true;
     } catch (err) {
