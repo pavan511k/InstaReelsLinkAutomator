@@ -66,6 +66,7 @@ const ERROR_MESSAGES = {
   invalid_state:       'Invalid session. Please try connecting again.',
   no_instagram_account:'No Instagram Business account found. Make sure your Instagram account is a Business or Creator account linked to a Facebook Page.',
   no_facebook_page:    'No Facebook Page found. You need at least one Facebook Page to connect.',
+  fb_coming_soon:      'Facebook support is launching soon — we\'ll let you know the moment it goes live. For now, please connect Instagram instead.',
   save_failed:         'Failed to save your account. Please try again.',
   oauth_failed:        'Connection failed. Please try again.',
 };
@@ -76,11 +77,30 @@ function PlatformIcon({ icon, className = 'h-5 w-5' }) {
   return <Sparkles className={className} strokeWidth={2} />;
 }
 
-export default function ConnectAccount() {
+export default function ConnectAccount({ fbAllowed = true }) {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const [errorMessage, setErrorMessage] = useState('');
   const [isConnecting, setIsConnecting] = useState('');
+
+  // When FB_BETA_MODE is on and this user isn't allowlisted, downgrade the
+  // FB tile to "Coming soon" so they can't initiate FB OAuth. The server
+  // route enforces the same gate (defense-in-depth).
+  const connectionOptions = CONNECTION_OPTIONS.map((opt) => {
+    if (opt.id === 'facebook' && !fbAllowed) {
+      return {
+        ...opt,
+        description: 'Facebook support is launching soon. Stay tuned — we\'ll let you know the moment it goes live.',
+        buttonLabel: 'Coming soon',
+        badge:    { text: 'Coming soon', tone: 'soon' },
+        cardTint: 'bg-neutral-100',
+        iconBg:   'bg-neutral-900',
+        badgeBg:  'bg-neutral-200 text-neutral-700 border-neutral-300',
+        disabled: true,
+      };
+    }
+    return opt;
+  });
 
   useEffect(() => {
     const error   = searchParams.get('error');
@@ -153,7 +173,7 @@ export default function ConnectAccount() {
 
         {/* Platform cards */}
         <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
-          {CONNECTION_OPTIONS.map((option) => {
+          {connectionOptions.map((option) => {
             const isThisConnecting = isConnecting === option.id;
             const isDisabled       = option.disabled || (isConnecting && !isThisConnecting);
 
