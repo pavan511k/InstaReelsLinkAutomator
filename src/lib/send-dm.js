@@ -31,7 +31,18 @@ async function throwIfMetaError(res, fallbackMsg) {
 // window from comment creation. Falls back to recipient.id when no commentId
 // is available (e.g. follow-up flow steps, user-initiated replies).
 function buildRecipient(recipientId, commentId) {
-    return commentId ? { comment_id: commentId } : { id: recipientId };
+    // Private Reply (recipient.comment_id) only works with a REAL Meta
+    // comment_id. Several flows pass synthetic dedup keys here -- e.g.
+    // story replies use `story_reply:<mid>`, opening-tap rewards use
+    // null already, etc. Real Meta comment_ids are numeric and never
+    // contain a colon, so use the colon as the synthetic marker.
+    // Passing a synthetic id to Meta returns:
+    //   "The requested user cannot be found"
+    // which silently kills the gate / DM send.
+    const isSynthetic = typeof commentId === 'string' && commentId.includes(':');
+    return (commentId && !isSynthetic)
+        ? { comment_id: commentId }
+        : { id: recipientId };
 }
 
 /**
