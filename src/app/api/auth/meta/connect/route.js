@@ -17,17 +17,26 @@ const isEmailAllowlisted = (email) =>
     !!email && ALLOWED_EMAILS.includes(email.toLowerCase());
 
 /**
- * GET /api/auth/meta/connect?type=instagram|facebook|both
- * Redirects the user to the Facebook OAuth dialog
+ * GET /api/auth/meta/connect?type=instagram|facebook
+ * Redirects the user to the Meta OAuth dialog.
+ *
+ * Rule: a user can have ONE active platform at a time (IG XOR FB). If
+ * they're already connected to one and request the OTHER, we bounce
+ * them back to /dashboard with a friendly "disconnect first" message.
+ * Re-OAuth of the SAME platform is allowed (token refresh / scope update).
+ *
+ * The legacy 'both' type is no longer accepted for new connections, but
+ * existing connected_accounts rows with platform='both' keep working —
+ * the OAuth callback still handles that value defensively.
  */
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const connectionType = searchParams.get('type') || 'instagram';
 
-    // Validate connection type
-    if (!['instagram', 'facebook', 'both'].includes(connectionType)) {
+    // Validate connection type — 'both' removed; single-platform only.
+    if (!['instagram', 'facebook'].includes(connectionType)) {
         return NextResponse.json(
-            { error: 'Invalid connection type. Must be instagram, facebook, or both.' },
+            { error: 'Invalid connection type. Must be instagram or facebook.' },
             { status: 400 }
         );
     }
@@ -46,6 +55,24 @@ export async function GET(request) {
         const url = new URL('/dashboard', request.url);
         url.searchParams.set('error', 'fb_coming_soon');
         return NextResponse.redirect(url);
+    }
+
+    // Cross-platform conflict check — only one active platform at a time.
+    // Reconnecting the SAME platform is fine (token refresh); switching to
+    // a DIFFERENT platform requires explicit disconnect first.
+    const { data: activeAccounts } = await supabase
+        .from('connected_accounts')
+        .select('platform')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+    if (activeAccounts && activeAccounts.length > 0) {
+        const conflictRow = activeAccounts.find((a) => a.platform !== connectionType);
+        if (conflictRow) {
+            const url = new URL('/dashboard', request.url);
+            url.searchParams.set('error', 'disconnect_first');
+            return NextResponse.redirect(url);
+        }
     }
 
     // Build the OAuth URL with user ID as state (for CSRF protection + user mapping)
