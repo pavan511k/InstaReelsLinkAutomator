@@ -365,14 +365,19 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
         const openingUseIgApi  = !openingAccount.fb_page_access_token;
         const openingIgSender  = queueEntry.ig_sender_id;
 
-        // Resolve plan for branding / templates
+        // Resolve plan + post_id (post_id is used to keep the DM Logs row
+        // linked to the original post so it doesn't render as "Unknown post"
+        // when the automation is later deleted; FK SET NULLs automation_id
+        // on dm_sent_log but post_id stays intact).
         let openingRewardPlan = 'free';
+        let openingRewardPostId = null;
         try {
-            const { data: autoForPlan } = await supabase
-                .from('dm_automations').select('user_id')
+            const { data: autoMeta } = await supabase
+                .from('dm_automations').select('user_id, post_id')
                 .eq('id', queueEntry.automation_id).maybeSingle();
-            if (autoForPlan?.user_id) openingRewardPlan = await getUserPlan(supabase, autoForPlan.user_id);
-        } catch { /* defaults to free */ }
+            if (autoMeta?.user_id) openingRewardPlan = await getUserPlan(supabase, autoMeta.user_id);
+            openingRewardPostId = autoMeta?.post_id || null;
+        } catch { /* defaults to free / null */ }
 
         // Build click-tracking map so reward links resolve through /r/<code>
         let openingTracking = {};
@@ -404,7 +409,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 
             await supabase.from('dm_sent_log').insert({
                 automation_id:   queueEntry.automation_id,
-                post_id:         null,
+                post_id:         openingRewardPostId,
                 recipient_ig_id: senderId,
                 comment_id:      null,
                 comment_text:    `[opening tap: ${msgText.slice(0, 60)}]`,
@@ -447,14 +452,18 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
     if (isFollowing) {
         console.log(`[Webhook] ${senderId} IS following — sending reward DM`);
 
+        // Plan lives in user_plans — resolve via the automation's user_id.
+        // post_id keeps the DM Logs row linked to the original post so it
+        // doesn't render as "Unknown post" after the automation is deleted.
         let rewardPlan = 'free';
+        let rewardPostId = null;
         try {
-            // Plan lives in user_plans — resolve via the automation's user_id.
-            const { data: autoForPlan } = await supabase
-                .from('dm_automations').select('user_id')
+            const { data: autoMeta } = await supabase
+                .from('dm_automations').select('user_id, post_id')
                 .eq('id', queueEntry.automation_id).maybeSingle();
-            if (autoForPlan?.user_id) rewardPlan = await getUserPlan(supabase, autoForPlan.user_id);
-        } catch { /* defaults to free */ }
+            if (autoMeta?.user_id) rewardPlan = await getUserPlan(supabase, autoMeta.user_id);
+            rewardPostId = autoMeta?.post_id || null;
+        } catch { /* defaults to free / null */ }
 
         // Build the click-tracking map for this automation so reward-DM
         // links route through /r/<code> for analytics. Without this, every
@@ -481,10 +490,10 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 
             await supabase.from('dm_sent_log').insert({
                 automation_id:   queueEntry.automation_id,
-                post_id:         null,
+                post_id:         rewardPostId,
                 recipient_ig_id: senderId,
                 comment_id:      null,
-                comment_text:    msgText,
+                comment_text:    `[follow gate confirmed: ${msgText.slice(0, 60)}]`,
                 status:          'sent',
                 platform:        useIgApi ? 'instagram' : 'facebook',
                 sent_at:         new Date().toISOString(),
@@ -1259,9 +1268,36 @@ async function processAutomationForComment(supabase, post, commentText, commente
                             }
                             throw enqErr;
                         }
-                        // Won the dedup race -- now send the gate DM. Roll
-                        // back the inflight row on send failure so the user
-                        // isn't stuck awaiting_confirmation with no DM.
+                        // Won the dedup race -- send the public comment
+                        // reply (best-effort) and then the gate DM. Mirrors
+                        // the normal-flow reply block at the bottom of this
+                        // function. Without this, enabling the follow gate
+                        // silently disables the public comment reply that
+                        // the same automation has configured.
+                        const gateReplyEnabled = Boolean(settingsConfig.replyPublicly);
+                        if (gateReplyEnabled) {
+                            let replyMsg = null;
+                            if (Array.isArray(settingsConfig.publicReplies)) {
+                                const enabledReplies = settingsConfig.publicReplies
+                                    .filter((r) => r && r.enabled && typeof r.text === 'string' && r.text.trim());
+                                if (enabledReplies.length > 0) {
+                                    replyMsg = enabledReplies[Math.floor(Math.random() * enabledReplies.length)].text;
+                                }
+                            }
+                            replyMsg = replyMsg
+                                || settingsConfig.replyMessage
+                                || settingsConfig.autoReplyText
+                                || 'Hey! Just sent you a DM -- check your inbox.';
+                            try {
+                                await replyToComment(commentId, resolveMessageVariables(replyMsg, context), token, useIgApi);
+                                console.log('[Webhook] Comment reply sent (follow-gate path)');
+                            } catch (replyErr) {
+                                console.warn('[Webhook] Comment reply failed (non-fatal, follow-gate path):', replyErr.message);
+                            }
+                        }
+
+                        // Roll back the inflight row on send failure so the
+                        // user isn't stuck awaiting_confirmation with no DM.
                         try {
                             await sendFollowGateDM(
                                 account.ig_user_id, commenterId, gateMessage, token,
@@ -2164,6 +2200,7 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
         await supabase.from('dm_sent_log').insert({
             automation_id:        null,
             post_id:              null,
+            user_id:              account.user_id,
             recipient_ig_id:      mentionerId,
             recipient_username:   mentionerHandle,
             recipient_first_name: mentionerFirstName,
@@ -2295,6 +2332,7 @@ async function handleStoryMentionDM(supabase, igAccountId, senderId, inboundMid)
         await supabase.from('dm_sent_log').insert({
             automation_id:        null,
             post_id:              null,
+            user_id:              account.user_id,
             recipient_ig_id:      senderId,
             recipient_username:   mentionerHandle,
             recipient_first_name: mentionerFirstName,
