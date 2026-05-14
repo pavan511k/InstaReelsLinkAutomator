@@ -75,7 +75,7 @@ export default async function FlowBuilderPage({ searchParams }) {
   // here mid-onboarding).
   const { data: account } = await supabase
     .from('connected_accounts')
-    .select('id, ig_username, ig_profile_picture_url, default_config')
+    .select('id, ig_username, ig_profile_picture_url, platform, default_config')
     .eq('user_id', user.id)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
@@ -88,6 +88,34 @@ export default async function FlowBuilderPage({ searchParams }) {
   // → Default Configuration. Edit-mode automations ignore these
   // (they hydrate from their own saved row).
   const accountDefaults = account?.default_config || {};
+
+  // Resolve platform across all of the user's active accounts so the
+  // builder can hide IG-only toggles (Follow Gate, Heart Reaction) when
+  // the user only has Facebook connected. 'both' / 'instagram' show
+  // everything; 'facebook' hides IG-only features.
+  let activePlatform = 'instagram';
+  try {
+    const { data: accountRows } = await supabase
+      .from('connected_accounts')
+      .select('platform')
+      .eq('user_id', user.id)
+      .eq('is_active', true);
+    const platforms = new Set((accountRows || []).map((a) => a.platform).filter(Boolean));
+    if (platforms.has('both') || (platforms.has('instagram') && platforms.has('facebook'))) {
+      activePlatform = 'both';
+    } else if (platforms.has('facebook')) {
+      activePlatform = 'facebook';
+    } else if (platforms.has('instagram')) {
+      activePlatform = 'instagram';
+    }
+  } catch { /* default to 'instagram' */ }
+
+  // If a user navigates directly to a story-reply builder URL while
+  // on a FB-only account, redirect them away — story-reply can never
+  // fire on FB since Pages don't have stories.
+  if (type === 'story-reply' && activePlatform === 'facebook') {
+    redirect('/automations');
+  }
 
   // Posts grid for the "Specific Post" / "Specific Story" pickers in
   // the builder. We split on `is_story` so each template only shows
@@ -147,6 +175,7 @@ export default async function FlowBuilderPage({ searchParams }) {
       initialAutomation={initialAutomation}
       effectivePlan={effectivePlan}
       accountDefaults={accountDefaults}
+      activePlatform={activePlatform}
     />
   );
 }

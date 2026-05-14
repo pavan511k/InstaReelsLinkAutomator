@@ -600,18 +600,19 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
     const { dm_type, dm_config } = automation;
 
     // Comment-triggered first DMs need Private Replies (recipient.comment_id)
-    // to bypass the 24h messaging window. Only applies to Instagram —
-    // Facebook stays on the standard messages endpoint per the comment below.
-    // Private Reply (recipient.comment_id) only works with a real Meta
-    // comment_id. Several flows store synthetic dedup keys in the queue
-    // -- e.g. `story_reply:<mid>` for story replies (which are DMs, not
-    // comments) -- and passing those to Meta makes it return "The
-    // requested user cannot be found." Synthetic IDs are namespaced with
-    // a "<flow>:<id>" shape; real Meta comment_ids are numeric and never
-    // contain a colon, so filter on that.
+    // to bypass the 24h messaging window. BOTH platforms support this:
+    //   - Instagram: comment_id on graph.instagram.com or graph.facebook.com
+    //   - Facebook Page: comment_id on graph.facebook.com ("Private Reply")
+    // Without it, FB sends fail with error (#10) "outside of allowed window".
+    //
+    // Private Reply only works with a REAL Meta comment_id. Several flows
+    // store synthetic dedup keys in the queue -- `story_reply:<mid>`,
+    // `dm_auto:<mid>` -- and passing those to Meta returns "The requested
+    // user cannot be found." Synthetic IDs always contain a colon; real
+    // Meta comment_ids never do. Filter on the colon.
     const rawCommentId = context?.comment_id || '';
     const isSyntheticCommentId = rawCommentId.includes(':');
-    const commentId = (platform === 'instagram' && rawCommentId && !isSyntheticCommentId)
+    const commentId = (rawCommentId && !isSyntheticCommentId)
         ? rawCommentId
         : null;
 

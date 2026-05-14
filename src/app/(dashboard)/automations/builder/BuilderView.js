@@ -1102,10 +1102,18 @@ function AdvancedCard({
   followUpMessage, onFollowUpMessage,
   openingEnabled = false,
   isPro = false,
+  activePlatform = 'instagram',
   isFocused, onFocus,
 }) {
+  const isFacebookOnly  = activePlatform === 'facebook';
   const showReplyPublicly = type === 'comment-to-dm';
-  const showReactWithHeart = type === 'story-reply' || type === 'dm-auto-responder';
+  // Heart reaction (sender_action: 'react') is rejected by FB's Send API.
+  // We already gate the actual send in the webhook by platform; hide the
+  // toggle so FB-only creators don't see a feature that will never fire.
+  const showReactWithHeart = (type === 'story-reply' || type === 'dm-auto-responder') && !isFacebookOnly;
+  // Follow Gate relies on the IG-only `is_user_follow_business` field;
+  // FB Pages don't expose an equivalent. Hide the toggle for FB-only.
+  const showAskToFollow = !isFacebookOnly;
 
   return (
     <CardShell num={num} title="Advanced Automations" icon={Settings2} hint="Optional engagement boosters." isFocused={isFocused} onFocus={onFocus}>
@@ -1195,45 +1203,48 @@ function AdvancedCard({
           />
         )}
 
-        {/* Ask to follow before sending DM — Pro feature. We send a
-            gate message with a "I followed!" tap; webhook verifies
-            follow status; the actual DM only fires once they're a
-            confirmed follower. */}
-        <div>
-          <Toggle
-            checked={Boolean(askToFollow)}
-            onChange={onAskToFollow}
-            label="Ask to follow before sending DM"
-            sublabel="Send a gate message; the DM only fires after we verify they followed."
-            proGated
-            disabled={!isPro}
-          />
-          {askToFollow && (
-            <div className="mt-3 space-y-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-neutral-700">Follow request message</label>
-                <textarea
-                  value={askToFollowMessage || ''}
-                  onChange={(e) => onAskToFollowMessage(e.target.value.slice(0, 640))}
-                  placeholder="Hey {first_name}! Follow us first and reply YES so I can send your link 🎁"
-                  rows={3}
-                  className="mt-1 block w-full resize-none rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-[#E63946] focus:outline-none focus:ring-2 focus:ring-[#E63946]/20 transition-colors"
+        {/* Ask to follow before sending DM — Pro feature, IG-only.
+            We send a gate message with a "I followed!" tap; webhook
+            verifies follow status; the actual DM only fires once they're
+            a confirmed follower. Hidden on FB-only accounts since FB
+            Pages don't expose follower-relationship data. */}
+        {showAskToFollow && (
+          <div>
+            <Toggle
+              checked={Boolean(askToFollow)}
+              onChange={onAskToFollow}
+              label="Ask to follow before sending DM"
+              sublabel="Send a gate message; the DM only fires after we verify they followed."
+              proGated
+              disabled={!isPro}
+            />
+            {askToFollow && (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-neutral-700">Follow request message</label>
+                  <textarea
+                    value={askToFollowMessage || ''}
+                    onChange={(e) => onAskToFollowMessage(e.target.value.slice(0, 640))}
+                    placeholder="Hey {first_name}! Follow us first and reply YES so I can send your link 🎁"
+                    rows={3}
+                    className="mt-1 block w-full resize-none rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-[#E63946] focus:outline-none focus:ring-2 focus:ring-[#E63946]/20 transition-colors"
+                  />
+                  <p className="mt-1 text-[11px] text-neutral-500">
+                    Sent only when the commenter doesn&apos;t already follow you. Existing
+                    followers skip this step and go straight to the DM.
+                  </p>
+                </div>
+                <LockedTextField
+                  value={askToFollowButtonText}
+                  onChange={onAskToFollowButtonText}
+                  label="Confirmation button text"
+                  placeholder="I'm following!"
+                  maxLength={20}
                 />
-                <p className="mt-1 text-[11px] text-neutral-500">
-                  Sent only when the commenter doesn&apos;t already follow you. Existing
-                  followers skip this step and go straight to the DM.
-                </p>
               </div>
-              <LockedTextField
-                value={askToFollowButtonText}
-                onChange={onAskToFollowButtonText}
-                label="Confirmation button text"
-                placeholder="I'm following!"
-                maxLength={20}
-              />
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Send follow-up message — Pro feature. 24h after the main
             DM, we nudge anyone who hasn't clicked the link. Uses the
@@ -2085,6 +2096,8 @@ export default function BuilderView({
   accountDefaults = {},     // Settings → Default Configuration. Used to
                             // seed keywords/message/button on NEW
                             // automations only (edit mode ignores these).
+  activePlatform = 'instagram', // 'instagram' | 'facebook' | 'both' — hides
+                                // IG-only toggles when only FB is connected.
 }) {
   useBuilderFullBleed();
   const router = useRouter();
@@ -2421,6 +2434,7 @@ export default function BuilderView({
             onFollowUpMessage={setFollowUpMessage}
             openingEnabled={openingEnabled}
             isPro={isPro}
+            activePlatform={activePlatform}
             isFocused={isFocused}
             onFocus={onFocus}
           />
