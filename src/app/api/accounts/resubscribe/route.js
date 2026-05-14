@@ -141,10 +141,15 @@ export async function POST() {
                 });
 
             } else if (account.fb_page_id && account.fb_page_access_token) {
-                // Facebook Login — subscribe the Page via graph.facebook.com
+                // Facebook Login — subscribe the Page via graph.facebook.com.
+                // Valid Page-object fields are listed in Meta's docs; using
+                // `instagram_comments` here makes Meta reject the WHOLE request
+                // with error 100, so NONE of the requested fields get applied
+                // (including messages + messaging_postbacks). IG events come
+                // via a separate Instagram-object subscription, not here.
                 const url =
                     `${GRAPH_FB_BASE}/${account.fb_page_id}/subscribed_apps` +
-                    `?subscribed_fields=instagram_comments%2Cmessages%2Cmessaging_postbacks%2Cfeed` +
+                    `?subscribed_fields=feed%2Cmessages%2Cmessaging_postbacks` +
                     `&access_token=${encodeURIComponent(account.fb_page_access_token)}`;
                 const res  = await fetch(url, { method: 'POST' });
                 const data = await res.json();
