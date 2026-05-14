@@ -9,7 +9,7 @@ export const metadata = {
 
 export default function PrivacyPolicy() {
     return (
-        <div className={styles.legalPage}>
+        <div id="top" className={styles.legalPage}>
             {/* Header */}
             <header className={styles.legalHeader}>
                 <div className={styles.headerInner}>
@@ -20,9 +20,9 @@ export default function PrivacyPolicy() {
                         <span className={styles.logoText}>auto<span className={styles.logoDM}>dm</span></span>
                     </Link>
                     <div className={styles.headerLinks}>
-                        <Link href="/terms">Terms of Service</Link>
+                        <Link href="/terms">Terms</Link>
                         <Link href="/login">Log In</Link>
-                        <Link href="/signup">Sign Up</Link>
+                        <Link href="/signup" className={styles.ctaButton}>Sign Up</Link>
                     </div>
                 </div>
             </header>
@@ -392,9 +392,23 @@ export default function PrivacyPolicy() {
                 </section>
             </div>
 
+            {/* Back to top */}
+            <a href="#top" className={styles.backToTop} aria-label="Back to top">↑</a>
+
             {/* Footer */}
             <footer className={styles.legalFooter}>
-                <p>© 2026 AutoDM. All rights reserved. | <Link href="/terms">Terms of Service</Link> | <Link href="/">Home</Link></p>
+                <div className={styles.footerInner}>
+                    <nav className={styles.footerNav} aria-label="Footer">
+                        <Link href="/">Home</Link>
+                        <Link href="/terms">Terms of Service</Link>
+                        <Link href="/login">Log In</Link>
+                        <a href="mailto:support@autodm.pro">Contact Support</a>
+                        <Link href="/signup" className={styles.primaryCta}>Get Started</Link>
+                    </nav>
+                    <div className={styles.footerCopyright}>
+                        © 2026 AutoDM. All rights reserved. Built for Instagram &amp; Facebook automation. We are a registered Meta Business Partner.
+                    </div>
+                </div>
             </footer>
         </div>
     );
