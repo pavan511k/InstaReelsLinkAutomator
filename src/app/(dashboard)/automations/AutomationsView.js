@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { MessageCircle, BookOpen, Send, Sparkles, Plus, Search, ArrowLeft, X, ChevronRight, ChevronDown, Check, Loader2, Trash2, Power, RefreshCw, RotateCcw, Copy, MousePointerClick, Zap, Mail, Lock, Crown } from 'lucide-react';
+import { MessageCircle, BookOpen, Send, Sparkles, Plus, Search, ArrowLeft, X, ChevronRight, ChevronDown, Check, Loader2, Trash2, Power, RefreshCw, RotateCcw, Copy, MousePointerClick, Zap, Mail, Lock, Crown, HelpCircle } from 'lucide-react';
+import AutomationRulesModal from '@/components/dashboard/AutomationRulesModal';
 import { getAutomationLimit } from '@/lib/plans';
 import PricingModal from '@/components/dashboard/PricingModal';
 
@@ -941,6 +942,7 @@ export default function AutomationsView({ automations = [], effectivePlan = 'fre
   const automationLimit = getAutomationLimit(effectivePlan);
   const atLimit         = automationLimit != null && automations.length >= automationLimit;
   const [showPricingModal, setShowPricingModal] = useState(false);
+  const [showRulesModal,   setShowRulesModal]   = useState(false);
 
   // Filters (search + template tab + status). Derived list runs
   // through all three.
@@ -1035,9 +1037,20 @@ export default function AutomationsView({ automations = [], effectivePlan = 'fre
       {/* ── Header ───────────────────────────────────────────────── */}
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
-            Automations
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
+              Automations
+            </h1>
+            <button
+              type="button"
+              onClick={() => setShowRulesModal(true)}
+              aria-label="How do automations decide which one fires?"
+              title="Which automation fires? (rules)"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition-colors"
+            >
+              <HelpCircle className="h-5 w-5" />
+            </button>
+          </div>
           <p className="mt-1 text-sm text-neutral-600">
             Manage every automation in one place — comments, stories, DMs, and ice breakers.
           </p>
@@ -1162,6 +1175,11 @@ export default function AutomationsView({ automations = [], effectivePlan = 'fre
       <PricingModal
         open={showPricingModal}
         onClose={() => setShowPricingModal(false)}
+      />
+
+      <AutomationRulesModal
+        open={showRulesModal}
+        onClose={() => setShowRulesModal(false)}
       />
     </div>
   );
