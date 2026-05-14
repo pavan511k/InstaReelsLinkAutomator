@@ -29,7 +29,11 @@ export async function GET(request) {
     try {
         const { data: leads, error, count } = await supabase
             .from('email_leads')
-            .select('id, email, recipient_ig_id, confirmed_at, automation_id', { count: 'exact' })
+            .select(
+                'id, email, recipient_ig_id, recipient_first_name, recipient_username,' +
+                ' confirmed_at, automation_id',
+                { count: 'exact' },
+            )
             .eq('user_id', user.id)
             .order('confirmed_at', { ascending: false })
             .range(offset, offset + limit - 1);

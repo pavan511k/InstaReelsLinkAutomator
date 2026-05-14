@@ -1935,13 +1935,35 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
             return;
         }
 
+        // Pull display name + username from the dm_sent_log row that
+        // delivered the ask-message. We populated those fields when the
+        // ask was sent (recipient_first_name comes from a Graph lookup,
+        // recipient_username from the comment author). No extra Meta API
+        // call needed — saves us a round-trip per capture.
+        let leadFirstName = null;
+        let leadUsername  = null;
+        try {
+            const { data: askLog } = await supabase
+                .from('dm_sent_log')
+                .select('recipient_first_name, recipient_username')
+                .eq('automation_id',  queueEntry.automation_id)
+                .eq('recipient_ig_id', senderId)
+                .order('sent_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            leadFirstName = askLog?.recipient_first_name || null;
+            leadUsername  = askLog?.recipient_username   || null;
+        } catch { /* non-fatal — row just won't have name/username */ }
+
         await supabase.from('email_leads').upsert({
-            automation_id:   queueEntry.automation_id,
-            account_id:      queueEntry.account_id,
-            user_id:         ownerUserId,
-            recipient_ig_id: senderId,
+            automation_id:        queueEntry.automation_id,
+            account_id:           queueEntry.account_id,
+            user_id:              ownerUserId,
+            recipient_ig_id:      senderId,
+            recipient_first_name: leadFirstName,
+            recipient_username:   leadUsername,
             email,
-            confirmed_at:    new Date().toISOString(),
+            confirmed_at:         new Date().toISOString(),
         }, { onConflict: 'automation_id,recipient_ig_id' });
 
         await supabase.from('email_collect_queue')
