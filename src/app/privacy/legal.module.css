@@ -1,14 +1,24 @@
 /* ────────────────────────────────────────────────────────────────
    Legal pages (Privacy + Terms). Shared CSS module imported by
    src/app/privacy/page.js AND src/app/terms/page.js.
-   Design: clean modern SaaS, Linear/Vercel inspired — generous
-   spacing, subtle dividers, hover-visible anchor links.
+   Palette: black / orange / white / gray — matches brand. Avoids
+   var(--color-primary) so this page is independent of the global
+   token which the dashboard still wires to a different hue.
    ──────────────────────────────────────────────────────────────── */
 
 .legalPage {
+    /* Local accent tokens so we don't fight the global --color-primary
+       and the legal pages stay on brand even if globals.css changes.   */
+    --legal-accent:        #F97316;  /* orange-500 */
+    --legal-accent-hover:  #EA580C;  /* orange-600 */
+    --legal-accent-soft:   #FFF7ED;  /* orange-50  */
+    --legal-accent-border: #FED7AA;  /* orange-200 */
+    --legal-ink:           #171717;
+    --legal-ink-soft:      #404040;
+
     min-height: 100vh;
     background:
-        radial-gradient(1200px 600px at 50% -10%, rgba(124, 58, 237, 0.08), transparent 60%),
+        radial-gradient(1200px 600px at 50% -10%, rgba(249, 115, 22, 0.06), transparent 60%),
         var(--color-gray-50);
     color: var(--color-gray-900);
 }
@@ -46,12 +56,12 @@
     width: 32px;
     height: 32px;
     border-radius: 9px;
-    background: linear-gradient(135deg, #7C3AED, #5B21B6);
-    border: 1px solid rgba(255,255,255,0.14);
+    background: #171717;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(124,58,237,0.35);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
     flex-shrink: 0;
 }
 
@@ -61,7 +71,7 @@
     letter-spacing: -0.01em;
 }
 
-.logoDM { color: var(--color-primary); }
+.logoDM { color: var(--legal-accent); }
 
 .headerLinks {
     display: flex;
@@ -85,13 +95,13 @@
 }
 
 .headerLinks a:focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--legal-accent);
     outline-offset: 2px;
 }
 
 /* Primary CTA in header */
 .ctaButton {
-    background: var(--color-gray-900) !important;
+    background: var(--legal-ink) !important;
     color: var(--color-white) !important;
     border-radius: var(--radius-md);
 }
@@ -136,8 +146,8 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--color-primary);
-    box-shadow: 0 0 8px rgba(124, 58, 237, 0.5);
+    background: var(--legal-accent);
+    box-shadow: 0 0 8px rgba(249, 115, 22, 0.5);
 }
 
 .intro {
@@ -153,13 +163,13 @@
 .summaryBox {
     position: relative;
     background:
-        linear-gradient(180deg, rgba(124, 58, 237, 0.04), rgba(124, 58, 237, 0.01)),
+        linear-gradient(180deg, rgba(249, 115, 22, 0.04), rgba(249, 115, 22, 0.01)),
         var(--color-white);
     border: 1px solid var(--color-gray-200);
     border-radius: var(--radius-xl);
     padding: var(--space-7);
     margin-bottom: var(--space-10);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 24px -12px rgba(124, 58, 237, 0.08);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 8px 24px -12px rgba(249, 115, 22, 0.10);
 }
 
 .summaryBox::before {
@@ -169,7 +179,7 @@
     left: var(--space-7);
     right: var(--space-7);
     height: 3px;
-    background: linear-gradient(90deg, #7C3AED, #5B21B6);
+    background: linear-gradient(90deg, #F97316, #EA580C);
     border-radius: 0 0 var(--radius-sm) var(--radius-sm);
 }
 
@@ -187,7 +197,7 @@
 
 .summaryBox h2::before {
     content: '✦';
-    color: var(--color-primary);
+    color: var(--legal-accent);
     font-size: 1.1em;
 }
 
@@ -201,9 +211,13 @@
 .summaryBox p:last-child { margin-bottom: 0; }
 .summaryBox strong { color: var(--color-gray-900); }
 .summaryBox a {
-    color: var(--color-primary);
+    color: var(--legal-accent);
     text-decoration: underline;
     text-underline-offset: 2px;
+}
+
+.summaryBox a:hover {
+    color: var(--legal-accent-hover);
 }
 
 /* ─── Table of Contents ───────────────────────────────────────── */
@@ -255,8 +269,8 @@
 }
 
 .toc a:hover {
-    color: var(--color-primary);
-    background: var(--color-primary-light);
+    color: var(--legal-accent-hover);
+    background: var(--legal-accent-soft);
 }
 
 .toc a::before {
@@ -268,7 +282,7 @@
     font-size: 0.8125rem;
 }
 
-.toc a:hover::before { color: var(--color-primary); }
+.toc a:hover::before { color: var(--legal-accent); }
 
 /* ─── Sections ────────────────────────────────────────────────── */
 .section {
@@ -335,7 +349,7 @@
 }
 
 .section a {
-    color: var(--color-primary);
+    color: var(--legal-accent);
     text-decoration: underline;
     text-underline-offset: 2px;
     text-decoration-thickness: 1px;
@@ -343,7 +357,7 @@
 }
 
 .section a:hover {
-    color: var(--color-primary-hover);
+    color: var(--legal-accent-hover);
     text-decoration-thickness: 2px;
 }
 
@@ -368,8 +382,8 @@
     color: var(--color-gray-600) !important;
     margin-bottom: var(--space-4) !important;
     padding: var(--space-3) var(--space-4);
-    background: var(--color-gray-50);
-    border-left: 3px solid var(--color-primary);
+    background: var(--legal-accent-soft);
+    border-left: 3px solid var(--legal-accent);
     border-radius: 0 var(--radius-md) var(--radius-md) 0;
     font-size: 0.9375rem !important;
     line-height: 1.6 !important;
@@ -422,19 +436,19 @@
 }
 
 .footerNav a:focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--legal-accent);
     outline-offset: 2px;
 }
 
 .footerNav a.primaryCta {
-    background: var(--color-gray-900);
+    background: var(--legal-ink);
     color: var(--color-white);
-    border-color: var(--color-gray-900);
+    border-color: var(--legal-ink);
 }
 
 .footerNav a.primaryCta:hover {
-    background: var(--color-gray-800);
-    border-color: var(--color-gray-800);
+    background: #2A2A2A;
+    border-color: #2A2A2A;
     color: var(--color-white);
 }
 
@@ -463,7 +477,7 @@
     width: 42px;
     height: 42px;
     border-radius: var(--radius-full);
-    background: var(--color-gray-900);
+    background: var(--legal-ink);
     color: var(--color-white);
     border: none;
     display: flex;
@@ -479,9 +493,9 @@
 }
 
 .backToTop:hover {
-    background: var(--color-primary);
+    background: var(--legal-accent);
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35);
+    box-shadow: 0 6px 16px rgba(249, 115, 22, 0.35);
 }
 
 /* ─── Responsive ──────────────────────────────────────────────── */
