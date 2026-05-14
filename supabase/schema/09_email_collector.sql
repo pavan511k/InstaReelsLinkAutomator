@@ -64,14 +64,19 @@ CREATE TRIGGER trigger_email_collect_queue_updated_at
 -- Permanent store of captured email leads.
 
 CREATE TABLE IF NOT EXISTS email_leads (
-    id              uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    automation_id   uuid REFERENCES dm_automations(id) ON DELETE CASCADE NOT NULL,
-    account_id      uuid REFERENCES connected_accounts(id) ON DELETE CASCADE NOT NULL,
-    user_id         uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    recipient_ig_id text NOT NULL,
-    email           text NOT NULL,
-    confirmed_at    timestamptz DEFAULT now(),
-    created_at      timestamptz DEFAULT now()
+    id                   uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    -- automation_id uses ON DELETE SET NULL (not CASCADE) so deleting the
+    -- triggering automation does not destroy the captured leads. The
+    -- /leads page scopes by user_id, so orphaned rows still surface.
+    automation_id        uuid REFERENCES dm_automations(id) ON DELETE SET NULL,
+    account_id           uuid REFERENCES connected_accounts(id) ON DELETE CASCADE NOT NULL,
+    user_id              uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    recipient_ig_id      text NOT NULL,
+    recipient_first_name text,
+    recipient_username   text,
+    email                text NOT NULL,
+    confirmed_at         timestamptz DEFAULT now(),
+    created_at           timestamptz DEFAULT now()
 );
 
 -- RLS
