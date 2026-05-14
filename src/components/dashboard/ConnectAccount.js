@@ -41,23 +41,10 @@ const CONNECTION_OPTIONS = [
     iconBg: 'bg-[#1877F2]',
     badgeBg: 'bg-amber-100 text-amber-700 border-amber-200',
   },
-  {
-    id: 'both',
-    title: 'Instagram + Facebook',
-    icon: 'both',
-    description: 'Connect both for complete coverage across platforms.',
-    features: [
-      'Everything in Instagram + Facebook',
-      'Single dashboard for both inboxes',
-      'Cross-posted content auto-detection',
-    ],
-    buttonLabel: 'Coming soon',
-    badge: { text: 'Coming soon', tone: 'soon' },
-    cardTint: 'bg-neutral-100',
-    iconBg: 'bg-neutral-900',
-    badgeBg: 'bg-neutral-200 text-neutral-700 border-neutral-300',
-    disabled: true,
-  },
+  // "Instagram + Facebook" combined connect was removed: managing one
+  // platform per account row is simpler for the rest of the system
+  // (FB closed-beta gate, IG-only feature toggles, billing). Existing
+  // connected_accounts rows with platform='both' continue to work.
 ];
 
 const ERROR_MESSAGES = {
@@ -67,6 +54,7 @@ const ERROR_MESSAGES = {
   no_instagram_account:'No Instagram Business account found. Make sure your Instagram account is a Business or Creator account linked to a Facebook Page.',
   no_facebook_page:    'No Facebook Page found. You need at least one Facebook Page to connect.',
   fb_coming_soon:      'Facebook support is launching soon — we\'ll let you know the moment it goes live. For now, please connect Instagram instead.',
+  disconnect_first:    'You already have a connected account. Please disconnect it from Settings → Permissions before connecting a different platform.',
   save_failed:         'Failed to save your account. Please try again.',
   oauth_failed:        'Connection failed. Please try again.',
 };
@@ -172,7 +160,7 @@ export default function ConnectAccount({ fbAllowed = true }) {
         )}
 
         {/* Platform cards */}
-        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 max-w-3xl mx-auto">
           {connectionOptions.map((option) => {
             const isThisConnecting = isConnecting === option.id;
             const isDisabled       = option.disabled || (isConnecting && !isThisConnecting);
