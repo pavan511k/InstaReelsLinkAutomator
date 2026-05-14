@@ -67,14 +67,15 @@ export async function DELETE() {
             postIds = (posts || []).map((p) => p.id);
         }
 
-        // DM automation IDs (from instagram posts)
-        let dmAutomationIds = [];
-        if (postIds.length > 0) {
-            const { data: autos } = await db
-                .from('dm_automations').select('id')
-                .in('post_id', postIds);
-            dmAutomationIds = (autos || []).map((a) => a.id);
-        }
+        // ALL DM automation IDs for this user — post-bound AND post-less.
+        // Previously this only fetched post-bound rows via `.in('post_id', postIds)`,
+        // which missed DM Auto-Responder / Email Collector / Any-Post automations
+        // (all of which have post_id=NULL). That left their related per-automation
+        // rows (dm_sent_log, email_leads, dm_link_codes, ...) orphaned after delete.
+        const { data: allDmAutos } = await db
+            .from('dm_automations').select('id')
+            .eq('user_id', user.id);
+        const dmAutomationIds = (allDmAutos || []).map((a) => a.id);
 
         // Global automation IDs (dm_sent_log also references these)
         const { data: globalAutos } = await db
@@ -120,11 +121,14 @@ export async function DELETE() {
 
         // ── 3. Delete per-post / per-account data ───────────────────────────
 
-        if (postIds.length > 0) {
-            await tryDelete('dm_automations', () =>
-                db.from('dm_automations').delete().in('post_id', postIds)
-            );
-        }
+        // Delete ALL dm_automations by user_id (not by post_id). Post-bound
+        // and post-less automations both belong to this user, and missing
+        // post-less rows was the root cause of "I deleted my account but
+        // my DM Auto-Responder / Email Collector automations are still there"
+        // after re-signup with the same email.
+        await tryDelete('dm_automations', () =>
+            db.from('dm_automations').delete().eq('user_id', user.id)
+        );
 
         if (accountIds.length > 0) {
             await tryDelete('instagram_posts', () =>
@@ -173,13 +177,22 @@ export async function DELETE() {
 
         // ── 5. Sign out + delete auth user ──────────────────────────────────
         // Auth user delete cascades any remaining rows with ON DELETE CASCADE FKs.
+        // CRITICAL: if this fails and we return success, the user signs back in
+        // with the same email -> same user_id -> sees all their old data again.
+        // That's the "I deleted my account but everything is still there" bug.
+        // Surface the failure so the user knows their account wasn't fully wiped.
 
         await supabase.auth.signOut();
 
         const { error: deleteAuthError } = await db.auth.admin.deleteUser(user.id);
         if (deleteAuthError) {
-            console.error('[AccountDelete] Failed to delete auth user:', deleteAuthError.message);
-            // All user data is already cleaned — non-fatal
+            console.error('[AccountDelete] Failed to delete auth user:', deleteAuthError);
+            return NextResponse.json({
+                error:
+                    'Your data was deleted but removing your login account failed. ' +
+                    'Please contact support@autodm.pro so we can finish the cleanup.',
+                details: deleteAuthError.message,
+            }, { status: 500 });
         }
 
         return NextResponse.json({
