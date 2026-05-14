@@ -1181,7 +1181,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
                     automation_id:        activeAutomation.id,
                     account_id:           post.account_id,
                     recipient_ig_id:      commenterId,
-                    ig_sender_id:         account.ig_user_id,
+                    ig_sender_id:         account.ig_user_id || account.fb_page_id,
                     confirmation_message: activeAutomation.settings_config?.emailThanksMessage || '',
                     status:               'awaiting_email',
                 });
@@ -1259,7 +1259,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
                             automation_id:         activeAutomation.id,
                             account_id:            post.account_id,
                             recipient_ig_id:       commenterId,
-                            ig_sender_id:          account.ig_user_id,
+                            ig_sender_id:          account.ig_user_id || account.fb_page_id,
                             gate_message:          gateMessage,
                             // Reuse the gate copy for retry nudges so we
                             // don't have a second editable field cluttering
@@ -1381,7 +1381,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
                     automation_id:         activeAutomation.id,
                     account_id:            post.account_id,
                     recipient_ig_id:       commenterId,
-                    ig_sender_id:          account.ig_user_id,
+                    ig_sender_id:          account.ig_user_id || account.fb_page_id,
                     status:                'awaiting_opening_tap',
                     gate_message:          openingResolved,
                     nudge_message:         openingResolved,
@@ -2029,10 +2029,14 @@ async function handleDmAutoResponder(supabase, igAccountId, senderId, msgText, i
     if (!senderId || !msgText?.trim()) return false;
 
     // Look up the connected account to scope automations to this user.
+    // Match by ig_user_id OR fb_page_id — when a fan DMs a FB Page, Meta
+    // sets entry.id to the page id; for IG events it's the IG Business
+    // Account id. Without the OR, FB-only rows (ig_user_id IS NULL) are
+    // never found and DM Auto-Responder / Email Collector silently miss.
     const { data: account } = await supabase
         .from('connected_accounts')
-        .select('id, user_id, ig_user_id, fb_page_access_token, access_token, default_config')
-        .eq('ig_user_id', igAccountId)
+        .select('id, user_id, ig_user_id, fb_page_id, fb_page_access_token, access_token, default_config')
+        .or(`ig_user_id.eq.${igAccountId},fb_page_id.eq.${igAccountId}`)
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -2186,8 +2190,9 @@ async function handleStoryMentionEvent(supabase, igAccountId, mentionData) {
 
     const { data: account } = await supabase
         .from('connected_accounts')
-        .select('id, user_id, access_token, fb_page_access_token, ig_user_id, default_config')
-        .eq('ig_user_id', igAccountId).eq('is_active', true)
+        .select('id, user_id, access_token, fb_page_access_token, ig_user_id, fb_page_id, default_config')
+        .or(`ig_user_id.eq.${igAccountId},fb_page_id.eq.${igAccountId}`)
+        .eq('is_active', true)
         .order('updated_at', { ascending: false }).limit(1).maybeSingle();
 
     if (!account) return;
@@ -2531,8 +2536,9 @@ async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload
 
     const { data: account, error: accountErr } = await supabase
         .from('connected_accounts')
-        .select('id, user_id, access_token, ig_user_id, default_config')
-        .eq('ig_user_id', igAccountId).eq('is_active', true)
+        .select('id, user_id, access_token, ig_user_id, fb_page_id, default_config')
+        .or(`ig_user_id.eq.${igAccountId},fb_page_id.eq.${igAccountId}`)
+        .eq('is_active', true)
         .order('updated_at', { ascending: false }).limit(1).maybeSingle();
 
     if (accountErr) console.warn('[IceBreaker] connected_accounts lookup error: ' + accountErr.message);
@@ -2599,8 +2605,9 @@ async function handleIceBreakerByText(supabase, igAccountId, senderId, msgText) 
 
     const { data: account } = await supabase
         .from('connected_accounts')
-        .select('id, user_id, access_token, ig_user_id, default_config')
-        .eq('ig_user_id', igAccountId).eq('is_active', true)
+        .select('id, user_id, access_token, ig_user_id, fb_page_id, default_config')
+        .or(`ig_user_id.eq.${igAccountId},fb_page_id.eq.${igAccountId}`)
+        .eq('is_active', true)
         .order('updated_at', { ascending: false }).limit(1).maybeSingle();
     if (!account) {
         console.warn('[IceBreaker:textMatch] No active connected_account for ig_user_id=' + igAccountId);
