@@ -964,7 +964,20 @@ async function processAutomationForComment(supabase, post, commentText, commente
         eligible.push(c);
     }
 
-    const ranked = [...eligible].sort((x, y) => specificity(x) - specificity(y));
+    // Sort by specificity, then break ties with most-recently-updated.
+    // Two automations on the same post with the same trigger shape and
+    // both matching the comment is a real scenario (e.g. two keyword
+    // sets that both contain "link"). Without the tie-breaker Supabase
+    // row order picks the winner, which is non-deterministic. With it,
+    // "the automation the creator just edited" reliably wins -- matching
+    // intent at the moment they hit Save.
+    const ranked = [...eligible].sort((x, y) => {
+        const specDiff = specificity(x) - specificity(y);
+        if (specDiff !== 0) return specDiff;
+        const xTs = x.updated_at ? new Date(x.updated_at).getTime() : 0;
+        const yTs = y.updated_at ? new Date(y.updated_at).getTime() : 0;
+        return yTs - xTs; // DESC — newer first
+    });
 
     let automation = null;
     const matchedButSkipped = [];
@@ -2003,13 +2016,23 @@ async function handleDmAutoResponder(supabase, igAccountId, senderId, msgText, i
         .maybeSingle();
     if (!account) return false;
 
+    // Pick up automations that fire on incoming DMs. Two template types
+    // qualify:
+    //   - 'dm-auto-responder': the obvious one — keyword → bot DMs back.
+    //   - 'email-collector':  the ask flow can also be DM-triggered, so a
+    //     fan who messages a keyword (instead of commenting) gets the
+    //     ask message and the email_collect_queue row is created via
+    //     processAutomationForComment's templateType branch.
+    // Without 'email-collector' here, DM-keyword triggers silently fall
+    // through to handleEmailCollectorReply which logs "No pending email
+    // collection — ignoring DM reply".
     const { data: candidates } = await supabase
         .from('dm_automations')
         .select('*')
         .eq('user_id', account.user_id)
         .eq('dm_type', 'builder_v2')
         .eq('is_active', true)
-        .filter('settings_config->>templateType', 'eq', 'dm-auto-responder');
+        .in('settings_config->>templateType', ['dm-auto-responder', 'email-collector']);
     if (!candidates || candidates.length === 0) return false;
 
     // Match: anyKeyword wins everything; otherwise need a keyword hit.
@@ -2022,8 +2045,23 @@ async function handleDmAutoResponder(supabase, igAccountId, senderId, msgText, i
     };
     // Specificity rank — keyword automations beat any-keyword.
     const rank = (a) => (a.trigger_config?.anyKeyword ? 1 : 0);
-    const matched = [...candidates].filter(matchOne).sort((x, y) => rank(x) - rank(y))[0];
+    // Template-type precedence — when both a dm-auto-responder and an
+    // email-collector match the same keyword, the dm-auto-responder wins.
+    // Rationale: an explicit dm-auto-responder for "link" expresses a
+    // specific intent for that keyword in DMs; the email-collector should
+    // only catch keywords that aren't already claimed by an auto-responder.
+    // Lower number = higher precedence.
+    const templateRank = (a) => {
+        const t = a.settings_config?.templateType;
+        if (t === 'dm-auto-responder') return 0;
+        if (t === 'email-collector')   return 1;
+        return 2;
+    };
+    const matched = [...candidates]
+        .filter(matchOne)
+        .sort((x, y) => rank(x) - rank(y) || templateRank(x) - templateRank(y))[0];
     if (!matched) return false;
+    console.log(`[Webhook/DMAutoResponder] Picked automation ${matched.id} (templateType=${matched.settings_config?.templateType}) for DM "${msgText.slice(0, 60)}"`);
 
     // Dedup: synthesize a stable id so the same inbound DM doesn't
     // fire twice on a Meta retry. Falls through to mid → senderId+text.
