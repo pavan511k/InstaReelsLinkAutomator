@@ -439,7 +439,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
     let isFollowing = false;
 
     try {
-        isFollowing = await checkUserIsFollower(igSenderId, senderId, accessToken);
+        isFollowing = await checkUserIsFollower(igSenderId, senderId, accessToken, useIgApi);
     } catch (err) {
         console.error('[Webhook] Follow check error (non-fatal):', err.message);
     }
@@ -1212,7 +1212,8 @@ async function processAutomationForComment(supabase, post, commentText, commente
             if (platform === 'instagram') {
                 let isFollower = null;
                 try {
-                    isFollower = await checkUserIsFollower(account.ig_user_id, commenterId, token);
+                    isFollower = await checkUserIsFollower(account.ig_user_id, commenterId, token, useIgApi);
+                    console.log(`[Webhook] askToFollow check for ${commenterId}: isFollower=${isFollower} (true=follower, false=not, null=API err)`);
                 } catch (err) {
                     console.warn('[Webhook] Follow check threw — sending DM anyway:', err.message);
                 }
