@@ -46,6 +46,10 @@ const TEMPLATES = [
     body:  'Auto-reply with a DM when someone replies to your story with a keyword.',
     iconBg:'bg-blue-600 text-white',
     badge: 'quick',
+    // Stories don't exist on Facebook Pages. Hide this template when the
+    // user's only connected platform is Facebook so they don't build a
+    // flow that can never fire.
+    igOnly: true,
   },
   // Ice Breakers moved to /tools/ice-breakers (account-level config,
   // not a per-trigger automation). Removed from the template picker.
@@ -69,7 +73,7 @@ const TEMPLATES = [
 ];
 
 // ─── Modal: Choose Template ────────────────────────────────────────────────
-function TemplatePickerModal({ open, onClose, onPick, isPro = false, onUpgradeRequired }) {
+function TemplatePickerModal({ open, onClose, onPick, isPro = false, onUpgradeRequired, activePlatform = 'instagram' }) {
   // ESC to close
   useEffect(() => {
     if (!open) return;
@@ -79,6 +83,14 @@ function TemplatePickerModal({ open, onClose, onPick, isPro = false, onUpgradeRe
   }, [open, onClose]);
 
   if (!open) return null;
+
+  // Hide IG-only templates when the user's only connected platform is FB.
+  // 'both' shows everything; 'instagram' shows everything; 'facebook' drops
+  // the templates flagged igOnly (currently just story-reply since FB Pages
+  // don't have stories).
+  const visibleTemplates = TEMPLATES.filter(
+    (t) => !t.igOnly || activePlatform !== 'facebook',
+  );
 
   const handlePick = (t) => {
     if (t.proOnly && !isPro) {
@@ -127,7 +139,7 @@ function TemplatePickerModal({ open, onClose, onPick, isPro = false, onUpgradeRe
 
         {/* Templates grid */}
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {TEMPLATES.map((t) => {
+          {visibleTemplates.map((t) => {
             const locked = t.proOnly && !isPro;
             return (
               <button
@@ -923,7 +935,7 @@ function ConfirmDeleteModal({ open, onClose, onConfirm }) {
 }
 
 // ─── Page View ─────────────────────────────────────────────────────────────
-export default function AutomationsView({ automations = [], effectivePlan = 'free' }) {
+export default function AutomationsView({ automations = [], effectivePlan = 'free', activePlatform = 'instagram' }) {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
@@ -1163,6 +1175,7 @@ export default function AutomationsView({ automations = [], effectivePlan = 'fre
           closeAll();
           setShowPricingModal(true);
         }}
+        activePlatform={activePlatform}
       />
       <NameAutomationModal
         open={stage === 'name'}
