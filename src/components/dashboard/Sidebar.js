@@ -30,7 +30,7 @@ const NAV = [
   { href: '/tools/story-mention',  label: 'Story Mention Auto-DM',  icon: AtSign,             locked: true,  igOnly: true },
   { section: 'Data' },
   { href: '/contacts',             label: 'Contacts',               icon: Users,              locked: true  },
-  { href: '/leads',                label: 'Email Leads',            icon: Mail,               locked: true,  igOnly: true },
+  { href: '/leads',                label: 'Email Leads',            icon: Mail,               locked: true },
   { href: '/logs',                 label: 'DM Logs',                icon: ScrollText,         locked: true  },
   { section: 'General' },
   { href: '/settings',             label: 'Settings',               icon: Settings,           locked: false },
@@ -324,80 +324,99 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* User section + Sign out */}
-        <div className={[
-          'border-t border-neutral-200 p-3',
-          isCollapsed ? 'flex flex-col items-stretch gap-2' : 'space-y-3',
-        ].join(' ')}>
-          <div className={[
-            'flex items-center gap-2.5',
-            isCollapsed ? 'flex-col gap-1' : '',
-          ].join(' ')}>
-            {/* Avatar */}
-            <span className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-200 text-sm font-semibold text-neutral-700">
-              {avatarUrl && !avatarErrored ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={avatarUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  onError={handleAvatarError}
-                />
-              ) : (
-                <span>{initials}</span>
-              )}
-            </span>
+        {/* ── Sidebar footer: user card + DM usage + sign out ────────────
+            Three visual zones, separated by a single divider, all sitting
+            inside a soft-bordered card so the bottom of the sidebar reads
+            as one cohesive surface instead of three stacked rows. */}
+        <div className="border-t border-neutral-200 p-3">
+          {isCollapsed ? (
+            /* Collapsed: avatar + sign-out icon, both centered */
+            <div className="flex flex-col items-center gap-2">
+              <span className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-200 text-sm font-semibold text-neutral-700 ring-2 ring-white">
+                {avatarUrl && !avatarErrored ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" onError={handleAvatarError} />
+                ) : (
+                  <span>{initials}</span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={handleLogout}
+                title="Sign out"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 transition-colors"
+              >
+                <LogOut className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+          ) : (
+            /* Expanded: user card with sign-out icon-button in corner,
+               followed by DM usage row */
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50/60 overflow-hidden">
+              {/* Top: avatar + email/plan + sign-out icon */}
+              <div className="flex items-center gap-3 px-3 py-3">
+                <span className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-200 text-sm font-semibold text-neutral-700 ring-2 ring-white">
+                  {avatarUrl && !avatarErrored ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={avatarUrl} alt="" className="h-full w-full object-cover" onError={handleAvatarError} />
+                  ) : (
+                    <span>{initials}</span>
+                  )}
+                </span>
 
-            {!isCollapsed && (
-              <div className="min-w-0 flex-1 space-y-1">
-                <p className="truncate text-xs font-medium text-neutral-700">{email}</p>
-                <PlanBadge
-                  effectivePlan={effectivePlan}
-                  trialDaysLeft={trialDaysLeft}
-                  onNavigate={() => setOpen(false)}
-                />
-              </div>
-            )}
-          </div>
-
-          {!isCollapsed && dmLimit !== null && (
-            <Link
-              href="/settings"
-              onClick={() => setOpen(false)}
-              title={`${dmUsed.toLocaleString()} of ${dmLimit.toLocaleString()} DMs used this month`}
-              className="block"
-            >
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200">
-                  <div
-                    className="h-full rounded-full bg-[#E63946] transition-all"
-                    style={{ width: `${Math.min(100, Math.round((dmUsed / dmLimit) * 100))}%` }}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="truncate text-xs font-medium text-neutral-800" title={email}>{email}</p>
+                  <PlanBadge
+                    effectivePlan={effectivePlan}
+                    trialDaysLeft={trialDaysLeft}
+                    onNavigate={() => setOpen(false)}
                   />
                 </div>
-                <span className="text-[10px] font-medium text-neutral-500">
-                  {dmUsed.toLocaleString()} / {dmLimit.toLocaleString()}
-                </span>
-              </div>
-            </Link>
-          )}
 
-          {/* Sign out — full-width row, label visible when expanded, icon-only
-              when collapsed. Replaces the previous icon-pair (theme toggle
-              dropped, signout was small + left-aligned). */}
-          <button
-            type="button"
-            onClick={handleLogout}
-            title="Sign out"
-            className={[
-              'flex items-center rounded-lg text-sm font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 transition-colors',
-              isCollapsed
-                ? 'h-9 w-9 self-center justify-center'
-                : 'w-full gap-2.5 px-3 py-2',
-            ].join(' ')}
-          >
-            <LogOut className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
-            {!isCollapsed && <span>Sign out</span>}
-          </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  title="Sign out"
+                  aria-label="Sign out"
+                  className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-white hover:text-neutral-900 hover:shadow-sm transition-all"
+                >
+                  <LogOut className="h-[15px] w-[15px]" strokeWidth={2} />
+                </button>
+              </div>
+
+              {/* Bottom: DM usage — same card, separated by a thin rule */}
+              {dmLimit !== null && (
+                <Link
+                  href="/settings"
+                  onClick={() => setOpen(false)}
+                  title={`${dmUsed.toLocaleString()} of ${dmLimit.toLocaleString()} DMs used this month`}
+                  className="block border-t border-neutral-200/70 bg-white/40 hover:bg-white px-3 py-2.5 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                      DMs this month
+                    </span>
+                    <span className="text-[11px] font-semibold tabular-nums text-neutral-700">
+                      {dmUsed.toLocaleString()}<span className="text-neutral-400"> / {dmLimit.toLocaleString()}</span>
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-neutral-200/70">
+                    <div
+                      className={[
+                        'h-full rounded-full transition-all',
+                        (dmUsed / dmLimit) >= 0.9
+                          ? 'bg-[#E63946]'
+                          : (dmUsed / dmLimit) >= 0.7
+                            ? 'bg-orange-500'
+                            : 'bg-neutral-700',
+                      ].join(' ')}
+                      style={{ width: `${Math.min(100, Math.round((dmUsed / dmLimit) * 100))}%` }}
+                    />
+                  </div>
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
