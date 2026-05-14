@@ -109,5 +109,32 @@ export default async function AutomationsPage() {
 
   const effectivePlan = await getUserEffectivePlan(supabase, user.id);
 
-  return <AutomationsView automations={automations} effectivePlan={effectivePlan} />;
+  // Resolve the user's active platform so the template picker can hide
+  // IG-only templates when only FB is connected. 'both' = at least one of
+  // each (or a single row with platform='both'); other values are the
+  // single-platform identifier.
+  let activePlatform = 'instagram';
+  try {
+    const { data: accountRows } = await supabase
+      .from('connected_accounts')
+      .select('platform')
+      .eq('user_id', user.id)
+      .eq('is_active', true);
+    const platforms = new Set((accountRows || []).map((a) => a.platform).filter(Boolean));
+    if (platforms.has('both') || (platforms.has('instagram') && platforms.has('facebook'))) {
+      activePlatform = 'both';
+    } else if (platforms.has('facebook')) {
+      activePlatform = 'facebook';
+    } else if (platforms.has('instagram')) {
+      activePlatform = 'instagram';
+    }
+  } catch { /* default to 'instagram' */ }
+
+  return (
+    <AutomationsView
+      automations={automations}
+      effectivePlan={effectivePlan}
+      activePlatform={activePlatform}
+    />
+  );
 }
