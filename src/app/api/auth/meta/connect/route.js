@@ -69,7 +69,11 @@ export async function GET(request) {
     if (activeAccounts && activeAccounts.length > 0) {
         const conflictRow = activeAccounts.find((a) => a.platform !== connectionType);
         if (conflictRow) {
-            const url = new URL('/dashboard', request.url);
+            // Send them to Settings — that's where they need to disconnect to
+            // proceed. Dashboard has no UI to surface this error since the
+            // ConnectAccount component (which owns the error banner) only
+            // renders when zero accounts are connected.
+            const url = new URL('/settings', request.url);
             url.searchParams.set('error', 'disconnect_first');
             return NextResponse.redirect(url);
         }
