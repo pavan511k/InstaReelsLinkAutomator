@@ -92,88 +92,143 @@ export function buildAuthUrl(connectionType, state) {
 
 /**
  * Exchange code for short-lived Instagram token
- * Uses Instagram's token endpoint (form-data POST)
+ * Uses Instagram's token endpoint (form-data POST).
+ *
+ * DEBUG LOGGING ENABLED: app has no production customers yet; user has
+ * explicitly granted permission to log tokens + secrets while we
+ * diagnose the non-Roles login failure. Remove the verbose logs before
+ * any real launch.
  */
 export async function exchangeCodeForInstagramToken(code) {
+    const url = 'https://api.instagram.com/oauth/access_token';
     const body = new URLSearchParams({
-        client_id: INSTAGRAM_APP_ID,         // Instagram App ID
-        client_secret: INSTAGRAM_APP_SECRET, // Instagram App Secret
+        client_id: INSTAGRAM_APP_ID,
+        client_secret: INSTAGRAM_APP_SECRET,
         grant_type: 'authorization_code',
         redirect_uri: REDIRECT_URI,
         code,
     });
 
-    const response = await fetch('https://api.instagram.com/oauth/access_token', {
+    console.log('[OAUTH_DEBUG] Step1 REQ', JSON.stringify({
+        url,
         method: 'POST',
-        body,
-    });
+        body: {
+            client_id:     INSTAGRAM_APP_ID,
+            client_secret: INSTAGRAM_APP_SECRET,
+            grant_type:    'authorization_code',
+            redirect_uri:  REDIRECT_URI,
+            code,
+        },
+    }));
+
+    const response = await fetch(url, { method: 'POST', body });
+    const rawText  = await response.text();
+    let parsed;
+    try { parsed = JSON.parse(rawText); } catch { parsed = { _raw: rawText }; }
+
+    console.log('[OAUTH_DEBUG] Step1 RESP', JSON.stringify({
+        status: response.status,
+        ok:     response.ok,
+        body:   parsed,
+    }));
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error_message || 'Failed to exchange code for Instagram token');
+        throw new Error(parsed?.error_message || parsed?.error?.message || `Step1 HTTP ${response.status}`);
     }
-
-    return response.json(); // { access_token, user_id }
+    return parsed;
 }
 
 /**
  * Exchange short-lived IG token for long-lived token (60 days).
- *
- * Meta's docs show GET on this endpoint, and GET works for app-Roles
- * users in Live mode. Non-Roles users in a mixed App Review state
- * have been seen to hit "Unsupported request - method type: get"
- * on the GET variant, so we try POST first and fall back to GET if
- * POST is unsupported. Both methods accept the same params; the
- * fallback covers the case where Meta later switches one off.
+ * Tries POST first (workaround for "Unsupported request - method type: get"
+ * seen on non-Roles users), falls back to GET.
  */
 export async function getInstagramLongLivedToken(shortLivedToken) {
+    const url = 'https://graph.instagram.com/access_token';
     const params = new URLSearchParams({
-        grant_type: 'ig_exchange_token',
-        client_secret: INSTAGRAM_APP_SECRET, // Instagram App Secret
-        access_token: shortLivedToken,
+        grant_type:    'ig_exchange_token',
+        client_secret: INSTAGRAM_APP_SECRET,
+        access_token:  shortLivedToken,
     });
 
-    const url = 'https://graph.instagram.com/access_token';
-
-    // Attempt POST with form body.
+    // Attempt POST first.
+    console.log('[OAUTH_DEBUG] Step2 REQ (POST)', JSON.stringify({
+        url,
+        method: 'POST',
+        body: {
+            grant_type:    'ig_exchange_token',
+            client_secret: INSTAGRAM_APP_SECRET,
+            access_token:  shortLivedToken,
+        },
+    }));
     let response = await fetch(url, { method: 'POST', body: params });
-    if (response.ok) return response.json();
+    let rawText  = await response.text();
+    let parsed;
+    try { parsed = JSON.parse(rawText); } catch { parsed = { _raw: rawText }; }
 
-    // POST not supported by Meta? Fall back to GET (the documented method).
-    // Distinguish "method not supported" (try other) from real failures.
-    const firstAttempt = await response.json().catch(() => ({}));
-    const firstMsg = firstAttempt?.error?.message || '';
+    console.log('[OAUTH_DEBUG] Step2 RESP (POST)', JSON.stringify({
+        status: response.status,
+        ok:     response.ok,
+        body:   parsed,
+    }));
+
+    if (response.ok) return parsed;
+
+    // POST rejected — distinguish method-mismatch (retry as GET) from real failures.
+    const firstMsg = parsed?.error?.message || parsed?.error_message || '';
     const methodMismatch =
         /method type/i.test(firstMsg) ||
         /unsupported.*method/i.test(firstMsg) ||
         response.status === 405;
 
     if (!methodMismatch) {
-        throw new Error(firstMsg || 'Failed to get long-lived Instagram token');
+        throw new Error(firstMsg || `Step2 HTTP ${response.status}`);
     }
 
-    response = await fetch(`${url}?${params.toString()}`);
+    // Fallback: GET.
+    const getUrl = `${url}?${params.toString()}`;
+    console.log('[OAUTH_DEBUG] Step2 REQ (GET fallback)', JSON.stringify({
+        url: getUrl,
+        method: 'GET',
+    }));
+    response = await fetch(getUrl);
+    rawText  = await response.text();
+    try { parsed = JSON.parse(rawText); } catch { parsed = { _raw: rawText }; }
+
+    console.log('[OAUTH_DEBUG] Step2 RESP (GET fallback)', JSON.stringify({
+        status: response.status,
+        ok:     response.ok,
+        body:   parsed,
+    }));
+
     if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error?.message || 'Failed to get long-lived Instagram token');
+        throw new Error(parsed?.error?.message || parsed?.error_message || `Step2 HTTP ${response.status}`);
     }
-    return response.json(); // { access_token, token_type, expires_in }
+    return parsed;
 }
 
 /**
  * Get Instagram user profile using Instagram API
  */
 export async function getInstagramUserProfile(accessToken) {
-    const response = await fetch(
-        `${GRAPH_IG_BASE}/me?fields=user_id,username,profile_picture_url,name&access_token=${accessToken}`
-    );
+    const url = `${GRAPH_IG_BASE}/me?fields=user_id,username,profile_picture_url,name&access_token=${accessToken}`;
+    console.log('[OAUTH_DEBUG] Step3 REQ (GET)', JSON.stringify({ url }));
+
+    const response = await fetch(url);
+    const rawText  = await response.text();
+    let parsed;
+    try { parsed = JSON.parse(rawText); } catch { parsed = { _raw: rawText }; }
+
+    console.log('[OAUTH_DEBUG] Step3 RESP', JSON.stringify({
+        status: response.status,
+        ok:     response.ok,
+        body:   parsed,
+    }));
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error?.message || 'Failed to fetch Instagram profile');
+        throw new Error(parsed?.error?.message || parsed?.error_message || `Step3 HTTP ${response.status}`);
     }
-
-    return response.json(); // { user_id, username, profile_picture_url, name }
+    return parsed;
 }
 
 // ─── Facebook Token Exchange ────────────────────────────────────
