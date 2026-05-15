@@ -57,27 +57,44 @@ export async function runBackfill({ automationId, postId }) {
     );
 
     // ── Fetch automation + post + account ─────────────────────────────
+    // We can't `select('*, connected_accounts!inner(...)')` directly on
+    // dm_automations because there's no direct FK between those tables —
+    // the relationship runs through instagram_posts.account_id. PostgREST
+    // doesn't auto-resolve two-hop relationships, so the embedded join
+    // silently returns no row and we'd throw "Automation not found" even
+    // when the automation exists. Fetch the chain explicitly instead.
     const { data: automation, error: autoErr } = await supabase
         .from('dm_automations')
-        .select('*, connected_accounts!inner(id, access_token, fb_page_access_token, ig_user_id)')
+        .select('*')
         .eq('id', automationId)
         .single();
 
     if (autoErr || !automation) {
+        console.warn('[Backfill] Automation lookup failed:',
+            autoErr?.message || `no row for id=${automationId}`);
         throw new Error('Automation not found');
     }
 
     const { data: post, error: postErr } = await supabase
         .from('instagram_posts')
-        .select('id, ig_post_id, account_id')
+        .select(
+            'id, ig_post_id, account_id, ' +
+            'connected_accounts(id, access_token, fb_page_access_token, ig_user_id, fb_page_id)',
+        )
         .eq('id', postId)
         .single();
 
     if (postErr || !post) {
+        console.warn('[Backfill] Post lookup failed:',
+            postErr?.message || `no row for id=${postId}`);
         throw new Error('Post not found');
     }
 
-    const account   = automation.connected_accounts;
+    const account = post.connected_accounts;
+    if (!account) {
+        console.warn('[Backfill] No connected_account row for post', postId);
+        throw new Error('Connected account not found for this post');
+    }
     const token     = account.fb_page_access_token || account.access_token;
     const useIgApi  = !account.fb_page_access_token;
     const graphBase = useIgApi ? GRAPH_IG_BASE : GRAPH_FB_BASE;
