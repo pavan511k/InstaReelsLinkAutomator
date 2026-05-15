@@ -95,34 +95,59 @@ export async function GET(request) {
 }
 
 /**
- * Parse Meta's signed_request parameter
+ * Parse Meta's signed_request parameter.
+ *
+ * IMPORTANT: we have TWO Meta apps configured — Facebook and Instagram —
+ * each with its own app secret. The data-deletion callback can come from
+ * either, depending on which OAuth flow the user originally completed.
+ * We try both secrets and accept whichever matches. Logs which secret
+ * matched so we can see in practice which flow the deletion came from.
+ *
  * @see https://developers.facebook.com/docs/games/gamesonfacebook/login#parsingsr
  */
 function parseSignedRequest(signedRequest) {
-    const appSecret = process.env.META_APP_SECRET;
-    if (!appSecret) {
-        console.error('META_APP_SECRET not set — cannot verify signed request');
+    const fbSecret = process.env.META_APP_SECRET;
+    const igSecret = process.env.INSTAGRAM_APP_SECRET;
+
+    if (!fbSecret && !igSecret) {
+        console.error('[DataDeletion] Neither META_APP_SECRET nor INSTAGRAM_APP_SECRET set — cannot verify signed request');
         return null;
     }
 
     const [encodedSig, payload] = signedRequest.split('.');
-    if (!encodedSig || !payload) return null;
-
-    // Decode the signature
-    const sig = Buffer.from(encodedSig.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-
-    // Verify signature using HMAC SHA256
-    const expectedSig = crypto
-        .createHmac('sha256', appSecret)
-        .update(payload)
-        .digest();
-
-    if (!crypto.timingSafeEqual(sig, expectedSig)) {
-        console.error('Data deletion: signature verification failed');
+    if (!encodedSig || !payload) {
+        console.error('[DataDeletion] Malformed signed_request (missing sig or payload)');
         return null;
     }
 
-    // Decode payload
+    const sig = Buffer.from(encodedSig.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+
+    const candidates = [
+        { label: 'FB', secret: fbSecret },
+        { label: 'IG', secret: igSecret },
+    ].filter((c) => !!c.secret);
+
+    let matchedLabel = null;
+    for (const c of candidates) {
+        const expected = crypto.createHmac('sha256', c.secret).update(payload).digest();
+        if (expected.length === sig.length && crypto.timingSafeEqual(sig, expected)) {
+            matchedLabel = c.label;
+            break;
+        }
+    }
+
+    if (!matchedLabel) {
+        console.error('[DataDeletion] Signature verification failed against BOTH app secrets', JSON.stringify({
+            sig_preview:     encodedSig.slice(0, 16),
+            payload_preview: payload.slice(0, 32),
+            tried_fb_secret: !!fbSecret,
+            tried_ig_secret: !!igSecret,
+        }));
+        return null;
+    }
+
+    console.log(`[DataDeletion] Signature verified against ${matchedLabel} app secret`);
+
     const decodedPayload = Buffer.from(
         payload.replace(/-/g, '+').replace(/_/g, '/'),
         'base64'
