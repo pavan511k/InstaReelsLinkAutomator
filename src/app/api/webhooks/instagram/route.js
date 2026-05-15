@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { graphBase } from '@/lib/meta-graph';
+import { graphBase, GRAPH_FB_BASE } from '@/lib/meta-graph';
 import {
     sendAutomatedDM, sendFollowGateDM, sendOpeningGateDM,
     checkUserIsFollower, sendHeartReaction,
@@ -846,14 +846,39 @@ async function processAutomationForComment(supabase, post, commentText, commente
         return out;
     }
 
-    // Resolve {first_name} for IG commenters via the Graph API. FB callers
-    // pre-fill commenterFirstName from from.name, so this only fires for
-    // platform === 'instagram'. Failure → null → downstream falls back to
-    // a neutral "there" so DMs never expose the numeric IGSID.
-    if (!out.firstName && platform === 'instagram') {
-        const lookupToken = account.fb_page_access_token || account.access_token;
-        const useIgApiForLookup = !account.fb_page_access_token;
-        out.firstName = await fetchIgUserFirstName(commenterId, lookupToken, useIgApiForLookup);
+    // Resolve {first_name}. For IG we use the Graph API user-lookup. For FB
+    // comment events from handleFacebookCommentEvent, first_name is pre-filled
+    // from `from.name` in the webhook payload. But FB DM-triggered events
+    // (DM Auto-Responder, Email Collector DM trigger) don't carry a name —
+    // we need to look it up via the FB Page User Profile API. Failure → null
+    // → downstream falls back to "there" so DMs never expose the raw PSID/IGSID.
+    if (!out.firstName) {
+        if (platform === 'instagram') {
+            const lookupToken = account.fb_page_access_token || account.access_token;
+            const useIgApiForLookup = !account.fb_page_access_token;
+            out.firstName = await fetchIgUserFirstName(commenterId, lookupToken, useIgApiForLookup);
+        } else if (platform === 'facebook' && account.fb_page_access_token) {
+            // FB Page User Profile lookup. Endpoint:
+            //   GET /{psid}?fields=first_name,last_name
+            // Requires the pages_messaging scope (already approved). Uses the
+            // PSID (commenterId) — Meta requires the Page Access Token here.
+            try {
+                const res = await fetch(
+                    `${GRAPH_FB_BASE}/${commenterId}` +
+                    `?fields=first_name` +
+                    `&access_token=${encodeURIComponent(account.fb_page_access_token)}`,
+                );
+                if (res.ok) {
+                    const data = await res.json();
+                    out.firstName = (data?.first_name || '').trim() || null;
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    console.warn('[Webhook] FB first_name lookup failed:', err.error?.message || res.status);
+                }
+            } catch (err) {
+                console.warn('[Webhook] FB first_name lookup threw:', err.message);
+            }
+        }
     }
 
     const lowerCommentText = commentText.toLowerCase().trim();
