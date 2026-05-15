@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Instagram, Facebook, LogOut, RefreshCw, Shield, Settings as SettingsIcon, UserCircle, Trash2,
@@ -93,6 +94,8 @@ function planBadgeMeta(plan) {
 }
 
 export default function SettingsContent({ user, connectedAccounts = [] }) {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
   const [disconnectingId, setDisconnectingId]           = useState(null);
   const [refreshingId, setRefreshingId]                 = useState(null);
   const [showDisconnectModal, setShowDisconnectModal]   = useState(false);
@@ -104,6 +107,20 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
   const [deleteError, setDeleteError]                   = useState('');
   const [emailCopied, setEmailCopied]                   = useState(false);
   const [savingConfig, setSavingConfig]                 = useState(false);
+
+  // Surface error from /api/auth/meta/connect (e.g. "disconnect_first" when
+  // user tries to switch platforms while one is still active).
+  useEffect(() => {
+    const err = searchParams.get('error');
+    if (err === 'disconnect_first') {
+      toast.error(
+        'You already have a connected account. Disconnect it first, then connect the other platform.',
+        { duration: 7000 },
+      );
+      // Strip the query param so a reload doesn't re-toast.
+      router.replace('/settings');
+    }
+  }, [searchParams, router]);
 
   const activeAccounts     = connectedAccounts.filter((a) => a.is_active);
   const inactiveAccounts   = connectedAccounts.filter((a) => !a.is_active);
