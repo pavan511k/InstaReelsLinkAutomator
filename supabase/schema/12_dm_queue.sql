@@ -86,3 +86,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_dm_queue_flow_upsell_dedup
     WHERE source_log_id IS NOT NULL
       AND queue_reason IN ('flow_step', 'upsell')
       AND status IN ('pending', 'processing', 'sent');
+
+-- Auto-populate workspace_id on insert. The application code doesn't
+-- always pass it; account_id (NOT NULL) is enough to derive it via
+-- connected_accounts.workspace_id (also NOT NULL).
+CREATE OR REPLACE FUNCTION trigger_dm_queue_set_workspace_id()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.workspace_id IS NULL AND NEW.account_id IS NOT NULL THEN
+        SELECT workspace_id INTO NEW.workspace_id
+        FROM connected_accounts
+        WHERE id = NEW.account_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_dm_queue_set_workspace_id ON dm_queue;
+CREATE TRIGGER tr_dm_queue_set_workspace_id
+    BEFORE INSERT ON dm_queue
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_dm_queue_set_workspace_id();
