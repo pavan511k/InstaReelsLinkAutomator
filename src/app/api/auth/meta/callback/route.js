@@ -121,23 +121,13 @@ export async function GET(request) {
     const error = searchParams.get('error');
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-    console.log('[OAUTH_DEBUG] CALLBACK ENTER', JSON.stringify({
-        url:          request.url,
-        code,
-        state,
-        error,
-        error_reason: searchParams.get('error_reason'),
-        error_desc:   searchParams.get('error_description'),
-    }));
-
     // User denied permissions
     if (error) {
-        console.error('[OAUTH_DEBUG] OAuth provider returned error:', error, searchParams.get('error_description'));
+        console.error('[OAuth] Provider returned error:', error, searchParams.get('error_description'));
         return NextResponse.redirect(`${appUrl}/dashboard?error=oauth_denied`);
     }
 
     if (!code || !state) {
-        console.error('[OAUTH_DEBUG] Missing code or state', { code, state });
         return NextResponse.redirect(`${appUrl}/dashboard?error=missing_params`);
     }
 
@@ -147,24 +137,13 @@ export async function GET(request) {
     const userId = state.substring(colonIndex + 1);
 
     if (!connectionType || !userId) {
-        console.error('[OAUTH_DEBUG] Invalid state shape', { state, connectionType, userId });
         return NextResponse.redirect(`${appUrl}/dashboard?error=invalid_state`);
     }
 
-    console.log('[OAUTH_DEBUG] PARSED', JSON.stringify({ connectionType, userId }));
-
     try {
-        let accountData;
-
-        // When USE_INSTAGRAM_LOGIN is enabled in meta-oauth.js and connectionType is
-        // 'instagram', the Instagram Login flow is used. Otherwise, all types use
-        // Facebook OAuth, so we go through handleFacebookCallback.
-        const USE_INSTAGRAM_LOGIN = true; // Must match the flag in meta-oauth.js
-        if (connectionType === 'instagram' && USE_INSTAGRAM_LOGIN) {
-            accountData = await handleInstagramCallback(code, userId);
-        } else {
-            accountData = await handleFacebookCallback(code, userId, connectionType);
-        }
+        const accountData = connectionType === 'instagram'
+            ? await handleInstagramCallback(code, userId)
+            : await handleFacebookCallback(code, userId, connectionType);
 
         // Save to Supabase — connected to the user's active workspace.
         const supabase = await createClient();
@@ -310,19 +289,13 @@ export async function GET(request) {
         // builder refactor — the same use case is now covered there.)
         return NextResponse.redirect(`${appUrl}/automations?connected=${connectionType}`);
     } catch (err) {
-        console.error('[OAUTH_DEBUG] CALLBACK CAUGHT', JSON.stringify({
-            message: err?.message,
-            name:    err?.name,
-            stack:   err?.stack,
-        }));
+        console.error('[OAuth] Callback failed:', err.message);
         // Pass the thrown error message as the 'error' query param so ConnectAccount.js
         // can look it up in ERROR_MESSAGES (e.g. 'no_facebook_page', 'no_instagram_account').
         // Fall back to 'oauth_failed' for generic/unexpected errors.
         const knownErrors = ['no_facebook_page', 'no_instagram_account', 'save_failed'];
         const errorKey = knownErrors.includes(err.message) ? err.message : 'oauth_failed';
-        return NextResponse.redirect(
-            `${appUrl}/dashboard?error=${errorKey}`
-        );
+        return NextResponse.redirect(`${appUrl}/dashboard?error=${errorKey}`);
     }
 }
 
@@ -378,65 +351,30 @@ async function subscribeToWebhookEvents(accountData) {
 }
 
 /**
- * Handle Instagram Login callback
- * Uses Instagram's own token endpoints
+ * Handle Instagram Login callback.
+ *
+ * Meta's documented 3-step flow for Instagram API with Instagram Login:
+ *   1. Exchange the OAuth code for a short-lived access token (1 hour).
+ *   2. Exchange the short-lived token for a long-lived one (60 days).
+ *   3. Fetch the user's IG profile so we can store username + avatar.
  */
 async function handleInstagramCallback(code, userId) {
-    // Each Meta call is labeled so the OAuth catch block can tell us
-    // exactly which step Meta rejected. The minified production stack
-    // trace hides this otherwise — debugging "Unsupported request"
-    // becomes a guessing game.
-    let shortToken;
-    try {
-        shortToken = await exchangeCodeForInstagramToken(code);
-    } catch (err) {
-        console.error('[OAuth/IG] Step 1 (exchangeCodeForInstagramToken) failed:', err.message);
-        throw err;
-    }
-
-    // Step 2: try to exchange the short-lived token for a 60-day long-lived
-    // one. Meta's "Instagram API with Instagram Login" (the product that
-    // replaced Basic Display in late 2024) has shifted behavior — for many
-    // newer accounts, Step 1 already returns a long-lived token and Step 2
-    // rejects with "Unsupported request - method type: post/get". When that
-    // happens we fall back to using Step 1's access_token directly, which
-    // Meta documents as already valid for 60 days on the new flow.
-    let longToken;
-    try {
-        longToken = await getInstagramLongLivedToken(shortToken.access_token);
-    } catch (err) {
-        const isUnsupportedRequest = /unsupported.*request/i.test(err?.message || '')
-                                  || /method type/i.test(err?.message || '');
-        if (isUnsupportedRequest) {
-            console.error('[OAuth/IG] Step 2 returned "Unsupported request" on both POST and GET — ' +
-                'assuming Step 1 token is already long-lived (new IG API with IG Login behavior). ' +
-                'Falling back to Step 1 token.');
-            longToken = { access_token: shortToken.access_token, expires_in: 5184000 };
-        } else {
-            console.error('[OAuth/IG] Step 2 (getInstagramLongLivedToken) failed:', err.message);
-            throw err;
-        }
-    }
-    const expiresIn = longToken.expires_in || 5184000;
-
-    let profile;
-    try {
-        profile = await getInstagramUserProfile(longToken.access_token);
-    } catch (err) {
-        console.error('[OAuth/IG] Step 3 (getInstagramUserProfile) failed:', err.message);
-        throw err;
-    }
+    const shortToken = await exchangeCodeForInstagramToken(code);
+    const longToken  = await getInstagramLongLivedToken(shortToken.access_token);
+    const profile    = await getInstagramUserProfile(longToken.access_token);
 
     return {
-        user_id: userId,
-        platform: 'instagram',
-        meta_user_id: profile.user_id || shortToken.user_id,
-        access_token: longToken.access_token,
-        token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
-        ig_user_id: profile.user_id || shortToken.user_id,
-        ig_username: profile.username,
+        user_id:                userId,
+        platform:               'instagram',
+        meta_user_id:           profile.user_id || shortToken.user_id,
+        access_token:           longToken.access_token,
+        token_expires_at:       new Date(Date.now() + longToken.expires_in * 1000).toISOString(),
+        ig_user_id:             profile.user_id || shortToken.user_id,
+        ig_username:            profile.username,
         ig_profile_picture_url: profile.profile_picture_url || null,
-        scopes: ['instagram_business_basic', 'instagram_business_manage_messages', 'instagram_business_manage_comments'],
+        // Use the actual permissions Meta granted (returned on Step 1) rather
+        // than a hardcoded list that can drift when scopes are added/removed.
+        scopes:                 shortToken.permissions || [],
     };
 }
 
