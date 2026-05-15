@@ -121,13 +121,23 @@ export async function GET(request) {
     const error = searchParams.get('error');
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+    console.log('[OAUTH_DEBUG] CALLBACK ENTER', JSON.stringify({
+        url:          request.url,
+        code,
+        state,
+        error,
+        error_reason: searchParams.get('error_reason'),
+        error_desc:   searchParams.get('error_description'),
+    }));
+
     // User denied permissions
     if (error) {
-        console.error('OAuth error:', error, searchParams.get('error_description'));
+        console.error('[OAUTH_DEBUG] OAuth provider returned error:', error, searchParams.get('error_description'));
         return NextResponse.redirect(`${appUrl}/dashboard?error=oauth_denied`);
     }
 
     if (!code || !state) {
+        console.error('[OAUTH_DEBUG] Missing code or state', { code, state });
         return NextResponse.redirect(`${appUrl}/dashboard?error=missing_params`);
     }
 
@@ -137,8 +147,11 @@ export async function GET(request) {
     const userId = state.substring(colonIndex + 1);
 
     if (!connectionType || !userId) {
+        console.error('[OAUTH_DEBUG] Invalid state shape', { state, connectionType, userId });
         return NextResponse.redirect(`${appUrl}/dashboard?error=invalid_state`);
     }
+
+    console.log('[OAUTH_DEBUG] PARSED', JSON.stringify({ connectionType, userId }));
 
     try {
         let accountData;
@@ -297,7 +310,11 @@ export async function GET(request) {
         // builder refactor — the same use case is now covered there.)
         return NextResponse.redirect(`${appUrl}/automations?connected=${connectionType}`);
     } catch (err) {
-        console.error('OAuth callback error:', err);
+        console.error('[OAUTH_DEBUG] CALLBACK CAUGHT', JSON.stringify({
+            message: err?.message,
+            name:    err?.name,
+            stack:   err?.stack,
+        }));
         // Pass the thrown error message as the 'error' query param so ConnectAccount.js
         // can look it up in ERROR_MESSAGES (e.g. 'no_facebook_page', 'no_instagram_account').
         // Fall back to 'oauth_failed' for generic/unexpected errors.
