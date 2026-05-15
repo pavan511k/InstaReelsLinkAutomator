@@ -15,17 +15,18 @@ const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || process.env.MET
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, ''); // strip trailing slash
 const REDIRECT_URI = `${APP_URL}/api/auth/meta/callback`;
 
-// Instagram API with Instagram Login scopes
+// Instagram API with Instagram Login scopes.
 const IG_SCOPES = [
     'instagram_business_basic',
     'instagram_business_manage_messages',
-    'instagram_business_manage_comments',
+    // 'instagram_business_manage_comments', // REJECTED in App Review — uncomment once Meta approves it (needed for Public Comment Reply via API).
 ];
 
-// Facebook Login scopes
+// Facebook Login scopes.
 const FB_SCOPES = [
     'pages_show_list',
-    'pages_read_engagement',
+    // 'pages_read_engagement', // REJECTED in App Review — uncomment once Meta approves it (needed for FB Comment Resend feature).
+    // 'pages_manage_engagement', // TO REQUEST in next App Review — needed for the Public Comment Reply feature (`replyToComment` posts via POST /{comment-id}/comments).
     'pages_manage_metadata',
     'pages_messaging',
 ];
