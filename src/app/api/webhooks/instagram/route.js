@@ -971,6 +971,17 @@ async function processAutomationForComment(supabase, post, commentText, commente
                 break;
             case 'keywords':
             default: {
+                // The "any keyword" toggle short-circuits keyword matching —
+                // the automation fires on every comment regardless of text.
+                // Mirrors the DM-auto-responder matcher below. Without this
+                // short-circuit, the automation silently falls into the
+                // keyword-array check and ends up matching only the
+                // account-level default keywords (since the per-automation
+                // keywords array is empty when "any keyword" is on).
+                if (triggerConfig.anyKeyword) {
+                    shouldSend = true;
+                    break;
+                }
                 const isExcludeMode = !!triggerConfig.excludeKeywords;
                 // Per-automation keywords are the user's source of truth.
                 // Merge in account-level globals only in positive mode —
@@ -2113,7 +2124,7 @@ async function handleDmAutoResponder(supabase, igAccountId, senderId, msgText, i
     // never found and DM Auto-Responder / Email Collector silently miss.
     const { data: account } = await supabase
         .from('connected_accounts')
-        .select('id, user_id, ig_user_id, fb_page_id, fb_page_access_token, access_token, default_config')
+        .select('id, user_id, workspace_id, ig_user_id, fb_page_id, fb_page_access_token, access_token, default_config')
         .or(`ig_user_id.eq.${igAccountId},fb_page_id.eq.${igAccountId}`)
         .order('updated_at', { ascending: false })
         .limit(1)
@@ -2130,10 +2141,12 @@ async function handleDmAutoResponder(supabase, igAccountId, senderId, msgText, i
     // Without 'email-collector' here, DM-keyword triggers silently fall
     // through to handleEmailCollectorReply which logs "No pending email
     // collection — ignoring DM reply".
+    // Scoped by workspace_id so a user with multiple workspaces doesn't
+    // get cross-workspace DM responders firing on the wrong account.
     const { data: candidates } = await supabase
         .from('dm_automations')
         .select('*')
-        .eq('user_id', account.user_id)
+        .eq('workspace_id', account.workspace_id)
         .eq('dm_type', 'builder_v2')
         .eq('is_active', true)
         .in('settings_config->>templateType', ['dm-auto-responder', 'email-collector']);
