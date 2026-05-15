@@ -117,7 +117,14 @@ export async function exchangeCodeForInstagramToken(code) {
 }
 
 /**
- * Exchange short-lived IG token for long-lived token (60 days)
+ * Exchange short-lived IG token for long-lived token (60 days).
+ *
+ * Meta's docs show GET on this endpoint, and GET works for app-Roles
+ * users in Live mode. Non-Roles users in a mixed App Review state
+ * have been seen to hit "Unsupported request - method type: get"
+ * on the GET variant, so we try POST first and fall back to GET if
+ * POST is unsupported. Both methods accept the same params; the
+ * fallback covers the case where Meta later switches one off.
  */
 export async function getInstagramLongLivedToken(shortLivedToken) {
     const params = new URLSearchParams({
@@ -126,15 +133,30 @@ export async function getInstagramLongLivedToken(shortLivedToken) {
         access_token: shortLivedToken,
     });
 
-    const response = await fetch(
-        `https://graph.instagram.com/access_token?${params.toString()}`
-    );
+    const url = 'https://graph.instagram.com/access_token';
 
+    // Attempt POST with form body.
+    let response = await fetch(url, { method: 'POST', body: params });
+    if (response.ok) return response.json();
+
+    // POST not supported by Meta? Fall back to GET (the documented method).
+    // Distinguish "method not supported" (try other) from real failures.
+    const firstAttempt = await response.json().catch(() => ({}));
+    const firstMsg = firstAttempt?.error?.message || '';
+    const methodMismatch =
+        /method type/i.test(firstMsg) ||
+        /unsupported.*method/i.test(firstMsg) ||
+        response.status === 405;
+
+    if (!methodMismatch) {
+        throw new Error(firstMsg || 'Failed to get long-lived Instagram token');
+    }
+
+    response = await fetch(`${url}?${params.toString()}`);
     if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.error?.message || 'Failed to get long-lived Instagram token');
     }
-
     return response.json(); // { access_token, token_type, expires_in }
 }
 
