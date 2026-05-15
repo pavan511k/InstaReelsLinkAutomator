@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/broadcast/[jobId]
@@ -9,6 +10,8 @@ export async function GET(request, { params: rawParams }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const { jobId } = await rawParams;
 
@@ -16,7 +19,7 @@ export async function GET(request, { params: rawParams }) {
         .from('broadcast_jobs')
         .select('id, status, total_recipients, processed_count, sent_count, failed_count, skipped_count, rate_limit_per_min, started_at, completed_at, created_at, error_message, dm_type')
         .eq('id', jobId)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .maybeSingle();
 
     if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
@@ -48,6 +51,8 @@ export async function PATCH(request, { params: rawParams }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const { jobId } = await rawParams;
     const { action } = await request.json();
@@ -59,7 +64,7 @@ export async function PATCH(request, { params: rawParams }) {
         .from('broadcast_jobs')
         .select('id, status')
         .eq('id', jobId)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .maybeSingle();
 
     if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
@@ -81,7 +86,7 @@ export async function PATCH(request, { params: rawParams }) {
         .from('broadcast_jobs')
         .update(updates)
         .eq('id', jobId)
-        .eq('user_id', user.id);
+        .eq('workspace_id', workspaceId);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

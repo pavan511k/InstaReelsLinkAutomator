@@ -63,7 +63,8 @@
       "Bash(awk NR>=288 && NR<=380 {printf \"%4d: %s\\\\n\", NR, $0} *)",
       "Bash(awk NR>=1244 && NR<=1455 {printf \"%4d: %s\\\\n\", NR, $0} *)",
       "Bash(awk NR>=1244 && NR<=1450 {printf \"%4d: %s\\\\n\", NR, $0} *)",
-      "Bash(awk NR>=183 && NR<=235 {printf \"%4d: %s\\\\n\", NR, $0} *)"
+      "Bash(awk NR>=183 && NR<=235 {printf \"%4d: %s\\\\n\", NR, $0} *)",
+      "Bash(npx --no-install eslint src/lib/post-upsert.js src/lib/next-post-binding.js src/app/api/posts/sync/route.js src/app/api/webhooks/instagram/route.js)"
     ]
   }
 }

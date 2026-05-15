@@ -830,6 +830,7 @@ function LockedTextField({ value, onChange, label, placeholder, maxLength = 20 }
 function SendDMCard({
   num, title, hint, dmMessage, onDmMessage, charLimit,
   dmImage, onDmImage,
+  dmImageHeadline, onDmImageHeadline,
   linkButtons, onAddLinkButton, onEditLinkButton, onRemoveLinkButton,
   openingEnabled, onOpeningEnabled,
   openingMessage, onOpeningMessage,
@@ -963,6 +964,32 @@ function SendDMCard({
         )}
         {uploadError && (
           <p className="mt-1 text-[11px] text-red-600">{uploadError}</p>
+        )}
+
+        {/* Optional image-card title — appears above the buttons in the
+            DM bubble. Only shown when an image is attached. Leave blank
+            to use the first line of the message automatically. Capped at
+            80 chars per Meta's generic_template title limit. */}
+        {dmImage && (
+          <div className="mt-3">
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-neutral-500 mb-1.5">
+              Image headline <span className="text-neutral-400 normal-case font-normal tracking-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={dmImageHeadline || ''}
+              onChange={(e) => onDmImageHeadline(e.target.value.slice(0, 80))}
+              placeholder="e.g. 🍪 Chakli Special — 20% off"
+              maxLength={80}
+              className="block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-[#E63946] focus:outline-none focus:ring-2 focus:ring-[#E63946]/20 transition-colors"
+            />
+            <div className="mt-1 flex items-center justify-between text-[11px] text-neutral-500">
+              <span className="text-neutral-400">
+                Leave blank to use the message&apos;s first line.
+              </span>
+              <span>{(dmImageHeadline || '').length} / 80</span>
+            </div>
+          </div>
         )}
       </div>
 
@@ -1314,6 +1341,7 @@ function ConversationPreview({
   keywords,
   dmMessage,
   dmImage,
+  dmImageHeadline,
   linkButtons = [],
   openingEnabled,
   openingMessage,
@@ -1328,7 +1356,33 @@ function ConversationPreview({
   followUpMessage = '',
   emailAskMessage = '',
   emailThanksMessage = '',
+  effectivePlan = 'free',
 }) {
+  // Free-tier DMs get "Powered by autodm.pro" appended to the MAIN message
+  // at send time. Reflect that in the preview so the user sees exactly what
+  // their recipients see. Only the main dmMessage gets branded — opening
+  // message is a separate gate bubble and not subject to applyBranding.
+  // Pro/Trial show a clean preview.
+  const FREE_BRANDING    = 'Powered by autodm.pro';
+  const isPaidPlan       = effectivePlan === 'pro' || effectivePlan === 'business' || effectivePlan === 'trial';
+  const dmMessageBranded = (dmMessage && !isPaidPlan)
+    ? (dmMessage.trimEnd().endsWith(FREE_BRANDING) ? dmMessage : `${dmMessage.trimEnd()}\n\n${FREE_BRANDING}`)
+    : dmMessage;
+
+  // Resolve the image-card headline the same way send-dm.js does so the
+  // preview matches the rendered DM exactly:
+  //   1. Explicit imageHeadline from the builder field
+  //   2. First non-empty line of the message
+  //   3. Final fallback to keep Meta from rejecting an empty title
+  // Only computed/shown when an image is attached.
+  const previewImageHeadline = (() => {
+    if (!dmImage) return null;
+    const explicit = (dmImageHeadline || '').trim();
+    if (explicit) return explicit.slice(0, 80);
+    const firstLine = (dmMessage || '').split('\n').find((l) => l.trim());
+    if (firstLine) return firstLine.trim().slice(0, 80);
+    return 'Take a look 👇';
+  })();
   // Webhook picks one at random from the enabled pool when firing;
   // for the live preview we just show the first enabled reply so the
   // user can see what shape the response takes.
@@ -1683,11 +1737,16 @@ function ConversationPreview({
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img src={dmImage} alt="" className="block w-full object-cover" />
                     )}
+                    {dmImage && previewImageHeadline && (
+                      <div className="px-3 pt-2 text-[11px] font-semibold leading-snug text-white">
+                        {previewImageHeadline}
+                      </div>
+                    )}
                     {(dmMessage || linkButtons.length > 0) && (
                       <div className="space-y-1.5 p-2">
                         {dmMessage && (
                           <div className="px-1 pb-0.5 pt-0.5 text-[11px] leading-snug text-white whitespace-pre-wrap">
-                            {dmMessage}
+                            {dmMessageBranded}
                           </div>
                         )}
                         {linkButtons.map((btn, i) => (
@@ -1766,11 +1825,16 @@ function ConversationPreview({
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={dmImage} alt="" className="block w-full object-cover" />
               )}
+              {dmImage && previewImageHeadline && (
+                <div className="px-3 pt-2 text-[11px] font-semibold leading-snug text-white">
+                  {previewImageHeadline}
+                </div>
+              )}
               {(dmMessage || linkButtons.length > 0) && (
                 <div className="space-y-1.5 p-2">
                   {dmMessage && (
                     <div className="px-1 pb-0.5 pt-0.5 text-[11px] leading-snug text-white whitespace-pre-wrap">
-                      {dmMessage}
+                      {dmMessageBranded}
                     </div>
                   )}
                   {linkButtons.map((btn, i) => (
@@ -2159,6 +2223,19 @@ export default function BuilderView({
   // dmImage is a publicly-accessible URL after upload (Supabase Storage
   // bucket `dm_images`). Null means no image attached.
   const [dmImage, setDmImage] = useState(dmCfg.imageUrl || null);
+  // Optional product/card title shown above the image-card buttons.
+  // Capped at 80 chars by Meta's generic_template title limit.
+  //
+  // Prefill behavior:
+  //   - Edit mode: use whatever was saved (including a deliberately empty
+  //     string, which means "let send-dm derive from message first line").
+  //   - New automation: seed with the friendly fallback so creators see
+  //     a sensible default in the field — they can erase or replace it.
+  const [dmImageHeadline, setDmImageHeadline] = useState(
+    isEditMode
+      ? (dmCfg.imageHeadline || '')
+      : (dmCfg.imageHeadline || 'Take a look 👇')
+  );
   // IG limits CTA buttons on outgoing DMs to 3 (button list element).
   // We enforce that cap when the user adds; modal also disables 'Add'
   // when limit reached.
@@ -2261,7 +2338,8 @@ export default function BuilderView({
       anyKeyword,
       keywords,
       dmMessage,
-      dmImageUrl: dmImage,
+      dmImageUrl:      dmImage,
+      dmImageHeadline,
       linkButtons,
       openingEnabled,
       openingMessage,
@@ -2394,6 +2472,8 @@ export default function BuilderView({
             charLimit={dmCharLimit}
             dmImage={dmImage}
             onDmImage={setDmImage}
+            dmImageHeadline={dmImageHeadline}
+            onDmImageHeadline={setDmImageHeadline}
             linkButtons={linkButtons}
             onAddLinkButton={() => setLinkModalState({ open: true, editIndex: -1 })}
             onEditLinkButton={(i) => setLinkModalState({ open: true, editIndex: i })}
@@ -2554,6 +2634,7 @@ export default function BuilderView({
             keywords={keywords}
             dmMessage={dmMessage}
             dmImage={dmImage}
+            dmImageHeadline={dmImageHeadline}
             linkButtons={linkButtons}
             openingEnabled={openingEnabled}
             openingMessage={openingMessage}
@@ -2568,6 +2649,7 @@ export default function BuilderView({
             followUpMessage={followUpMessage}
             emailAskMessage={emailAskMessage}
             emailThanksMessage={emailThanksMessage}
+            effectivePlan={effectivePlan}
           />
         </div>
 
@@ -2588,7 +2670,11 @@ export default function BuilderView({
       <AddLinkModal
         open={linkModalState.open}
         initial={linkModalState.editIndex >= 0 ? linkButtons[linkModalState.editIndex] : null}
-        defaultLabel={accountDefaults?.defaultButtonName || ''}
+        // Prefill new buttons with the user's saved default. If they
+        // saved empty, new buttons start blank — their explicit choice.
+        // `??` keeps a saved empty string empty; only a literal missing
+        // value (legacy rows) gets the friendly "Shop now".
+        defaultLabel={accountDefaults?.defaultButtonName ?? 'Shop now'}
         onSave={(data) => {
           if (linkModalState.editIndex >= 0) {
             // Edit existing

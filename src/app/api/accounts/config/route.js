@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { getUserEffectivePlan } from '@/lib/plan-server';
 import { isProOrTrial } from '@/lib/plans';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/accounts/config
@@ -16,13 +17,15 @@ export async function GET() {
     }
 
     try {
+        const workspaceId = await getActiveWorkspaceId(supabase);
+        if (!workspaceId) return NextResponse.json({ config: {} });
         const { data: account } = await supabase
             .from('connected_accounts')
             .select('default_config')
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .eq('is_active', true)
             .limit(1)
-            .single();
+            .maybeSingle();
 
         return NextResponse.json({
             config: account?.default_config || {},
@@ -66,6 +69,10 @@ export async function POST(request) {
     }
 
     try {
+        const workspaceId = await getActiveWorkspaceId(supabase);
+        if (!workspaceId) {
+            return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
+        }
         const { error } = await supabase
             .from('connected_accounts')
             .update({
@@ -73,7 +80,7 @@ export async function POST(request) {
                 updated_at: new Date().toISOString(),
             })
             .eq('id', accountId)
-            .eq('user_id', user.id);
+            .eq('workspace_id', workspaceId);
 
         if (error) {
             console.error('Failed to save config:', error);

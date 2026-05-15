@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT     = 500;
@@ -22,6 +23,9 @@ export async function GET(request) {
     const gate = requirePro(plan, 'Email Leads require a Pro plan.');
     if (gate) return gate;
 
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ leads: [], total: 0 });
+
     const { searchParams } = new URL(request.url);
     const limit  = Math.min(parseInt(searchParams.get('limit')  || String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT, MAX_LIMIT);
     const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0);
@@ -34,7 +38,7 @@ export async function GET(request) {
                 ' confirmed_at, automation_id',
                 { count: 'exact' },
             )
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .order('confirmed_at', { ascending: false })
             .range(offset, offset + limit - 1);
 

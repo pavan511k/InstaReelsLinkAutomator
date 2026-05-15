@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { fetchAllCommenters, parseKeywords } from '@/lib/broadcast-helpers';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/broadcast/preview?postId=xxx
@@ -17,6 +18,8 @@ export async function GET(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const { searchParams } = new URL(request.url);
     const postId = searchParams.get('postId');
@@ -27,12 +30,12 @@ export async function GET(request) {
     // ── Verify post + fetch connected account ─────────────────────
     const { data: post } = await supabase
         .from('instagram_posts')
-        .select('id, ig_post_id, account_id, connected_accounts!inner(user_id, ig_user_id, access_token, fb_page_access_token)')
+        .select('id, ig_post_id, account_id, connected_accounts!inner(workspace_id, ig_user_id, access_token, fb_page_access_token)')
         .eq('id', postId)
         .single();
 
     if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-    if (post.connected_accounts.user_id !== user.id) {
+    if (post.connected_accounts.workspace_id !== workspaceId) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -55,7 +58,7 @@ export async function GET(request) {
         .from('dm_automations')
         .select('id')
         .eq('post_id', postId)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .maybeSingle();
 
     if (automation?.id) {

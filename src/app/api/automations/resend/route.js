@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase-server';
 import { runBackfill } from '@/lib/backfill';
 import { getUserEffectivePlan } from '@/lib/plan-server';
 import { isProOrTrial } from '@/lib/plans';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * POST /api/automations/resend
@@ -48,14 +49,17 @@ export async function POST(request) {
         );
     }
 
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
+
     // Verify ownership + bound-to-post + active.
     const { data: automation } = await supabase
         .from('dm_automations')
-        .select('id, user_id, post_id, is_active, trigger_config')
+        .select('id, workspace_id, post_id, is_active, trigger_config')
         .eq('id', id)
         .single();
 
-    if (!automation || automation.user_id !== user.id) {
+    if (!automation || automation.workspace_id !== workspaceId) {
         return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
     }
     if (!automation.post_id) {
@@ -67,6 +71,21 @@ export async function POST(request) {
     if (!automation.is_active) {
         return NextResponse.json(
             { error: 'Activate the automation before resending so the new DMs actually fire.' },
+            { status: 400 },
+        );
+    }
+
+    // Block FB-bound automations: reading past comments from a Page post
+    // requires the pages_read_engagement scope, which we don't request.
+    // Defense in depth — the UI already hides the action for FB users.
+    const { data: post } = await supabase
+        .from('instagram_posts')
+        .select('account_id, connected_accounts!inner(platform)')
+        .eq('id', automation.post_id)
+        .maybeSingle();
+    if (post?.connected_accounts?.platform === 'facebook') {
+        return NextResponse.json(
+            { error: 'Resend isn\'t available for Facebook automations.' },
             { status: 400 },
         );
     }

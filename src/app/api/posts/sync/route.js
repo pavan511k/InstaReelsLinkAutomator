@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { GRAPH_API_VERSION, GRAPH_FB_BASE } from '@/lib/meta-graph';
+import { bindPendingNextPostAutomations } from '@/lib/next-post-binding';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * POST /api/posts/sync
@@ -21,12 +23,16 @@ export async function POST() {
     if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) {
+        return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
+    }
 
-    // Get all active connected accounts
+    // Get all active connected accounts in this workspace
     const { data: accounts, error: accountError } = await supabase
         .from('connected_accounts')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .eq('is_active', true);
 
     if (accountError || !accounts || accounts.length === 0) {
@@ -112,18 +118,25 @@ export async function POST() {
                     // attachment.url is the linked page URL (not a media URL) — only used as a last resort.
                     const mediaUrl = attachment?.media?.image?.src || attachment?.url || null;
                     const mediaType = attachment?.media_type === 'video' ? 'VIDEO' : 'IMAGE';
+                    // FB engagement comes back via summary objects; total_count
+                    // is the only field we need. .limit(0) suppresses the
+                    // actual comment/reaction list so payloads stay small.
+                    const commentsTotal  = p.comments?.summary?.total_count;
+                    const reactionsTotal = p.reactions?.summary?.total_count;
 
                     return {
-                        account_id: account.id,
-                        ig_post_id: `fb_${p.id}`,
-                        media_type: mediaType,
-                        media_url: mediaUrl,
-                        thumbnail_url: mediaUrl,
-                        caption: p.message || '',
-                        permalink: p.permalink_url || '',
-                        timestamp: p.created_time,
-                        is_story: false,
-                        synced_at: new Date().toISOString(),
+                        account_id:     account.id,
+                        ig_post_id:     `fb_${p.id}`,
+                        media_type:     mediaType,
+                        media_url:      mediaUrl,
+                        thumbnail_url:  mediaUrl,
+                        caption:        p.message || '',
+                        permalink:      p.permalink_url || '',
+                        timestamp:      p.created_time,
+                        is_story:       false,
+                        like_count:     typeof reactionsTotal === 'number' ? reactionsTotal : null,
+                        comments_count: typeof commentsTotal  === 'number' ? commentsTotal  : null,
+                        synced_at:      new Date().toISOString(),
                     };
                 }));
                 syncedPlatforms.push('facebook');
@@ -171,57 +184,7 @@ export async function POST() {
             }
         }
 
-        // ── Next-Post binding ───────────────────────────────────────────
-        // builder_v2 automations saved with postTargetMode='next' wait
-        // here for the first post the user publishes AFTER the
-        // automation was created. We bind to the oldest such post and
-        // flip the mode to 'specific' so the binding is one-shot.
-        // Idempotent — already-bound rows have post_id != null and
-        // don't match the filter.
-        try {
-            const { data: pendingNext } = await supabase
-                .from('dm_automations')
-                .select('id, created_at, trigger_config')
-                .eq('user_id', user.id)
-                .eq('dm_type', 'builder_v2')
-                .eq('is_active', true)
-                .is('post_id', null)
-                .filter('trigger_config->>postTargetMode', 'eq', 'next');
-
-            if (pendingNext && pendingNext.length > 0) {
-                const accountIds = accounts.map((a) => a.id);
-                for (const auto of pendingNext) {
-                    const { data: candidates } = await supabase
-                        .from('instagram_posts')
-                        .select('id, timestamp')
-                        .in('account_id', accountIds)
-                        .eq('is_story', false)
-                        .gt('timestamp', auto.created_at)
-                        .order('timestamp', { ascending: true })
-                        .limit(1);
-                    const target = candidates?.[0];
-                    if (!target) continue;
-                    const nextTrigger = { ...(auto.trigger_config || {}), postTargetMode: 'specific' };
-                    const { error: bindErr } = await supabase
-                        .from('dm_automations')
-                        .update({
-                            post_id:        target.id,
-                            trigger_config: nextTrigger,
-                            updated_at:     new Date().toISOString(),
-                        })
-                        .eq('id', auto.id);
-                    if (bindErr) {
-                        console.warn(`[Sync] Failed to bind next-post automation ${auto.id}:`, bindErr.message);
-                    } else {
-                        console.log(`[Sync] Bound next-post automation ${auto.id} to post ${target.id}`);
-                    }
-                }
-            }
-        } catch (bindErr) {
-            // Non-fatal — sync still succeeds, automations stay pending
-            // and will retry on the next sync run.
-            console.warn('[Sync] Next-post binding pass failed:', bindErr.message);
-        }
+        await bindPendingNextPostAutomations(supabase, workspaceId, accounts.map((a) => a.id));
 
         // Reconcile expired/deleted stories per account.
         // Any DB row marked is_story=true for an account whose ig_post_id
@@ -327,7 +290,7 @@ async function fetchInstagramStories(igUserId, accessToken, useIgApi = false) {
  * does not include the image src, causing all thumbnails to be null.
  */
 async function fetchFacebookPosts(pageId, pageAccessToken) {
-    const fields = 'id,message,permalink_url,created_time,attachments{media_type,media{image{src}},url}';
+    const fields = 'id,message,permalink_url,created_time,attachments{media_type,media{image{src}},url},comments.summary(true).limit(0),reactions.summary(true).limit(0)';
     const response = await fetch(
         `${GRAPH_FB_BASE}/${pageId}/posts?fields=${fields}&limit=100&access_token=${pageAccessToken}`
     );

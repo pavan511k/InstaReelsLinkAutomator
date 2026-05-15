@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import BuilderView from './BuilderView';
 import { getUserEffectivePlan } from '@/lib/plan-server';
 import { isProOrTrial } from '@/lib/plans';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 const VALID_TYPES = new Set([
   'comment-to-dm',
@@ -38,6 +39,7 @@ export default async function FlowBuilderPage({ searchParams }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+  const workspaceId = await getActiveWorkspaceId(supabase);
 
   const params  = await searchParams;
   const editId  = (params?.edit || '').toString();
@@ -48,12 +50,12 @@ export default async function FlowBuilderPage({ searchParams }) {
   let name = (params?.name || '').toString();
 
   if (editId) {
-    const { data: row } = await supabase
+    const { data: row } = workspaceId ? await supabase
       .from('dm_automations')
       .select('*')
       .eq('id', editId)
-      .eq('user_id', user.id)
-      .maybeSingle();
+      .eq('workspace_id', workspaceId)
+      .maybeSingle() : { data: null };
     if (!row) {
       redirect('/automations');
     }
@@ -73,14 +75,14 @@ export default async function FlowBuilderPage({ searchParams }) {
   // back to a generic placeholder/icon when the user hasn't connected
   // an account yet (still possible via the modal flow if they navigate
   // here mid-onboarding).
-  const { data: account } = await supabase
+  const { data: account } = workspaceId ? await supabase
     .from('connected_accounts')
     .select('id, ig_username, ig_profile_picture_url, platform, default_config')
-    .eq('user_id', user.id)
+    .eq('workspace_id', workspaceId)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle();
+    .maybeSingle() : { data: null };
 
   const igUsername  = account?.ig_username || 'your_handle';
   const igAvatarUrl = account?.ig_profile_picture_url || null;
@@ -95,11 +97,11 @@ export default async function FlowBuilderPage({ searchParams }) {
   // everything; 'facebook' hides IG-only features.
   let activePlatform = 'instagram';
   try {
-    const { data: accountRows } = await supabase
+    const { data: accountRows } = workspaceId ? await supabase
       .from('connected_accounts')
       .select('platform')
-      .eq('user_id', user.id)
-      .eq('is_active', true);
+      .eq('workspace_id', workspaceId)
+      .eq('is_active', true) : { data: [] };
     const platforms = new Set((accountRows || []).map((a) => a.platform).filter(Boolean));
     if (platforms.has('both') || (platforms.has('instagram') && platforms.has('facebook'))) {
       activePlatform = 'both';

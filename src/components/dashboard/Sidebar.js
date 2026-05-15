@@ -10,6 +10,7 @@ import {
   MessageSquarePlus, Users, PanelLeftClose, PanelLeftOpen, Workflow, AtSign, Mail,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
+import WorkspaceSwitcher from '@/components/dashboard/WorkspaceSwitcher';
 
 // `igOnly: true` items are hidden when the active connected account is
 // Facebook-only — Stories don't exist on FB, Ice Breakers use the
@@ -102,6 +103,10 @@ export default function Sidebar({
   activePlatform      = null,
   dmUsed              = 0,
   dmLimit             = null,
+  workspaces          = [],
+  activeWorkspace     = null,
+  workspaceLimit      = 1,
+  canCreateWorkspace  = false,
 }) {
   const filteredNav = activePlatform === 'facebook'
     ? NAV.filter((item) => !item.igOnly)
@@ -211,6 +216,21 @@ export default function Sidebar({
                 : <PanelLeftClose className="h-4 w-4" strokeWidth={2} />}
             </button>
           )}
+        </div>
+
+        {/* Workspace switcher — the active workspace gates every query
+            on the page, so it sits at the top of the chrome where it's
+            always visible. Falls back to a single-icon button when the
+            sidebar is collapsed. */}
+        <div className={isCollapsed ? 'flex justify-center px-3 pb-3' : 'px-3 pb-3'}>
+          <WorkspaceSwitcher
+            activeWorkspace={activeWorkspace}
+            workspaces={workspaces}
+            canCreateWorkspace={canCreateWorkspace}
+            workspaceLimit={workspaceLimit}
+            workspaceCount={workspaces.length}
+            collapsed={isCollapsed}
+          />
         </div>
 
         {/* Connection status pill — only when expanded */}

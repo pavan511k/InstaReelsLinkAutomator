@@ -74,13 +74,10 @@ export default function SignupPage() {
       if (authError) {
         setError(authError.message);
       } else {
-        // Welcome email — fire and forget, don't block redirect.
-        fetch('/api/email/welcome', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, name: fullName }),
-        }).catch(() => {/* non-critical */});
-
+        // No separate welcome email — Supabase Auth already sends the
+        // verification email at signup, and we send the trial-started
+        // email once the user connects their first IG/FB account. Two
+        // emails ~minutes apart felt redundant.
         router.push('/verify');
       }
     } catch {

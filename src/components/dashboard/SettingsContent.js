@@ -11,6 +11,7 @@ import {
 import DisconnectModal from './DisconnectModal';
 import PricingModal from './PricingModal';
 import Modal from '@/components/ui/Modal';
+import WorkspacesSection from './WorkspacesSection';
 
 const THRESHOLD_OPTIONS = [50, 60, 70, 80, 90, 95];
 
@@ -93,7 +94,15 @@ function planBadgeMeta(plan) {
   return                                            { label: 'Free Plan',  tone: 'border-neutral-200 bg-neutral-100 text-neutral-700',  dot: 'bg-neutral-400' };
 }
 
-export default function SettingsContent({ user, connectedAccounts = [] }) {
+export default function SettingsContent({
+  user,
+  connectedAccounts  = [],
+  workspaces         = [],
+  activeWorkspaceId  = null,
+  workspaceLimit     = 1,
+  canCreateWorkspace = false,
+  effectivePlan      = 'free',
+}) {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const [disconnectingId, setDisconnectingId]           = useState(null);
@@ -109,7 +118,8 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
   const [savingConfig, setSavingConfig]                 = useState(false);
 
   // Surface error from /api/auth/meta/connect (e.g. "disconnect_first" when
-  // user tries to switch platforms while one is still active).
+  // user tries to switch platforms while one is still active) and from
+  // /api/auth/meta/callback when an account is already in another workspace.
   useEffect(() => {
     const err = searchParams.get('error');
     if (err === 'disconnect_first') {
@@ -117,10 +127,49 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
         'You already have a connected account. Disconnect it first, then connect the other platform.',
         { duration: 7000 },
       );
-      // Strip the query param so a reload doesn't re-toast.
+      router.replace('/settings');
+    } else if (err === 'account_in_use_elsewhere') {
+      toast.error(
+        'This Instagram or Facebook account is already connected to a different AutoDM user. Ask the owner to disconnect it before you can connect it here.',
+        { duration: 10000 },
+      );
+      router.replace('/settings');
+    } else if (err === 'account_in_other_workspace') {
+      const targetWsId  = searchParams.get('target_ws');
+      const targetWs    = targetWsId
+        ? workspaces.find((w) => w.id === targetWsId)
+        : null;
+      const targetName  = targetWs?.name || 'the other workspace';
+
+      const switchToTarget = async () => {
+        try {
+          const res = await fetch('/api/workspaces/switch', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ workspaceId: targetWsId }),
+          });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j?.error || 'Failed to switch workspace');
+          }
+          toast.success(`Switched to ${targetName}`);
+          // Hard reload so every RSC re-scopes its queries.
+          window.location.href = '/settings';
+        } catch (e) {
+          toast.error(e.message || 'Failed to switch workspace');
+        }
+      };
+
+      toast.error(
+        `This account is already connected to "${targetName}". Switch workspaces to manage it there, or disconnect it first.`,
+        {
+          duration: 12000,
+          action: targetWsId ? { label: `Switch to ${targetName}`, onClick: switchToTarget } : undefined,
+        },
+      );
       router.replace('/settings');
     }
-  }, [searchParams, router]);
+  }, [searchParams, router, workspaces]);
 
   const activeAccounts     = connectedAccounts.filter((a) => a.is_active);
   const inactiveAccounts   = connectedAccounts.filter((a) => !a.is_active);
@@ -147,7 +196,12 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
     keywords:          defaultCfg.keywords          || [],
     excludeKeywords:   defaultCfg.excludeKeywords   || [],
     defaultMessage:    defaultCfg.defaultMessage    || '',
-    defaultButtonName: defaultCfg.defaultButtonName || '',
+    // Respect whatever the user has saved. The OAuth callback seeds
+    // "Shop now" for new accounts; if the user clears the field and
+    // saves empty, an empty string stays empty (no ghost-fallback).
+    // `??` so a saved empty string is preserved; only null/undefined
+    // (legacy rows) get the friendly default.
+    defaultButtonName: (defaultCfg.defaultButtonName ?? 'Shop now'),
     utmTag:            defaultCfg.utmTag            || '',
   });
   const [keywordInput, setKeywordInput] = useState('');
@@ -347,10 +401,19 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
         </div>
         {firstActiveAccount?.ig_username && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700">
-            Workspace: <span className="font-mono text-[#E63946]">@{firstActiveAccount.ig_username}</span>
+            Account: <span className="font-mono text-[#E63946]">@{firstActiveAccount.ig_username}</span>
           </span>
         )}
       </div>
+
+      {/* ── Workspaces ─────────────────────────────────────────────────── */}
+      <WorkspacesSection
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        workspaceLimit={workspaceLimit}
+        canCreate={canCreateWorkspace}
+        effectivePlan={effectivePlan}
+      />
 
       {/* ── Connected Accounts ────────────────────────────────────────── */}
       <SectionCard
@@ -777,7 +840,7 @@ export default function SettingsContent({ user, connectedAccounts = [] }) {
         <button
           type="button"
           onClick={() => setShowDeleteModal(true)}
-          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition-colors"
         >
           <Trash2 className="h-3.5 w-3.5" strokeWidth={2.5} />
           Delete Account

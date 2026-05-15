@@ -12,6 +12,8 @@ import {
 import { applyTracking } from '@/lib/click-tracking';
 import { fetchIgUserFirstName, extractFirstName } from '@/lib/ig-profile';
 import { fireAlerts } from '@/app/api/alerts/route';
+import { fetchAndUpsertPost } from '@/lib/post-upsert';
+import { bindPendingNextPostAutomations } from '@/lib/next-post-binding';
 
 import { getDmLimit, getEffectivePlan } from '@/lib/plans';
 import { getMonthlyDmCount } from '@/lib/plan-server';
@@ -718,6 +720,45 @@ async function sendRewardDM(igSenderId, recipientId, dmType, dmConfig, accessTok
 
 // ─── Comment Handlers ─────────────────────────────────────────────────────────
 
+/**
+ * Lazy-sync: when a comment arrives on a media we haven't synced yet,
+ * fetch + upsert that single media so account-wide automations
+ * (postTargetMode 'any' / 'next') can fire on the very first comment
+ * instead of being lost until the user manually clicks "Refresh posts".
+ *
+ * Guard query first — if the user has no pending any/next automation,
+ * skip the Graph API fetch entirely (would have bailed anyway).
+ *
+ * Returns { id, account_id } on success or null when there's nothing to do
+ * (no account match, no pending automation, or fetch/upsert failure).
+ */
+async function maybeLazySyncPost(supabase, accountIdentifier, mediaId, platform) {
+    const { data: account } = await supabase
+        .from('connected_accounts')
+        .select('id, user_id, workspace_id, ig_user_id, fb_page_id, fb_page_access_token, access_token, platform')
+        .or(`ig_user_id.eq.${accountIdentifier},fb_page_id.eq.${accountIdentifier}`)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (!account) return null;
+
+    const { count } = await supabase
+        .from('dm_automations')
+        .select('id', { count: 'exact', head: true })
+        .eq('workspace_id', account.workspace_id)
+        .eq('is_active', true)
+        .is('post_id', null)
+        .filter('trigger_config->>postTargetMode', 'in', '(any,next)');
+
+    if (!count) return null;
+
+    const row = await fetchAndUpsertPost(supabase, account, mediaId, platform);
+    if (!row) return null;
+
+    await bindPendingNextPostAutomations(supabase, account.workspace_id, [account.id]);
+    return row;
+}
+
 async function handleInstagramCommentEvent(supabase, igAccountId, commentData) {
     const { id: commentId, text, from, media } = commentData;
 
@@ -728,11 +769,15 @@ async function handleInstagramCommentEvent(supabase, igAccountId, commentData) {
 
     console.log(`[Webhook] IG Comment on media ${media.id}: "${text}" from user ${from.id} (@${from.username || '?'})`);
 
-    const { data: post } = await supabase
+    let { data: post } = await supabase
         .from('instagram_posts')
         .select('id, account_id')
         .eq('ig_post_id', media.id)
-        .single();
+        .maybeSingle();
+
+    if (!post) {
+        post = await maybeLazySyncPost(supabase, igAccountId, media.id, 'instagram');
+    }
 
     // from.username — Instagram includes the handle on comment webhook payloads.
     // Captured here and propagated through the queue / sent_log so flow-step
@@ -757,11 +802,15 @@ async function handleFacebookCommentEvent(supabase, pageId, commentData) {
 
     console.log(`[Webhook] FB Comment on post ${post_id}: "${message}" from user ${from.id}`);
 
-    const { data: post } = await supabase
+    let { data: post } = await supabase
         .from('instagram_posts')
         .select('id, account_id')
         .eq('ig_post_id', `fb_${post_id}`)
-        .single();
+        .maybeSingle();
+
+    if (!post) {
+        post = await maybeLazySyncPost(supabase, pageId, post_id, 'facebook');
+    }
 
     // FB delivers the user's display name in from.name. Use it for both the
     // {username} fallback (preserving prior behavior) and to derive a real
@@ -800,7 +849,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
     // additional account-owner lookup to scope correctly.
     const { data: account } = await supabase
         .from('connected_accounts')
-        .select('user_id, access_token, fb_page_access_token, ig_user_id, fb_page_id, platform, default_config')
+        .select('user_id, workspace_id, access_token, fb_page_access_token, ig_user_id, fb_page_id, platform, default_config')
         .eq('id', post.account_id)
         .single();
 
@@ -835,7 +884,7 @@ async function processAutomationForComment(supabase, post, commentText, commente
                 .select('*')
                 .is('post_id', null)
                 .eq('is_active', true)
-                .eq('user_id', account.user_id)
+                .eq('workspace_id', account.workspace_id)
                 .filter('trigger_config->>postTargetMode', 'eq', 'any');
 
         candidates = [...(postBound || []), ...(anyMode || [])];

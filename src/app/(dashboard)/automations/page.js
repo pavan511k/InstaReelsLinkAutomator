@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 import AutomationsView from './AutomationsView';
 import { getUserEffectivePlan } from '@/lib/plan-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * /automations — unified list of every automation built with the new
@@ -19,8 +20,9 @@ export default async function AutomationsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+  const workspaceId = await getActiveWorkspaceId(supabase);
 
-  // Fetch builder_v2 rows for this user. instagram_posts is joined
+  // Fetch builder_v2 rows for this workspace. instagram_posts is joined
   // inline so the list can render a post thumbnail + caption next
   // to each automation without an N+1 lookup. Sorted newest-first
   // (updated_at) so the most-recently-touched automation is on top.
@@ -29,20 +31,20 @@ export default async function AutomationsPage() {
   // `add-post-engagement.sql` and fall back to a query without them if
   // that migration hasn't run yet.
   let rows = [];
-  const tryWithCounts = await supabase
+  const tryWithCounts = workspaceId ? await supabase
     .from('dm_automations')
     .select(`
       id, post_id, dm_type, dm_config, trigger_config, settings_config,
       is_active, scheduled_start_at, expires_at, updated_at, created_at,
       instagram_posts:post_id (id, thumbnail_url, media_url, caption, is_story, comments_count)
     `)
-    .eq('user_id', user.id)
+    .eq('workspace_id', workspaceId)
     .eq('dm_type', 'builder_v2')
-    .order('updated_at', { ascending: false });
+    .order('updated_at', { ascending: false }) : { data: [], error: null };
 
   if (!tryWithCounts.error) {
     rows = tryWithCounts.data || [];
-  } else {
+  } else if (workspaceId) {
     const fallback = await supabase
       .from('dm_automations')
       .select(`
@@ -50,7 +52,7 @@ export default async function AutomationsPage() {
         is_active, scheduled_start_at, expires_at, updated_at, created_at,
         instagram_posts:post_id (id, thumbnail_url, media_url, caption, is_story)
       `)
-      .eq('user_id', user.id)
+      .eq('workspace_id', workspaceId)
       .eq('dm_type', 'builder_v2')
       .order('updated_at', { ascending: false });
     rows = fallback.data || [];
@@ -115,11 +117,11 @@ export default async function AutomationsPage() {
   // single-platform identifier.
   let activePlatform = 'instagram';
   try {
-    const { data: accountRows } = await supabase
+    const { data: accountRows } = workspaceId ? await supabase
       .from('connected_accounts')
       .select('platform')
-      .eq('user_id', user.id)
-      .eq('is_active', true);
+      .eq('workspace_id', workspaceId)
+      .eq('is_active', true) : { data: [] };
     const platforms = new Set((accountRows || []).map((a) => a.platform).filter(Boolean));
     if (platforms.has('both') || (platforms.has('instagram') && platforms.has('facebook'))) {
       activePlatform = 'both';

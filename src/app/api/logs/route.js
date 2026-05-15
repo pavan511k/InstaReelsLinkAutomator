@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 const PAGE_SIZE = 50;
 
@@ -14,6 +15,8 @@ export async function GET(request) {
     if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ rows: [], total: 0, hasMore: false });
 
     const { searchParams } = new URL(request.url);
     const status   = searchParams.get('status')   || 'all';   // all | sent | failed
@@ -45,7 +48,7 @@ export async function GET(request) {
         let query = supabase
             .from('dm_sent_log')
             .select('id, automation_id, post_id, recipient_ig_id, comment_text, status, error_message, sent_at, platform', { count: 'exact' })
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .order('sent_at', { ascending: false })
             .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { GRAPH_FB_BASE, GRAPH_IG_BASE } from '@/lib/meta-graph';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/accounts/resubscribe
@@ -17,6 +18,8 @@ export async function GET(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const { searchParams } = new URL(request.url);
     if (searchParams.get('force') === '1') {
@@ -32,7 +35,7 @@ export async function GET(request) {
     const { data: accounts } = await db
         .from('connected_accounts')
         .select('id, platform, ig_user_id, fb_page_id, access_token, fb_page_access_token, is_active')
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .eq('is_active', true);
 
     if (!accounts?.length) {
@@ -102,6 +105,8 @@ export async function POST() {
     if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const db = createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -111,7 +116,7 @@ export async function POST() {
     const { data: accounts, error } = await db
         .from('connected_accounts')
         .select('id, platform, ig_user_id, fb_page_id, access_token, fb_page_access_token')
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .eq('is_active', true);
 
     if (error || !accounts?.length) {

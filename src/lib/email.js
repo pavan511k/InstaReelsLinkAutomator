@@ -11,6 +11,29 @@ function getResend() {
 const FROM = 'AutoDM <support@autodm.pro>';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://autodm.pro';
 
+// ── Brand palette ─────────────────────────────────────────────────────────────
+// All email templates draw from this single source. Dark-mode "premium SaaS"
+// look — true black surface, white text, orange accent. Matches the rest of
+// the AutoDM brand (legal pages, cookie banner, dashboard CTAs).
+const COLORS = {
+    bg:           '#0F0F0F',   // page background
+    card:         '#171717',   // surface card
+    cardSubtle:   '#1F1F1F',   // inner panels / inset
+    border:       'rgba(255,255,255,0.08)',
+    borderStrong: 'rgba(255,255,255,0.14)',
+    text:         '#FFFFFF',
+    textSoft:     'rgba(255,255,255,0.62)',
+    textMuted:    'rgba(255,255,255,0.38)',
+    textFaint:    'rgba(255,255,255,0.22)',
+    accent:       '#F97316',   // orange-500 — primary brand accent
+    accentHover:  '#EA580C',   // orange-600
+    accentSoft:   'rgba(249,115,22,0.14)',
+    accentBorder: 'rgba(249,115,22,0.32)',
+    warn:         '#F59E0B',
+    warnSoft:     'rgba(245,158,11,0.13)',
+    warnBorder:   'rgba(245,158,11,0.32)',
+};
+
 // ── Shared layout wrapper ─────────────────────────────────────────────────────
 function layout(content) {
     return `<!DOCTYPE html>
@@ -20,8 +43,8 @@ function layout(content) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AutoDM</title>
 </head>
-<body style="margin:0;padding:0;background:#0A0915;font-family:'Inter',system-ui,-apple-system,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0A0915;padding:40px 16px;">
+<body style="margin:0;padding:0;background:${COLORS.bg};font-family:'Inter','Helvetica Neue',Arial,system-ui,-apple-system,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:${COLORS.bg};padding:40px 16px;">
     <tr>
       <td align="center">
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
@@ -30,8 +53,8 @@ function layout(content) {
           <tr>
             <td style="padding-bottom:32px;text-align:center;">
               <a href="${APP_URL}" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
-                <span style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.04em;">
-                  auto<span style="color:#A78BFA;">dm</span>
+                <span style="font-size:22px;font-weight:800;color:${COLORS.text};letter-spacing:-0.04em;">
+                  auto<span style="color:${COLORS.accent};">dm</span>
                 </span>
               </a>
             </td>
@@ -39,7 +62,7 @@ function layout(content) {
 
           <!-- Card -->
           <tr>
-            <td style="background:#13102A;border:1px solid rgba(255,255,255,0.09);border-radius:20px;padding:40px 36px;">
+            <td style="background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:20px;padding:40px 36px;">
               ${content}
             </td>
           </tr>
@@ -47,12 +70,12 @@ function layout(content) {
           <!-- Footer -->
           <tr>
             <td style="padding-top:28px;text-align:center;">
-              <p style="margin:0 0 8px;font-size:12px;color:rgba(255,255,255,0.25);">
-                AutoDM · <a href="${APP_URL}" style="color:rgba(255,255,255,0.25);text-decoration:none;">autodm.pro</a>
+              <p style="margin:0 0 8px;font-size:12px;color:${COLORS.textFaint};">
+                AutoDM · <a href="${APP_URL}" style="color:${COLORS.textFaint};text-decoration:none;">autodm.pro</a>
               </p>
-              <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.18);">
+              <p style="margin:0;font-size:12px;color:${COLORS.textFaint};">
                 You're receiving this because you signed up for AutoDM.<br/>
-                <a href="${APP_URL}/settings" style="color:rgba(255,255,255,0.25);text-decoration:underline;">Manage email preferences</a>
+                <a href="${APP_URL}/settings" style="color:${COLORS.textFaint};text-decoration:underline;">Manage email preferences</a>
               </p>
             </td>
           </tr>
@@ -66,12 +89,13 @@ function layout(content) {
 }
 
 // ── Button helper ─────────────────────────────────────────────────────────────
+// Solid orange CTA — high contrast on the dark card, on-brand.
 function button(text, href) {
-    return `<a href="${href}" style="display:inline-block;padding:13px 28px;background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;font-size:15px;font-weight:700;text-decoration:none;border-radius:10px;letter-spacing:-0.01em;">${text}</a>`;
+    return `<a href="${href}" style="display:inline-block;padding:13px 28px;background:${COLORS.accent};color:#fff;font-size:15px;font-weight:700;text-decoration:none;border-radius:10px;letter-spacing:-0.01em;box-shadow:0 6px 18px -6px rgba(249,115,22,0.45);">${text}</a>`;
 }
 
 // ── Divider ───────────────────────────────────────────────────────────────────
-const divider = `<hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:28px 0;" />`;
+const divider = `<hr style="border:none;border-top:1px solid ${COLORS.border};margin:28px 0;" />`;
 
 // ── Ad-hoc admin send ─────────────────────────────────────────────────────────
 // Backs the /admin/email tool. Caller provides recipients + content;
@@ -101,63 +125,17 @@ export async function sendCustomEmail({
     });
 }
 
-// ── 1. Welcome email (sent after signup) ─────────────────────────────────────
-export async function sendWelcomeEmail({ to, name }) {
-    const firstName = (name || to.split('@')[0]).split(' ')[0];
-
-    const html = layout(`
-        <h1 style="margin:0 0 8px;font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.04em;">
-            Welcome to AutoDM 👋
-        </h1>
-        <p style="margin:0 0 28px;font-size:15px;color:rgba(255,255,255,0.5);line-height:1.65;">
-            Hey ${firstName}, you're in! Let's get your Instagram on autopilot.
-        </p>
-
-        <!-- Steps -->
-        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            ${[
-                ['1', 'Verify your email', 'Click the confirmation link in the email from Supabase to activate your account.'],
-                ['2', 'Connect Instagram', 'Link your Instagram Business or Creator account — takes under 60 seconds.'],
-                ['3', 'Set your first automation', 'Pick a post, set a keyword trigger, and watch DMs fly automatically.'],
-            ].map(([num, title, desc]) => `
-            <tr>
-              <td style="padding:12px 0;vertical-align:top;">
-                <table cellpadding="0" cellspacing="0">
-                  <tr>
-                    <td style="vertical-align:top;padding-right:14px;">
-                    <div style="width:28px;height:28px;border-radius:8px;background:rgba(124,58,237,0.2);border:1px solid rgba(167,139,250,0.3);text-align:center;line-height:28px;font-size:12px;font-weight:700;color:#A78BFA;">${num}</div>
-                    </td>
-                    <td>
-                      <p style="margin:0 0 3px;font-size:14px;font-weight:700;color:rgba(255,255,255,0.88);">${title}</p>
-                      <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.42);line-height:1.55;">${desc}</p>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>`).join('')}
-        </table>
-
-        <div style="text-align:center;margin-bottom:28px;">
-            ${button('Get started →', `${APP_URL}/dashboard`)}
-        </div>
-
-        ${divider}
-
-        <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.32);line-height:1.6;text-align:center;">
-            🎁 <strong style="color:rgba(255,255,255,0.55);">30-day free Pro trial</strong> starts automatically when you connect Instagram.<br/>
-            No credit card required — ever.
-        </p>
-    `);
-
-    return getResend().emails.send({
-        from: FROM,
-        to,
-        subject: 'Welcome to AutoDM 🎉 — Here\'s how to get started',
-        html,
-    });
-}
-
-// ── 2. Trial started email (sent when Instagram is connected) ─────────────────
+// ── 1. Trial started email (sent on email verification) ─────────────────────
+// This is the ONLY onboarding email we send from our side — Supabase already
+// sends the email-verification confirmation at signup. Triggered from
+// `/auth/callback` the first time the user clicks the verification link.
+// We deliberately don't send any "welcome" email at signup or any extra
+// email at IG/FB connect — one email, one moment.
+//
+// `igUsername` is unused (kept in the signature for backwards-compat in
+// case any other caller still passes it); the email no longer assumes the
+// user has connected an account when it fires.
+// eslint-disable-next-line no-unused-vars
 export async function sendTrialStartedEmail({ to, name, igUsername, trialEndsAt }) {
     const firstName = (name || to.split('@')[0]).split(' ')[0];
     const expiryDate = new Date(trialEndsAt).toLocaleDateString('en-IN', {
@@ -165,109 +143,109 @@ export async function sendTrialStartedEmail({ to, name, igUsername, trialEndsAt 
     });
 
     const html = layout(`
-        <div style="text-align:center;margin-bottom:28px;">
-            <div style="display:inline-block;padding:8px 20px;background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(167,139,250,0.15));border:1px solid rgba(167,139,250,0.3);border-radius:100px;font-size:13px;font-weight:700;color:#C4B5FD;margin-bottom:20px;">
-                🎁 30-Day Pro Trial Started
+        <div style="text-align:center;margin-bottom:32px;">
+            <div style="display:inline-block;padding:7px 18px;background:${COLORS.accentSoft};border:1px solid ${COLORS.accentBorder};border-radius:100px;font-size:12px;font-weight:700;color:${COLORS.accent};letter-spacing:0.04em;text-transform:uppercase;margin-bottom:20px;">
+                30-Day Pro Trial Started
             </div>
-            <h1 style="margin:0 0 10px;font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.04em;">
-                Your Pro trial is live, ${firstName}!
+            <h1 style="margin:0 0 10px;font-size:28px;font-weight:800;color:${COLORS.text};letter-spacing:-0.03em;line-height:1.2;">
+                Welcome to AutoDM, ${firstName}.
             </h1>
-            <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.5);line-height:1.65;">
-                @${igUsername || 'your account'} is connected and all Pro features are unlocked.
+            <p style="margin:0;font-size:15px;color:${COLORS.textSoft};line-height:1.65;">
+                Your 30-day Pro trial is live — every Pro feature is unlocked,
+                no credit card required.<br/>
+                Connect your Instagram or Facebook account in the dashboard to
+                fire your first automated DM.
             </p>
         </div>
 
-        <!-- Pro features grid -->
-        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            <tr>
-                <td style="padding:4px;">
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                        ${[
-                            ['✅', 'Unlimited Automation Flows', 'No 5-automation cap — build as many as you need'],
-                            ['✅', 'Email Collector', 'Capture emails as leads via DM reply'],
-                            ['✅', 'Story Mention Auto-DM', 'Auto-reply when fans tag you in their story'],
-                            ['✅', 'Ask to Follow before DM', 'Only send links to users who follow you first'],
-                            ['✅', 'Multi-step Flow Automation', 'Send sequential follow-ups at configurable delays'],
-                            ['✅', 'Real-time analytics & priority support', 'DM logs, click counts & faster help'],
-                        ].map(([icon, title, desc]) => `
-                        <tr>
-                          <td style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <table cellpadding="0" cellspacing="0">
-                              <tr>
-                                <td style="padding-right:12px;font-size:16px;">${icon}</td>
-                                <td>
-                                  <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:rgba(255,255,255,0.85);">${title}</p>
-                                  <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.38);">${desc}</p>
-                                </td>
-                              </tr>
-                            </table>
-                          </td>
-                        </tr>`).join('')}
+        <!-- Pro features list -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;background:${COLORS.cardSubtle};border:1px solid ${COLORS.border};border-radius:14px;">
+            ${[
+                ['Unlimited automation flows',          'No 5-automation cap — build as many as you need.'],
+                ['Email Collector',                     'Capture leads when fans reply with their email.'],
+                ['Story Mention Auto-DM',               'Auto-reply when fans tag you in a story.'],
+                ['Ask-to-Follow gate',                  'Send links only to users who follow you first.'],
+                ['Multi-step flow automation',          'Send sequential follow-ups at configurable delays.'],
+                ['Analytics & priority support',        'DM logs, click counts, and faster help.'],
+            ].map(([title, desc], i, arr) => `
+                <tr>
+                  <td style="padding:14px 20px;${i < arr.length - 1 ? `border-bottom:1px solid ${COLORS.border};` : ''}">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-right:14px;vertical-align:top;">
+                          <div style="width:20px;height:20px;border-radius:50%;background:${COLORS.accent};text-align:center;line-height:20px;color:#fff;font-size:12px;font-weight:800;">✓</div>
+                        </td>
+                        <td>
+                          <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:${COLORS.text};">${title}</p>
+                          <p style="margin:0;font-size:13px;color:${COLORS.textMuted};line-height:1.5;">${desc}</p>
+                        </td>
+                      </tr>
                     </table>
-                </td>
-            </tr>
+                  </td>
+                </tr>`).join('')}
         </table>
 
         <div style="text-align:center;margin-bottom:28px;">
-            ${button('Set up your first automation →', `${APP_URL}/automations`)}
+            ${button('Connect your account', `${APP_URL}/dashboard`)}
         </div>
 
         ${divider}
 
-        <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.35);line-height:1.6;text-align:center;">
-            Your trial runs until <strong style="color:rgba(255,255,255,0.55);">${expiryDate}</strong>.<br/>
-            After that, continue with Pro for just <strong style="color:rgba(255,255,255,0.55);">₹299/month</strong> — or stay on the free plan with up to 5 automations.
+        <p style="margin:0;font-size:13px;color:${COLORS.textMuted};line-height:1.65;text-align:center;">
+            Your trial runs until <strong style="color:${COLORS.textSoft};">${expiryDate}</strong>.<br/>
+            After that, continue with Pro for just <strong style="color:${COLORS.text};">₹299/month</strong> — or stay on the free plan with up to 5 automations.
         </p>
     `);
 
     return getResend().emails.send({
         from: FROM,
         to,
-        subject: `🎁 Your 30-day AutoDM Pro trial has started!`,
+        subject: 'Your 30-day AutoDM Pro trial is live',
         html,
     });
 }
 
-// ── 3. Trial expiry reminder (sent by /api/cron/expiring-soon) ────────────────
+// ── 2. Trial expiry reminder (sent by /api/cron/expiring-soon) ────────────────
 export async function sendTrialExpiringEmail({ to, name, daysLeft, trialEndsAt }) {
     const firstName = (name || to.split('@')[0]).split(' ')[0];
     const expiryDate = new Date(trialEndsAt).toLocaleDateString('en-IN', {
         day: 'numeric', month: 'long', year: 'numeric',
     });
+    const dayWord = daysLeft === 1 ? 'day' : 'days';
 
     const html = layout(`
-        <div style="text-align:center;margin-bottom:28px;">
-            <div style="display:inline-block;padding:8px 20px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:100px;font-size:13px;font-weight:700;color:#FCD34D;margin-bottom:20px;">
-                ⚠️ Trial ending in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}
+        <div style="text-align:center;margin-bottom:30px;">
+            <div style="display:inline-block;padding:7px 18px;background:${COLORS.warnSoft};border:1px solid ${COLORS.warnBorder};border-radius:100px;font-size:12px;font-weight:700;color:${COLORS.warn};letter-spacing:0.04em;text-transform:uppercase;margin-bottom:20px;">
+                Trial ends in ${daysLeft} ${dayWord}
             </div>
-            <h1 style="margin:0 0 10px;font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.04em;">
-                Don't lose your Pro features, ${firstName}
+            <h1 style="margin:0 0 10px;font-size:26px;font-weight:800;color:${COLORS.text};letter-spacing:-0.03em;line-height:1.25;">
+                Don't lose your Pro features, ${firstName}.
             </h1>
-            <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.5);line-height:1.65;">
-                Your free trial ends on <strong style="color:rgba(255,255,255,0.7);">${expiryDate}</strong>.<br/>
+            <p style="margin:0;font-size:15px;color:${COLORS.textSoft};line-height:1.65;">
+                Your AutoDM Pro trial ends on <strong style="color:${COLORS.text};">${expiryDate}</strong>.<br/>
                 Upgrade now to keep your Pro automations firing without interruption.
             </p>
         </div>
 
-        <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(167,139,250,0.2);border-radius:14px;padding:20px 24px;margin-bottom:28px;">
-            <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#fff;">AutoDM Pro</p>
-            <p style="margin:0 0 14px;font-size:13px;color:rgba(255,255,255,0.45);">
+        <div style="background:${COLORS.cardSubtle};border:1px solid ${COLORS.border};border-radius:14px;padding:22px 24px;margin-bottom:28px;">
+            <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:${COLORS.text};">AutoDM Pro</p>
+            <p style="margin:0 0 16px;font-size:13px;color:${COLORS.textMuted};line-height:1.5;">
                 Unlimited automations · Email Collector · Story Mention Auto-DM · Ask-to-Follow · Priority support
             </p>
-            <p style="margin:0;font-size:28px;font-weight:800;color:#A78BFA;letter-spacing:-0.04em;">
-                ₹299<span style="font-size:15px;font-weight:400;color:rgba(255,255,255,0.4)">/month</span>
+            <p style="margin:0;font-size:30px;font-weight:800;color:${COLORS.accent};letter-spacing:-0.04em;">
+                ₹299<span style="font-size:15px;font-weight:500;color:${COLORS.textMuted};">/month</span>
             </p>
         </div>
 
         <div style="text-align:center;margin-bottom:28px;">
-            ${button('Upgrade to Pro →', `${APP_URL}/pricing`)}
+            ${button('Upgrade to Pro', `${APP_URL}/pricing`)}
         </div>
 
         ${divider}
 
-        <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.32);text-align:center;line-height:1.6;">
+        <p style="margin:0;font-size:13px;color:${COLORS.textMuted};text-align:center;line-height:1.65;">
             If you don't upgrade, your account moves to the free plan (up to 5 automations).<br/>
-            <strong style="color:rgba(255,255,255,0.55);">Email Collector, Story Mention Auto-DM and Ask-to-Follow stop firing</strong> on free.<br/>
+            <strong style="color:${COLORS.textSoft};">Email Collector, Story Mention Auto-DM and Ask-to-Follow stop firing</strong> on free.<br/>
             All your saved data stays intact.
         </p>
     `);
@@ -275,12 +253,12 @@ export async function sendTrialExpiringEmail({ to, name, daysLeft, trialEndsAt }
     return getResend().emails.send({
         from: FROM,
         to,
-        subject: `⚠️ Your AutoDM Pro trial expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`,
+        subject: `Your AutoDM Pro trial expires in ${daysLeft} ${dayWord}`,
         html,
     });
 }
 
-// ── 4. Pro subscription expiring soon (cron — 7 days before plan_expires_at) ──
+// ── 3. Pro subscription expiring soon (cron — 7 days before plan_expires_at) ──
 // Sent to users on PAID Pro whose subscription is within 7 days of expiry,
 // once per expiry value. Without this email, paid users hit free silently
 // when their period ends — main cause of involuntary churn for products
@@ -290,47 +268,45 @@ export async function sendProExpiringEmail({ to, name, daysLeft, expiresAt }) {
     const expiryDate = new Date(expiresAt).toLocaleDateString('en-IN', {
         day: 'numeric', month: 'long', year: 'numeric',
     });
+    const dayWord = daysLeft === 1 ? 'day' : 'days';
 
     const html = layout(`
-        <div style="text-align:center;margin-bottom:28px;">
-            <div style="display:inline-block;padding:8px 20px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:100px;font-size:13px;font-weight:700;color:#FCD34D;margin-bottom:20px;">
-                ⏰ Pro expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}
+        <div style="text-align:center;margin-bottom:30px;">
+            <div style="display:inline-block;padding:7px 18px;background:${COLORS.warnSoft};border:1px solid ${COLORS.warnBorder};border-radius:100px;font-size:12px;font-weight:700;color:${COLORS.warn};letter-spacing:0.04em;text-transform:uppercase;margin-bottom:20px;">
+                Pro expires in ${daysLeft} ${dayWord}
             </div>
-            <h1 style="margin:0 0 10px;font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.04em;">
-                Renew your Pro plan, ${firstName}
+            <h1 style="margin:0 0 10px;font-size:26px;font-weight:800;color:${COLORS.text};letter-spacing:-0.03em;line-height:1.25;">
+                Renew your Pro plan, ${firstName}.
             </h1>
-            <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.5);line-height:1.65;">
-                Your AutoDM Pro subscription ends on <strong style="color:rgba(255,255,255,0.7);">${expiryDate}</strong>.<br/>
-                Renew now to keep Email Collector, Story Mention Auto-DM, Ask-to-Follow and all Pro features active.
+            <p style="margin:0;font-size:15px;color:${COLORS.textSoft};line-height:1.65;">
+                Your AutoDM Pro subscription ends on <strong style="color:${COLORS.text};">${expiryDate}</strong>.<br/>
+                Renew to keep Email Collector, Story Mention Auto-DM, Ask-to-Follow and all Pro features active.
             </p>
         </div>
 
-        <div style="background:rgba(124,58,237,0.1);border:1px solid rgba(167,139,250,0.2);border-radius:14px;padding:20px 24px;margin-bottom:28px;">
-            <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td style="vertical-align:top;">
-                        <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#fff;">AutoDM Pro</p>
-                        <p style="margin:0 0 14px;font-size:13px;color:rgba(255,255,255,0.45);">
-                            Unlimited automations · Email Collector · Story Mention Auto-DM · Ask-to-Follow · Priority support
-                        </p>
-                        <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.55);">
-                            <strong style="color:#A78BFA;">₹299/month</strong> &nbsp;·&nbsp; <strong style="color:#A78BFA;">₹2,999/year</strong> (save ₹589)
-                        </p>
-                    </td>
-                </tr>
-            </table>
+        <div style="background:${COLORS.cardSubtle};border:1px solid ${COLORS.border};border-radius:14px;padding:22px 24px;margin-bottom:28px;">
+            <p style="margin:0 0 6px;font-size:15px;font-weight:700;color:${COLORS.text};">AutoDM Pro</p>
+            <p style="margin:0 0 16px;font-size:13px;color:${COLORS.textMuted};line-height:1.5;">
+                Unlimited automations · Email Collector · Story Mention Auto-DM · Ask-to-Follow · Priority support
+            </p>
+            <p style="margin:0;font-size:14px;color:${COLORS.textSoft};">
+                <strong style="color:${COLORS.accent};font-size:18px;">₹299/month</strong>
+                &nbsp;·&nbsp;
+                <strong style="color:${COLORS.accent};font-size:18px;">₹2,999/year</strong>
+                <span style="color:${COLORS.textMuted};">(save ₹589)</span>
+            </p>
         </div>
 
         <div style="text-align:center;margin-bottom:28px;">
-            ${button('Renew Pro →', `${APP_URL}/pricing`)}
+            ${button('Renew Pro', `${APP_URL}/pricing`)}
         </div>
 
         ${divider}
 
-        <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.32);text-align:center;line-height:1.6;">
-            We don't auto-renew, so if you do nothing your account will move to the free plan
+        <p style="margin:0;font-size:13px;color:${COLORS.textMuted};text-align:center;line-height:1.65;">
+            We don't auto-renew, so if you do nothing your account moves to the free plan
             (up to 5 automations) on ${expiryDate}.<br/>
-            <strong style="color:rgba(255,255,255,0.55);">Email Collector, Story Mention Auto-DM and Ask-to-Follow stop firing</strong> on free —
+            <strong style="color:${COLORS.textSoft};">Email Collector, Story Mention Auto-DM and Ask-to-Follow stop firing</strong> on free —
             but all your saved data stays intact.
         </p>
     `);
@@ -338,7 +314,7 @@ export async function sendProExpiringEmail({ to, name, daysLeft, expiresAt }) {
     return getResend().emails.send({
         from: FROM,
         to,
-        subject: `⏰ Your AutoDM Pro expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`,
+        subject: `Your AutoDM Pro expires in ${daysLeft} ${dayWord}`,
         html,
     });
 }

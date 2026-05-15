@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { fetchAllCommenters, parseKeywords } from '@/lib/broadcast-helpers';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/broadcast/start?postId=xxx
@@ -12,6 +13,8 @@ export async function GET(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ job: null });
 
     const { searchParams } = new URL(request.url);
     const postId = searchParams.get('postId');
@@ -21,7 +24,7 @@ export async function GET(request) {
         .from('broadcast_jobs')
         .select('id, status')
         .eq('post_id', postId)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .in('status', ['pending', 'running', 'paused'])
         .order('created_at', { ascending: false })
         .maybeSingle();
@@ -50,6 +53,8 @@ export async function POST(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const body = await request.json();
     const { postId, dmType, dmConfig, rateLimitPerMin = 20, keywords: rawKeywords = '' } = body;
@@ -62,12 +67,12 @@ export async function POST(request) {
     // ── Verify post + fetch connected account ─────────────────────
     const { data: post } = await supabase
         .from('instagram_posts')
-        .select('id, ig_post_id, account_id, connected_accounts!inner(user_id, ig_user_id, access_token, fb_page_access_token)')
+        .select('id, ig_post_id, account_id, connected_accounts!inner(user_id, workspace_id, ig_user_id, access_token, fb_page_access_token)')
         .eq('id', postId)
         .single();
 
     if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
-    if (post.connected_accounts.user_id !== user.id) {
+    if (post.connected_accounts.workspace_id !== workspaceId) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -83,7 +88,7 @@ export async function POST(request) {
         .from('broadcast_jobs')
         .select('id, status')
         .eq('post_id', postId)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .in('status', ['pending', 'running'])
         .maybeSingle();
 
@@ -109,7 +114,7 @@ export async function POST(request) {
         .from('dm_automations')
         .select('id')
         .eq('post_id', postId)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .maybeSingle();
 
     // ── Find who already got a DM (so we can skip them) ──────────
@@ -146,6 +151,7 @@ export async function POST(request) {
         .from('broadcast_jobs')
         .insert({
             user_id:           user.id,
+            workspace_id:      workspaceId,
             automation_id:     automation?.id || null,
             post_id:           postId,
             ig_post_id:        post.ig_post_id,

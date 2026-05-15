@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 import IceBreakersView from './IceBreakersView';
 import { getUserEffectivePlan } from '@/lib/plan-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * /tools/ice-breakers — account-level Ice Breakers editor.
@@ -23,18 +24,19 @@ export default async function IceBreakersPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+  const workspaceId = await getActiveWorkspaceId(supabase);
 
   // Active connected account — Ice Breakers attach per-account at the
   // Meta `messenger_profile` API, so we need the account id + a way
   // to render the IG handle / avatar in the preview.
-  const { data: account } = await supabase
+  const { data: account } = workspaceId ? await supabase
     .from('connected_accounts')
     .select('id, ig_username, ig_profile_picture_url, default_config')
-    .eq('user_id', user.id)
+    .eq('workspace_id', workspaceId)
     .eq('is_active', true)
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle();
+    .maybeSingle() : { data: null };
 
   if (!account) {
     // No connected account → bounce them to settings to connect one.

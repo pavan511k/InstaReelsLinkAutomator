@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
-import { sendTrialStartedEmail } from '@/lib/email';
 import {
     exchangeCodeForInstagramToken,
     getInstagramLongLivedToken,
@@ -13,22 +12,23 @@ import {
     getMetaUser,
 } from '@/lib/meta-oauth';
 import { GRAPH_API_VERSION, GRAPH_FB_BASE, GRAPH_IG_BASE } from '@/lib/meta-graph';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * Sync all posts for a user using a service-role client.
  * Called from the OAuth callback so it doesn't rely on session cookies.
  */
-async function syncPostsForUser(userId) {
+async function syncPostsForUser(userId, workspaceId) {
     const db = createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.SUPABASE_SERVICE_ROLE_KEY,
     );
 
-    const { data: accounts } = await db
-        .from('connected_accounts')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('is_active', true);
+    // Scope to the workspace just connected to so we sync exactly that
+    // account, not other workspaces' accounts the user already owns.
+    let q = db.from('connected_accounts').select('*').eq('is_active', true);
+    q = workspaceId ? q.eq('workspace_id', workspaceId) : q.eq('user_id', userId);
+    const { data: accounts } = await q;
 
     if (!accounts || accounts.length === 0) return;
 
@@ -43,22 +43,24 @@ async function syncPostsForUser(userId) {
                 const useIgApi = !account.fb_page_access_token && account.platform === 'instagram';
                 const igBase = useIgApi ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
                 const igRes = await fetch(
-                    `${igBase}/${GRAPH_API_VERSION}/${account.ig_user_id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&limit=100&access_token=${token}`
+                    `${igBase}/${GRAPH_API_VERSION}/${account.ig_user_id}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count&limit=100&access_token=${token}`
                 );
                 if (igRes.ok) {
                     const igData = await igRes.json();
                     for (const p of igData.data || []) {
                         allPosts.push({
-                            account_id: account.id,
-                            ig_post_id: p.id,
-                            media_type: p.media_type,
-                            media_url: p.media_url || null,
-                            thumbnail_url: p.thumbnail_url || p.media_url || null,
-                            caption: p.caption || '',
-                            permalink: p.permalink || '',
-                            timestamp: p.timestamp,
-                            is_story: false,
-                            synced_at: new Date().toISOString(),
+                            account_id:     account.id,
+                            ig_post_id:     p.id,
+                            media_type:     p.media_type,
+                            media_url:      p.media_url || null,
+                            thumbnail_url:  p.thumbnail_url || p.media_url || null,
+                            caption:        p.caption || '',
+                            permalink:      p.permalink || '',
+                            timestamp:      p.timestamp,
+                            is_story:       false,
+                            like_count:     typeof p.like_count     === 'number' ? p.like_count     : null,
+                            comments_count: typeof p.comments_count === 'number' ? p.comments_count : null,
+                            synced_at:      new Date().toISOString(),
                         });
                     }
                 }
@@ -69,24 +71,28 @@ async function syncPostsForUser(userId) {
             try {
                 const token = account.fb_page_access_token || account.access_token;
                 const fbRes = await fetch(
-                    `${GRAPH_FB_BASE}/${account.fb_page_id}/posts?fields=id,message,permalink_url,created_time,attachments{media_type,media{image{src}},url}&limit=100&access_token=${token}`
+                    `${GRAPH_FB_BASE}/${account.fb_page_id}/posts?fields=id,message,permalink_url,created_time,attachments{media_type,media{image{src}},url},comments.summary(true).limit(0),reactions.summary(true).limit(0)&limit=100&access_token=${token}`
                 );
                 if (fbRes.ok) {
                     const fbData = await fbRes.json();
                     for (const p of fbData.data || []) {
                         const att = p.attachments?.data?.[0];
                         const mediaUrl = att?.media?.image?.src || att?.url || null;
+                        const commentsTotal  = p.comments?.summary?.total_count;
+                        const reactionsTotal = p.reactions?.summary?.total_count;
                         allPosts.push({
-                            account_id: account.id,
-                            ig_post_id: `fb_${p.id}`,
-                            media_type: att?.media_type === 'video' ? 'VIDEO' : 'IMAGE',
-                            media_url: mediaUrl,
-                            thumbnail_url: mediaUrl,
-                            caption: p.message || '',
-                            permalink: p.permalink_url || '',
-                            timestamp: p.created_time,
-                            is_story: false,
-                            synced_at: new Date().toISOString(),
+                            account_id:     account.id,
+                            ig_post_id:     `fb_${p.id}`,
+                            media_type:     att?.media_type === 'video' ? 'VIDEO' : 'IMAGE',
+                            media_url:      mediaUrl,
+                            thumbnail_url:  mediaUrl,
+                            caption:        p.message || '',
+                            permalink:      p.permalink_url || '',
+                            timestamp:      p.created_time,
+                            is_story:       false,
+                            like_count:     typeof reactionsTotal === 'number' ? reactionsTotal : null,
+                            comments_count: typeof commentsTotal  === 'number' ? commentsTotal  : null,
+                            synced_at:      new Date().toISOString(),
                         });
                     }
                 }
@@ -147,15 +153,67 @@ export async function GET(request) {
             accountData = await handleFacebookCallback(code, userId, connectionType);
         }
 
-        // Save to Supabase — multi-account: one row per user per platform
+        // Save to Supabase — connected to the user's active workspace.
         const supabase = await createClient();
         const platform = accountData.platform;
+        const workspaceId = await getActiveWorkspaceId(supabase);
 
-        // Check for existing account (active or inactive) for this user + platform
+        if (!workspaceId) {
+            return NextResponse.redirect(`${appUrl}/dashboard?error=no_workspace`);
+        }
+
+        // Block if the same IG/FB account is already connected anywhere.
+        // The unique partial index on connected_accounts(ig_user_id) /
+        // (fb_page_id) enforces this at the DB level — we just need to
+        // surface a friendly error before the insert fails.
+        //
+        // The lookup uses the SERVICE-ROLE client so it sees rows owned
+        // by other users too. RLS would otherwise hide them, and a
+        // cross-user collision would slip through to a generic
+        // "save_failed" redirect when the unique index ultimately rejects
+        // the insert.
+        //
+        // Two cases:
+        //   1. Same user, different workspace → redirect with
+        //      `account_in_other_workspace` + `target_ws` so /settings
+        //      offers a "Switch to {workspace}" action.
+        //   2. Different user owns it → redirect with
+        //      `account_in_use_elsewhere`. We don't expose which user
+        //      owns it; that's a privacy / security boundary.
+        if (accountData.ig_user_id || accountData.fb_page_id) {
+            const idColumn = accountData.ig_user_id ? 'ig_user_id' : 'fb_page_id';
+            const idValue  = accountData.ig_user_id || accountData.fb_page_id;
+            const serviceDb = createServiceClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL,
+                process.env.SUPABASE_SERVICE_ROLE_KEY,
+            );
+            const { data: existingAnywhere } = await serviceDb
+                .from('connected_accounts')
+                .select('id, user_id, workspace_id')
+                .eq(idColumn, idValue)
+                .maybeSingle();
+
+            if (existingAnywhere && existingAnywhere.user_id !== userId) {
+                // Owned by a different user account entirely.
+                const redirectUrl = new URL('/settings', appUrl);
+                redirectUrl.searchParams.set('error', 'account_in_use_elsewhere');
+                return NextResponse.redirect(redirectUrl.toString());
+            }
+
+            if (existingAnywhere && existingAnywhere.workspace_id !== workspaceId) {
+                // Same user, just in another workspace.
+                const redirectUrl = new URL('/settings', appUrl);
+                redirectUrl.searchParams.set('error', 'account_in_other_workspace');
+                redirectUrl.searchParams.set('target_ws', existingAnywhere.workspace_id);
+                return NextResponse.redirect(redirectUrl.toString());
+            }
+        }
+
+        // Check for existing account (active or inactive) for this workspace + platform
         const { data: existingAccount } = await supabase
             .from('connected_accounts')
             .select('id, is_active')
-            .eq('user_id', userId)
+            .eq('workspace_id', workspaceId)
             .eq('platform', platform)
             .maybeSingle();
 
@@ -187,58 +245,39 @@ export async function GET(request) {
                 excludeKeywords:   [],
                 triggerType:       'keywords',
                 defaultMessage:    '',
-                defaultButtonName: '',
+                // Seed a friendly default for new accounts. The user can
+                // change it (including clearing to empty) in Settings;
+                // their saved value is then respected everywhere.
+                defaultButtonName: 'Shop now',
                 utmTag:            '',
             };
 
             // Insert account — credentials + config only, no plan columns.
+            // workspace_id binds this account to the active workspace.
             const { error: insertError } = await supabase
                 .from('connected_accounts')
-                .insert({ ...accountData, is_active: true, default_config: defaultConfig });
+                .insert({
+                    ...accountData,
+                    workspace_id:   workspaceId,
+                    is_active:      true,
+                    default_config: defaultConfig,
+                });
 
             if (insertError) {
                 console.error('Failed to save account:', insertError);
                 return NextResponse.redirect(`${appUrl}/dashboard?error=save_failed`);
             }
 
-            // ── Upsert trial into user_plans (only if no plan row exists yet) ──
-            // If the user already paid before connecting, their user_plans row is
-            // already set to 'pro' by the payment webhook — don't overwrite it.
-            const trialEndsAt = new Date();
-            trialEndsAt.setDate(trialEndsAt.getDate() + 30);
-
-            try {
-                // ignoreDuplicates: true means: insert if no row exists, skip if one already does.
-                // This preserves a pre-existing paid plan row.
-                await supabase.from('user_plans').upsert(
-                    { user_id: userId, plan: 'free', trial_ends_at: trialEndsAt.toISOString() },
-                    { onConflict: 'user_id', ignoreDuplicates: true },
-                );
-            } catch { /* non-fatal — layout falls back to 'free' */ }
-
-            // Send trial-started email to the new user (non-critical)
-            try {
-                const supabaseForEmail = await createClient();
-                const { data: { user: newUser } } = await supabaseForEmail.auth.getUser();
-                const userEmail = newUser?.email;
-                const userName  = newUser?.user_metadata?.full_name || '';
-                if (userEmail) {
-                    sendTrialStartedEmail({
-                        to:          userEmail,
-                        name:        userName,
-                        igUsername:  accountData.ig_username || '',
-                        trialEndsAt: trialEndsAt.toISOString(),
-                    }).catch((e) => console.warn('[Email] Trial started email failed:', e.message));
-                }
-            } catch (emailErr) {
-                console.warn('[Email] Could not send trial email:', emailErr.message);
-            }
+            // Trial provisioning + trial-started email moved to the
+            // email-verification callback (/auth/callback). By the time
+            // the user reaches this OAuth flow, they've already verified
+            // their email, so the trial row exists. Nothing to do here.
         }
         // Auto-sync posts after successful connection.
         // Uses a service-role client so this works regardless of whether the
         // session cookie survives the server-to-server fetch boundary.
         try {
-            await syncPostsForUser(userId);
+            await syncPostsForUser(userId, workspaceId);
             console.log('[OAuth Callback] Auto-sync completed after connection');
         } catch (syncErr) {
             // Non-critical — user can manually re-sync later from the automation builder.

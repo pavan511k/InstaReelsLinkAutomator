@@ -57,25 +57,26 @@ export async function GET(request) {
         return NextResponse.redirect(url);
     }
 
-    // Cross-platform conflict check — only one active platform at a time.
-    // Reconnecting the SAME platform is fine (token refresh); switching to
-    // a DIFFERENT platform requires explicit disconnect first.
-    const { data: activeAccounts } = await supabase
-        .from('connected_accounts')
-        .select('platform')
-        .eq('user_id', user.id)
-        .eq('is_active', true);
+    // Cross-platform conflict check — only one active platform per
+    // workspace. Reconnecting the SAME platform is fine (token refresh);
+    // switching to a DIFFERENT platform in the same workspace requires
+    // explicit disconnect first. Other workspaces are unaffected.
+    const { getActiveWorkspaceId } = await import('@/lib/workspace-context');
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (workspaceId) {
+        const { data: activeAccounts } = await supabase
+            .from('connected_accounts')
+            .select('platform')
+            .eq('workspace_id', workspaceId)
+            .eq('is_active', true);
 
-    if (activeAccounts && activeAccounts.length > 0) {
-        const conflictRow = activeAccounts.find((a) => a.platform !== connectionType);
-        if (conflictRow) {
-            // Send them to Settings — that's where they need to disconnect to
-            // proceed. Dashboard has no UI to surface this error since the
-            // ConnectAccount component (which owns the error banner) only
-            // renders when zero accounts are connected.
-            const url = new URL('/settings', request.url);
-            url.searchParams.set('error', 'disconnect_first');
-            return NextResponse.redirect(url);
+        if (activeAccounts && activeAccounts.length > 0) {
+            const conflictRow = activeAccounts.find((a) => a.platform !== connectionType);
+            if (conflictRow) {
+                const url = new URL('/settings', request.url);
+                url.searchParams.set('error', 'disconnect_first');
+                return NextResponse.redirect(url);
+            }
         }
     }
 

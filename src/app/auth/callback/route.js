@@ -3,6 +3,9 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { TRIAL_DAYS } from '@/lib/plans';
+import { sendTrialStartedEmail } from '@/lib/email';
+import { WORKSPACE_COOKIE_NAME } from '@/lib/workspace-context';
+import { enforceWorkspaceLocks } from '@/lib/workspace-locks';
 
 /**
  * GET /auth/callback
@@ -51,34 +54,106 @@ export async function GET(request) {
         return NextResponse.redirect(`${origin}/login?error=auth_failed`);
     }
 
-    // ── Step 2: provision trial (service role — bypasses user_plans RLS) ─
+    // ── Step 2: provision trial + send trial-started email ───────────────
+    // This is the single source of truth for "user becomes a paying-eligible
+    // trial user." Runs once per user — the first time they click the email
+    // verification link Supabase sent. Subsequent visits to this route (e.g.
+    // password resets that route through here) skip both the insert and the
+    // email because the user_plans row already exists.
+    let activeWorkspaceId = null;
     try {
         const serviceDb = createServiceClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL,
             process.env.SUPABASE_SERVICE_ROLE_KEY,
         );
 
-        const trialEndsAt = new Date();
-        trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS);
+        // Check if user_plans row exists. If not, insert AND send email.
+        // If yes, skip both (already onboarded — or paid plan, which we
+        // must never overwrite).
+        const userId = sessionData.user.id;
+        const { data: existingPlan } = await serviceDb
+            .from('user_plans').select('user_id')
+            .eq('user_id', userId).maybeSingle();
 
-        await serviceDb
-            .from('user_plans')
-            .upsert(
-                {
-                    user_id:       sessionData.user.id,
-                    plan:          'free',
-                    trial_ends_at: trialEndsAt.toISOString(),
-                },
-                {
-                    onConflict:       'user_id',
-                    ignoreDuplicates: true, // never overwrites an existing row (paid plans safe)
-                }
-            );
+        if (!existingPlan) {
+            const trialEndsAt = new Date();
+            trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS);
 
-        console.log(`[AuthCallback] Trial provisioned for user ${sessionData.user.id} — expires ${trialEndsAt.toDateString()}`);
+            await serviceDb.from('user_plans').insert({
+                user_id:       userId,
+                plan:          'free',
+                trial_ends_at: trialEndsAt.toISOString(),
+            });
+
+            console.log(`[AuthCallback] Trial provisioned for user ${userId} — expires ${trialEndsAt.toDateString()}`);
+
+            // Fire-and-forget trial-started email. Failure to send shouldn't
+            // block the redirect — user can still use the product.
+            const userEmail = sessionData.user.email;
+            const userName  = sessionData.user.user_metadata?.full_name || '';
+            if (userEmail) {
+                sendTrialStartedEmail({
+                    to:          userEmail,
+                    name:        userName,
+                    igUsername:  '', // not connected yet — email copy handles this
+                    trialEndsAt: trialEndsAt.toISOString(),
+                }).catch((e) => console.warn('[AuthCallback] Trial email send failed:', e.message));
+            }
+        }
+
+        // Default workspace provisioning. Single source of truth: every
+        // authenticated user has at least one workspace. The schema
+        // migration backfilled existing users; this branch covers brand
+        // new signups + any edge case where a user reached this route
+        // without a workspace row.
+        const { data: existingWs } = await serviceDb
+            .from('workspaces')
+            .select('id')
+            .eq('owner_id', userId)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+        if (existingWs) {
+            activeWorkspaceId = existingWs.id;
+        } else {
+            const { data: newWs } = await serviceDb
+                .from('workspaces')
+                .insert({ owner_id: userId, name: 'Default', slug: 'default' })
+                .select('id')
+                .single();
+            if (newWs) {
+                await serviceDb
+                    .from('workspace_members')
+                    .insert({ workspace_id: newWs.id, user_id: userId, role: 'owner' });
+                activeWorkspaceId = newWs.id;
+                console.log(`[AuthCallback] Default workspace ${newWs.id} created for user ${userId}`);
+            }
+        }
+
+        // Reconcile workspace locks defensively. Catches the case where a
+        // user's trial expired or paid plan lapsed since the last time
+        // they touched the app — the cron sweep handles this too, but
+        // running here means a returning user sees the right state on
+        // the very first page load after coming back.
+        try {
+            await enforceWorkspaceLocks(serviceDb, userId);
+        } catch (err) {
+            console.warn('[AuthCallback] Lock reconciliation failed:', err.message);
+        }
     } catch (err) {
-        // Non-fatal — layout has a fallback provisioner
-        console.warn('[AuthCallback] Trial provision failed (non-fatal):', err.message);
+        // Non-fatal — dashboard layout has a tertiary fallback provisioner.
+        console.warn('[AuthCallback] Trial/workspace provision failed (non-fatal):', err.message);
+    }
+
+    if (activeWorkspaceId) {
+        response.cookies.set(WORKSPACE_COOKIE_NAME, activeWorkspaceId, {
+            httpOnly: true,
+            sameSite: 'lax',
+            secure:   process.env.NODE_ENV === 'production',
+            path:     '/',
+            maxAge:   60 * 60 * 24 * 365,
+        });
     }
 
     return response;

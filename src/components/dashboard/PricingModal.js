@@ -29,6 +29,7 @@ const PLANS = [
     period: 'forever',
     highlight: false,
     features: [
+      '1 Workspace',
       '5 Automation Flows',
       'Comment-trigger automations',
       'Story-reply automations',
@@ -43,6 +44,7 @@ const PLANS = [
     highlight: true,
     badge: 'Most Popular',
     features: [
+      '5 Workspaces — manage multiple accounts',
       'Unlimited Automation Flows',
       'Email Collector — capture leads via DM',
       'Story Mention Auto-DM',
@@ -61,6 +63,7 @@ const PLANS = [
     comingSoon: true,
     features: [
       'Everything in Pro',
+      '10 Workspaces — for agencies & teams',
       'Dedicated Account Manager',
       'Custom Branding',
       'Advanced Lead Capture',

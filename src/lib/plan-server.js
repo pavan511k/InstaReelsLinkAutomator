@@ -11,7 +11,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getEffectivePlan } from '@/lib/plans';
+import { getEffectivePlan, getWorkspaceLimit } from '@/lib/plans';
 
 /**
  * Fetches and returns the effective plan string for a user.
@@ -72,4 +72,22 @@ export function requirePro(effectivePlan, message = 'This feature requires a Pro
         return null; // gate passes
     }
     return NextResponse.json({ error: message, upgradeRequired: true }, { status: 403 });
+}
+
+/**
+ * Returns { allowed: boolean, current: number, limit: number } describing
+ * whether the user can create another workspace under their current plan.
+ *
+ * Used by:
+ *   - POST /api/workspaces (block creation server-side)
+ *   - WorkspaceSwitcher UI (disable "Create" button + show upgrade prompt)
+ */
+export async function canCreateMoreWorkspaces(supabase, userId, effectivePlan) {
+    const { count } = await supabase
+        .from('workspaces')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', userId);
+    const current = count ?? 0;
+    const limit = getWorkspaceLimit(effectivePlan);
+    return { allowed: current < limit, current, limit };
 }

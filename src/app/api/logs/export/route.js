@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/logs/export
@@ -19,6 +20,8 @@ export async function GET(request) {
     if (!user) {
         return new Response('Not authenticated', { status: 401 });
     }
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return new Response('No active workspace', { status: 400 });
 
     const { searchParams } = new URL(request.url);
     const status   = searchParams.get('status')   || 'all';
@@ -35,7 +38,7 @@ export async function GET(request) {
         const { data: userAutomations } = await supabase
             .from('dm_automations')
             .select('id, dm_type, instagram_posts(id, caption, ig_post_id)')
-            .eq('user_id', user.id);
+            .eq('workspace_id', workspaceId);
 
         // automation_id → { caption, dmType, postId }
         const autoMap = {};
@@ -67,7 +70,7 @@ export async function GET(request) {
         let query = supabase
             .from('dm_sent_log')
             .select('id, automation_id, recipient_ig_id, comment_id, comment_text, status, error_message, sent_at, platform')
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .order('sent_at', { ascending: false })
             .limit(50_000);
 

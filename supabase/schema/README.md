@@ -33,6 +33,7 @@ is safe and will not overwrite data.
 | 16 | `16_storage_dm_images.sql` | Storage bucket for DM slide images |
 | 17 | `17_admin_email_log.sql` | Audit log for the admin /admin/email tool |
 | 18 | `18_contacts_rpc.sql` | `contacts_for_user(uuid)` RPC powering /contacts |
+| 19 | `19_workspaces.sql` | Workspaces + memberships, adds `workspace_id` to all scoped tables |
 
 > **Order matters.** Each table references tables created by earlier scripts
 > via foreign keys. Running out of order will produce FK constraint errors.

@@ -52,11 +52,51 @@ export async function DELETE() {
     try {
         // ── 1. Collect IDs ──────────────────────────────────────────────────
 
-        // Connected account IDs
+        // Connected account IDs + full row (tokens needed for Meta-side
+        // cleanup below — must fetch BEFORE we scrub/delete the rows).
         const { data: accounts } = await db
-            .from('connected_accounts').select('id')
+            .from('connected_accounts')
+            .select('id, ig_user_id, fb_page_id, access_token, fb_page_access_token, default_config')
             .eq('user_id', user.id);
         const accountIds = (accounts || []).map((a) => a.id);
+
+        // ── 1a. Meta-side cleanup BEFORE we scrub the tokens ────────────
+        // Currently only Ice Breakers persist on Meta after our row delete.
+        // Without this DELETE, the openers we pushed to messenger_profile
+        // keep rendering in the fan's Instagram inbox until manually
+        // removed. Best-effort — failure here doesn't block delete.
+        for (const acc of (accounts || [])) {
+            const hasIceBreakers = Array.isArray(acc.default_config?.iceBreakers)
+                && acc.default_config.iceBreakers.length > 0;
+            if (!hasIceBreakers) continue;
+            const token    = acc.fb_page_access_token || acc.access_token;
+            const pageOrIg = acc.fb_page_id || acc.ig_user_id;
+            const base     = acc.fb_page_access_token
+                ? 'https://graph.facebook.com/v21.0'
+                : 'https://graph.instagram.com/v21.0';
+            if (!token || !pageOrIg) continue;
+            try {
+                const url =
+                    `${base}/${pageOrIg}/messenger_profile` +
+                    `?platform=instagram` +
+                    `&access_token=${encodeURIComponent(token)}`;
+                const res = await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fields: ['ice_breakers'] }),
+                });
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    console.warn('[AccountDelete] Meta ice_breakers DELETE failed for',
+                        acc.id, ':', body.error?.message || res.status);
+                } else {
+                    console.log('[AccountDelete] Meta ice_breakers cleared for', acc.id);
+                }
+            } catch (err) {
+                console.warn('[AccountDelete] Meta ice_breakers DELETE threw for',
+                    acc.id, ':', err.message);
+            }
+        }
 
         // Instagram post IDs
         let postIds = [];

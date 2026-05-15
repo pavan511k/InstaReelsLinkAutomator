@@ -27,6 +27,30 @@ export const PRO_AUTOMATION_LIMIT  = null; // unlimited
 export const FREE_SLIDE_LIMIT = 3;
 
 /**
+ * Workspace count caps per plan.
+ * Free: 1 (just the default workspace).
+ * Pro / Trial: 5 separate workspaces.
+ * Business: 10 separate workspaces.
+ *
+ * When a paid user downgrades, excess workspaces are soft-locked
+ * (read-only, no automation activations). See workspaces.is_locked.
+ */
+export const FREE_WORKSPACE_LIMIT     = 1;
+export const PRO_WORKSPACE_LIMIT      = 5;
+export const BUSINESS_WORKSPACE_LIMIT = 10;
+
+/**
+ * Returns the workspace count cap for an effective plan string.
+ * @param {'free' | 'trial' | 'pro' | 'business'} effectivePlan
+ * @returns {number}
+ */
+export function getWorkspaceLimit(effectivePlan) {
+    if (effectivePlan === 'business') return BUSINESS_WORKSPACE_LIMIT;
+    if (effectivePlan === 'pro' || effectivePlan === 'trial') return PRO_WORKSPACE_LIMIT;
+    return FREE_WORKSPACE_LIMIT;
+}
+
+/**
  * Single source of truth for purchasable billing plans.
  *
  * Each entry is what users CAN BUY (the SKU). The `entitlement` field maps

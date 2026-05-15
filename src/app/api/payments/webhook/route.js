@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createHmac } from 'crypto';
 import { BILLING_PLANS, computePlanExpiresAt } from '@/lib/plans';
+import { enforceWorkspaceLocks } from '@/lib/workspace-locks';
 
 function createSupabase() {
     return createServiceClient(
@@ -129,6 +130,18 @@ export async function POST(request) {
             .from('payment_orders')
             .update({ status: 'paid', paid_at: new Date().toISOString() })
             .eq('order_id', orderId);
+
+        // Reconcile workspace locks: the new plan likely covers more
+        // workspaces than the previous one, so previously-locked entries
+        // need to unlock. Non-fatal — webhook still acks the payment.
+        try {
+            const result = await enforceWorkspaceLocks(supabase, order.user_id);
+            if (result.unlocked.length > 0) {
+                console.log(`[Webhook/Payments] Unlocked ${result.unlocked.length} workspace(s) for ${order.user_id}`);
+            }
+        } catch (err) {
+            console.warn('[Webhook/Payments] Lock reconciliation failed:', err.message);
+        }
     }
 
     if (eventType === 'PAYMENT_FAILED' || eventType === 'PAYMENT_USER_DROPPED') {

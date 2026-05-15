@@ -144,23 +144,11 @@ export async function sendMultiCtaDM(igUserId, recipientId, message, buttons, ac
         throw new Error('Multi-CTA requires at least one button with a label and URL');
     }
 
-    // Subtitle rules mirror applyBranding: opt-out wins; Pro shows only
-    // their own custom branding (no AutoDM push on paid plans); free tier
-    // gets the minimal "autodm.pro" tag. The em-dash convention for plain
-    // DMs is dropped here because the template subtitle is already a
-    // visually distinct line under the title.
-    let subtitle;
-    if (dmConfig?.appendBranding === false) {
-        subtitle = undefined;
-    } else {
-        const isPro = plan === 'pro' || plan === 'business' || plan === 'trial';
-        if (isPro) {
-            const customBranding = (dmConfig?.branding || '').trim();
-            subtitle = customBranding ? customBranding.slice(0, 80) : undefined;
-        } else {
-            subtitle = 'autodm.pro';
-        }
-    }
+    // Subtitle rule (matches applyBranding):
+    //   - Paid (pro/business/trial): clean, no subtitle
+    //   - Free: "Powered by autodm.pro" subtitle
+    const isPaid    = plan === 'pro' || plan === 'business' || plan === 'trial';
+    const subtitle  = isPaid ? undefined : FREE_BRANDING_SUFFIX;
 
     // Meta's generic_template caps title at 80 chars. We hard-truncate so
     // the preview and the wire content stay consistent (the preview also
@@ -213,13 +201,11 @@ export async function sendButtonTemplateDM(igUserId, recipientId, slides, access
     const url = `${base}/${igUserId}/messages`;
 
     // Per-slide branding mirrors applyBranding:
-    //   - opt-out wins (no subtitle suffix added)
-    //   - Pro: only their custom string (paid plans don't get an AutoDM push)
-    //   - free: minimal "autodm.pro" tag
-    const isPro = plan === 'pro' || plan === 'business' || plan === 'trial';
-    const customBranding = isPro ? (dmConfig?.branding || '').trim() : '';
-    const brandLabel     = isPro ? customBranding : 'autodm.pro';
-    const shouldAppend   = dmConfig?.appendBranding !== false && !!brandLabel;
+    //   - Paid (pro/business/trial): clean, no auto-appended branding
+    //   - Free: "Powered by autodm.pro" rendered as the subtitle line
+    const isPaid       = plan === 'pro' || plan === 'business' || plan === 'trial';
+    const brandLabel   = isPaid ? '' : FREE_BRANDING_SUFFIX;
+    const shouldAppend = !!brandLabel;
 
     const cappedSlides = (slides || []).slice(0, META_MAX_CARDS);
     if ((slides || []).length > META_MAX_CARDS) {
@@ -235,7 +221,10 @@ export async function sendButtonTemplateDM(igUserId, recipientId, slides, access
         }
 
         const element = {
-            title: slide.headline || 'AutoDM',
+            // Meta requires a non-empty title on generic_template elements.
+            // Callers should always pass slide.headline; the fallback exists
+            // only to keep Meta from rejecting the whole DM if a caller forgets.
+            title: slide.headline || 'Take a look 👇',
             ...(subtitle ? { subtitle } : {}),
         };
 
@@ -559,29 +548,21 @@ function normaliseUrl(raw) {
 // Minimal one-line attribution for free-tier DMs. Instagram auto-detects
 // the bare domain and renders it as a tappable link without us adding any
 // "https://" preamble that would make it look like a spam footer.
-export const FREE_BRANDING_SUFFIX = '— autodm.pro';
+export const FREE_BRANDING_SUFFIX = 'Powered by autodm.pro';
 
-export function applyBranding(message, dmConfig, plan) {
+/**
+ * Append the free-tier branding footer on a new line. Paid plans
+ * (pro / business / trial) get the message clean. The previous
+ * `dm_config.branding` / `appendBranding` custom-branding feature was
+ * never surfaced in the UI; removed to keep the rules simple.
+ *
+ * Always uses `\n\n` so the footer renders as its own paragraph in the
+ * DM — never concatenated mid-line with the user's message.
+ */
+export function applyBranding(message, _dmConfig, plan) {
     const trimmed = (message || '').trimEnd();
-
-    // Rules:
-    //   - dmConfig.appendBranding === false  -> always clean (explicit opt-out)
-    //   - Pro/Trial + dmConfig.branding set  -> append the user's custom line
-    //   - Pro/Trial + no custom branding     -> clean (paid plans don't get
-    //                                          our default branding pushed)
-    //   - free / non-Pro                     -> minimal "— autodm.pro" footer
-    if (dmConfig?.appendBranding === false) return trimmed;
-
-    const isPro = plan === 'pro' || plan === 'business' || plan === 'trial';
-
-    if (isPro) {
-        const custom = (dmConfig?.branding || '').trim();
-        if (!custom) return trimmed;
-        const customLine = `— ${custom}`;
-        if (trimmed.endsWith(custom) || trimmed.endsWith(customLine)) return trimmed;
-        return `${trimmed}\n\n${customLine}`;
-    }
-
+    const isPaid  = plan === 'pro' || plan === 'business' || plan === 'trial';
+    if (isPaid) return trimmed;
     if (trimmed.endsWith(FREE_BRANDING_SUFFIX)) return trimmed;
     return `${trimmed}\n\n${FREE_BRANDING_SUFFIX}`;
 }
@@ -717,9 +698,28 @@ export async function sendAutomatedDM(automation, recipientId, accessToken, igUs
             }
 
             if (imageUrl) {
+                // Headline shown above the image-card buttons. Meta requires
+                // a non-empty title (max 80 chars). Fallback order:
+                //   1. Explicit imageHeadline set on the automation (builder field)
+                //   2. First line of the message — natural-looking default
+                //   3. A neutral placeholder so we never push the literal "AutoDM"
+                const explicitHeadline = (dm_config.imageHeadline || '').trim();
+                const firstLine        = (mainMessage.split('\n').find((l) => l.trim()) || '').trim();
+                const slideHeadline    =
+                    (explicitHeadline && explicitHeadline.slice(0, 80))
+                    || (firstLine && firstLine.slice(0, 80))
+                    || 'Take a look 👇';
+
+                // If the headline is just the first line of the message, drop
+                // that line from the description to avoid the same text appearing
+                // twice (title + subtitle would be redundant).
+                const description = !explicitHeadline && firstLine && mainMessage.startsWith(firstLine)
+                    ? mainMessage.slice(firstLine.length).trimStart()
+                    : mainMessage;
+
                 const slide = {
-                    headline:    'AutoDM',
-                    description: mainMessage,
+                    headline:    slideHeadline,
+                    description,
                     imageUrl,
                     ...(validButtons.length > 0 && {
                         buttons: validButtons.map((b) => ({ type: 'url', label: b.label, value: b.url })),

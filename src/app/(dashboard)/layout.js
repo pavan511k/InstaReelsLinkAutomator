@@ -2,7 +2,9 @@ import { createClient } from '@/lib/supabase-server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/dashboard/Sidebar';
-import { getEffectivePlan, trialDaysRemaining, getDmLimit, TRIAL_DAYS } from '@/lib/plans';
+import LockedWorkspaceBanner from '@/components/dashboard/LockedWorkspaceBanner';
+import { getEffectivePlan, trialDaysRemaining, getDmLimit, TRIAL_DAYS, getWorkspaceLimit } from '@/lib/plans';
+import { getActiveWorkspace } from '@/lib/workspace-context';
 
 export const metadata = {
     title: 'Dashboard — AutoDM',
@@ -23,13 +25,31 @@ export default async function DashboardLayout({ children }) {
     let monthlyDmCount      = 0;
     let dmCountMonth        = null;
 
+    // Resolve the user's active workspace once — every connected_account /
+    // automation query in the sidebar + child pages scopes to this id.
+    const activeWorkspace = await getActiveWorkspace(supabase);
+    const activeWorkspaceId = activeWorkspace?.id ?? null;
+
+    // Workspace list + plan-aware "can create more" flag are passed into
+    // the Sidebar so the WorkspaceSwitcher renders without an extra
+    // round-trip on first paint.
+    let workspaces = [];
+    try {
+        const { data } = await supabase
+            .from('workspaces')
+            .select('id, name, slug, is_locked, created_at')
+            .eq('owner_id', user.id)
+            .order('created_at', { ascending: true });
+        workspaces = data || [];
+    } catch { /* table may not exist in very fresh deploys */ }
+
     // ── Connection status (credentials only — no plan columns here) ──────
     try {
-        const { data: accounts } = await supabase
+        const { data: accounts } = activeWorkspaceId ? await supabase
             .from('connected_accounts')
             .select('id, ig_profile_picture_url, platform')
-            .eq('user_id', user.id)
-            .eq('is_active', true);
+            .eq('workspace_id', activeWorkspaceId)
+            .eq('is_active', true) : { data: [] };
 
         if (accounts && accounts.length > 0) {
             isConnected   = true;
@@ -120,6 +140,9 @@ export default async function DashboardLayout({ children }) {
     const dmUsed       = dmCountMonth === currentMonth ? monthlyDmCount : 0;
     const dmLimit      = getDmLimit(effectivePlan);
 
+    const workspaceLimit     = getWorkspaceLimit(effectivePlan);
+    const canCreateWorkspace = workspaces.length < workspaceLimit;
+
     // Standard centered shell. Full-bleed routes (e.g., flow builder)
     // override these properties via `main:has(.builder-fullbleed)` in
     // globals.css — see comment there. We can't decide here based on
@@ -143,6 +166,10 @@ export default async function DashboardLayout({ children }) {
                 activePlatform={activePlatform}
                 dmUsed={dmUsed}
                 dmLimit={dmLimit}
+                workspaces={workspaces}
+                activeWorkspace={activeWorkspace}
+                workspaceLimit={workspaceLimit}
+                canCreateWorkspace={canCreateWorkspace}
             />
             <div className="flex min-w-0 flex-1 flex-col">
                 {/* Trial-status communication is split intentionally:
@@ -153,6 +180,15 @@ export default async function DashboardLayout({ children }) {
                     to the sidebar. Horizontal: 12/16/20/24px,
                     vertical: 32/40/48/56px. max-w-7xl prevents sprawl. */}
                 <main className={mainClass}>
+                    {activeWorkspace?.is_locked && (
+                        <div className="mb-4">
+                            <LockedWorkspaceBanner
+                                workspaceName={activeWorkspace.name}
+                                workspaceLimit={workspaceLimit}
+                                plan={effectivePlan}
+                            />
+                        </div>
+                    )}
                     {children}
                 </main>
             </div>

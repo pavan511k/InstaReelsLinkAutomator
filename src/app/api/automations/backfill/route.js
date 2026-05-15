@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
 import { runBackfill } from '@/lib/backfill';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * POST /api/automations/backfill
@@ -19,6 +20,8 @@ export async function POST(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     // Pro gate
     const plan = await getUserEffectivePlan(supabase, user.id);
@@ -39,7 +42,7 @@ export async function POST(request) {
         .from('dm_automations')
         .select('id')
         .eq('id', automationId)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .maybeSingle();
 
     if (!owns) {

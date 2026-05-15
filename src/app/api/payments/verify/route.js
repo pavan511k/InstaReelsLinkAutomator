@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { BILLING_PLANS, computePlanExpiresAt } from '@/lib/plans';
+import { enforceWorkspaceLocks } from '@/lib/workspace-locks';
 
 const CASHFREE_BASE = process.env.CASHFREE_ENV === 'production'
     ? 'https://api.cashfree.com/pg'
@@ -86,6 +87,13 @@ export async function GET(request) {
                     .update({ status: 'paid', paid_at: new Date().toISOString() })
                     .eq('order_id', orderId)
                     .eq('user_id', user.id);
+
+                // Unlock any workspaces the new plan now covers.
+                try {
+                    await enforceWorkspaceLocks(serviceSupabase, user.id);
+                } catch (err) {
+                    console.warn('[Verify] Lock reconciliation failed:', err.message);
+                }
             }
 
             return NextResponse.json({ status: 'paid', planId });

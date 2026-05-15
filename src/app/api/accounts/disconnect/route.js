@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * POST /api/accounts/disconnect
@@ -31,6 +32,10 @@ export async function POST(request) {
     if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) {
+        return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
+    }
 
     let accountId;
     try {
@@ -43,10 +48,10 @@ export async function POST(request) {
     const db = createServiceClient();
 
     try {
-        // 1. Find the account(s) to disconnect
+        // 1. Find the account(s) to disconnect — scoped to active workspace
         let accountQuery = db
             .from('connected_accounts').select('id')
-            .eq('user_id', user.id).eq('is_active', true);
+            .eq('workspace_id', workspaceId).eq('is_active', true);
 
         if (accountId) accountQuery = accountQuery.eq('id', accountId);
 
@@ -69,12 +74,60 @@ export async function POST(request) {
             .in('account_id', accountIds);
         const postIds = (posts || []).map((p) => p.id);
 
-        // 3. PAUSE all per-post automations (user config — keep but deactivate)
-        if (postIds.length > 0) {
-            await db.from('dm_automations')
-                .update({ is_active: false, updated_at: new Date().toISOString() })
-                .in('post_id', postIds);
+        // 2a. Meta-side ice-breakers cleanup BEFORE we scrub the tokens.
+        //     Without this DELETE, the openers we pushed to messenger_profile
+        //     keep rendering in the fan's Instagram inbox after disconnect.
+        //     Best-effort — failure here doesn't block disconnect.
+        const { data: accountsForCleanup } = await db
+            .from('connected_accounts')
+            .select('id, ig_user_id, fb_page_id, access_token, fb_page_access_token, default_config')
+            .in('id', accountIds);
+        for (const acc of (accountsForCleanup || [])) {
+            const hasIceBreakers = Array.isArray(acc.default_config?.iceBreakers)
+                && acc.default_config.iceBreakers.length > 0;
+            if (!hasIceBreakers) continue;
+            const token    = acc.fb_page_access_token || acc.access_token;
+            const pageOrIg = acc.fb_page_id || acc.ig_user_id;
+            const base     = acc.fb_page_access_token
+                ? 'https://graph.facebook.com/v21.0'
+                : 'https://graph.instagram.com/v21.0';
+            if (!token || !pageOrIg) continue;
+            try {
+                const url =
+                    `${base}/${pageOrIg}/messenger_profile` +
+                    `?platform=instagram` +
+                    `&access_token=${encodeURIComponent(token)}`;
+                const res = await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fields: ['ice_breakers'] }),
+                });
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    console.warn('[Disconnect] Meta ice_breakers DELETE failed for',
+                        acc.id, ':', body.error?.message || res.status);
+                } else {
+                    console.log('[Disconnect] Meta ice_breakers cleared for', acc.id);
+                }
+            } catch (err) {
+                console.warn('[Disconnect] Meta ice_breakers DELETE threw for',
+                    acc.id, ':', err.message);
+            }
         }
+
+        // 3. PAUSE every dm_automation in THIS workspace. Previously this
+        //    only paused post-bound rows via `.in('post_id', postIds)`, but
+        //    post-less automations (DM Auto-Responder, Email Collector via
+        //    DM, any-post Comment-to-DM) survived as `is_active=true` and
+        //    could keep firing — or, after reconnect with a different
+        //    platform, fire with a stale stored platform value. Pausing
+        //    them all keeps the config (re-activate via the toggle) but
+        //    stops execution until the user explicitly resumes. Scoped to
+        //    the active workspace so disconnecting from one workspace
+        //    doesn't pause automations in the user's other workspaces.
+        await db.from('dm_automations')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq('workspace_id', workspaceId);
 
         // 4. PAUSE all global automations for this account
         //    (keep the config — user may reconnect — but disable so they don't fire)

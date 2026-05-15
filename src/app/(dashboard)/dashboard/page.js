@@ -2,20 +2,22 @@ import { createClient } from '@/lib/supabase-server';
 import ConnectAccount from '@/components/dashboard/ConnectAccount';
 import DashboardView from './DashboardView';
 import { getEffectivePlan, getDmLimit, isUnlimited, trialDaysRemaining, getAutomationLimit } from '@/lib/plans';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 export default async function DashboardPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+    const workspaceId = await getActiveWorkspaceId(supabase);
 
     let connectedAccounts = [];
     let allPosts = [];
 
     try {
-        const { data: accounts } = await supabase
+        const { data: accounts } = workspaceId ? await supabase
             .from('connected_accounts')
             .select('id, platform, ig_username, ig_profile_picture_url, fb_page_name, is_active')
-            .eq('user_id', user.id)
-            .eq('is_active', true);
+            .eq('workspace_id', workspaceId)
+            .eq('is_active', true) : { data: [] };
 
         connectedAccounts = accounts || [];
 
@@ -70,7 +72,7 @@ export default async function DashboardPage() {
                 .from('dm_sent_log')
                 .select('id', { count: 'exact', head: true })
                 .eq('status', 'sent')
-                .eq('user_id', user.id);
+                .eq('workspace_id', workspaceId);
             totalSent = sentCount || 0;
 
             // This month
@@ -81,7 +83,7 @@ export default async function DashboardPage() {
                 .select('id', { count: 'exact', head: true })
                 .eq('status', 'sent')
                 .gte('sent_at', startOfMonth.toISOString())
-                .eq('user_id', user.id);
+                .eq('workspace_id', workspaceId);
             monthlySent = monthlyCount || 0;
 
             // This week vs last week
@@ -93,7 +95,7 @@ export default async function DashboardPage() {
                 .select('id', { count: 'exact', head: true })
                 .eq('status', 'sent')
                 .gte('sent_at', sevenDaysAgo.toISOString())
-                .eq('user_id', user.id);
+                .eq('workspace_id', workspaceId);
             weekSent = weekCount || 0;
 
             const { count: prevWeekCount } = await supabase
@@ -102,7 +104,7 @@ export default async function DashboardPage() {
                 .eq('status', 'sent')
                 .gte('sent_at', fourteenDaysAgo.toISOString())
                 .lt('sent_at', sevenDaysAgo.toISOString())
-                .eq('user_id', user.id);
+                .eq('workspace_id', workspaceId);
             prevWeekSent = prevWeekCount || 0;
 
             // 30-day daily breakdown for chart
@@ -112,7 +114,7 @@ export default async function DashboardPage() {
                 .select('sent_at')
                 .eq('status', 'sent')
                 .gte('sent_at', thirtyDaysAgo.toISOString())
-                .eq('user_id', user.id)
+                .eq('workspace_id', workspaceId)
                 .order('sent_at', { ascending: true });
             dailyDMData = aggregateDailyDMs(dmRows || [], thirtyDaysAgo);
         }
@@ -121,7 +123,7 @@ export default async function DashboardPage() {
         const { count: activeCount } = await supabase
             .from('dm_automations')
             .select('id', { count: 'exact', head: true })
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .eq('is_active', true);
         totalActivePosts = activeCount || 0;
 
@@ -147,13 +149,14 @@ export default async function DashboardPage() {
     const trialDaysLeft   = trialDaysRemaining(planRow);   // 0 if not on trial
 
     // Total automations count (active + paused) — drives the free-tier
-    // automation cap UI on the dashboard + automations list.
+    // automation cap UI on the dashboard + automations list. Scoped per
+    // workspace because the cap is enforced per workspace.
     let totalAutomations = 0;
     try {
         const { count } = await supabase
             .from('dm_automations')
             .select('id', { count: 'exact', head: true })
-            .eq('user_id', user.id);
+            .eq('workspace_id', workspaceId);
         totalAutomations = count || 0;
     } catch { /* table may not exist */ }
 
@@ -170,7 +173,7 @@ export default async function DashboardPage() {
         const { data: recipients } = await supabase
             .from('dm_sent_log')
             .select('recipient_ig_id')
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .eq('status', 'sent')
             .not('recipient_ig_id', 'is', null)
             .limit(5000);

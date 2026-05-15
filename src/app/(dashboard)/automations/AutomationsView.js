@@ -458,7 +458,7 @@ function RowAction({ title, icon: Icon, onClick, busy = false, danger = false })
 // row actions. Clicking the row body navigates to the builder in
 // edit mode. Active toggle and Delete are stopPropagation'd so they
 // don't trigger the navigation.
-function AutomationsList({ automations, onUpgradeRequired }) {
+function AutomationsList({ automations, onUpgradeRequired, activePlatform = 'instagram' }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -708,8 +708,11 @@ function AutomationsList({ automations, onUpgradeRequired }) {
                         inbound-DM triggers with no historical surface
                         to walk. We hide the icon entirely for those
                         templates so the row doesn't carry an action
-                        that would just open an "ineligible" modal. */}
-                    {a.templateType === 'comment-to-dm' && (
+                        that would just open an "ineligible" modal.
+                        Also hidden on Facebook — reading past comments
+                        from a Page post requires the pages_read_engagement
+                        scope, which we don't request. */}
+                    {a.templateType === 'comment-to-dm' && activePlatform !== 'facebook' && (
                       <RowAction
                         title="Resend to past comments"
                         icon={RotateCcw}
@@ -1161,6 +1164,7 @@ export default function AutomationsView({ automations = [], effectivePlan = 'fre
           <AutomationsList
             automations={filteredAutomations}
             onUpgradeRequired={() => setShowPricingModal(true)}
+            activePlatform={activePlatform}
           />
         </>
       )}

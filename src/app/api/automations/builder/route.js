@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase-server';
 import { getUserEffectivePlan } from '@/lib/plan-server';
 import { isProOrTrial, getAutomationLimit } from '@/lib/plans';
 import { isValidButtonUrl } from '@/lib/url-validate';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * /api/automations/builder
@@ -27,7 +28,7 @@ const VALID_POST_TARGET_MODES = new Set(['specific', 'next', 'any']);
 // that lands in dm_automations. This is the single source of truth
 // for how the new builder state maps to the JSONB columns. The
 // webhook reads these same fields back when firing.
-function buildRowFromBody(body, userId, planIsPro) {
+function buildRowFromBody(body, userId, workspaceId, planIsPro) {
     const {
         type,
         name,
@@ -37,6 +38,7 @@ function buildRowFromBody(body, userId, planIsPro) {
         keywords,
         dmMessage,
         dmImageUrl,
+        dmImageHeadline,
         linkButtons,
         openingEnabled,
         openingMessage,
@@ -73,6 +75,13 @@ function buildRowFromBody(body, userId, planIsPro) {
         templateType:      type,
         message:           isEmailCollector ? (emailAskMessage || '') : (dmMessage || ''),
         imageUrl:          isEmailCollector ? null : (dmImageUrl || null),
+        // imageHeadline: optional title rendered above the image card. When
+        // unset, send-dm.js falls back to the message's first line (avoids
+        // the hardcoded "AutoDM" title that was showing on free-tier DMs).
+        // Capped at 80 chars per Meta's generic_template title limit.
+        imageHeadline:     isEmailCollector
+            ? ''
+            : (dmImageHeadline || '').toString().trim().slice(0, 80),
         buttons:           isEmailCollector ? [] : (Array.isArray(linkButtons) ? linkButtons : []),
         openingEnabled:    isEmailCollector ? false : Boolean(openingEnabled),
         openingMessage:    isEmailCollector ? '' : (openingMessage || ''),
@@ -102,6 +111,7 @@ function buildRowFromBody(body, userId, planIsPro) {
 
     return {
         user_id: userId,
+        workspace_id: workspaceId,
         // post_id is nullable now — only 'specific' mode binds to one.
         post_id: postTargetMode === 'specific' ? (postId || null) : null,
         dm_type: dmType,
@@ -198,14 +208,14 @@ function validateBody(body) {
  * Counts non-archived rows only — once we add archive semantics those
  * shouldn't burn a slot.
  */
-async function checkAutomationLimit(supabase, userId, plan) {
+async function checkAutomationLimit(supabase, workspaceId, plan) {
     const limit = getAutomationLimit(plan);
     if (limit == null) return null; // unlimited
 
     const { count, error } = await supabase
         .from('dm_automations')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId);
+        .eq('workspace_id', workspaceId);
 
     if (error) {
         console.error('[Builder] Count check failed:', error);
@@ -214,7 +224,7 @@ async function checkAutomationLimit(supabase, userId, plan) {
     if ((count ?? 0) >= limit) {
         return NextResponse.json(
             {
-                error: `Free plan is limited to ${limit} automations. Upgrade to Pro for unlimited automations.`,
+                error: `Free plan is limited to ${limit} automations per workspace. Upgrade to Pro for unlimited automations.`,
                 upgradeRequired: true,
                 limit,
                 current: count,
@@ -230,6 +240,8 @@ export async function POST(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     let body;
     try { body = await request.json(); }
@@ -260,25 +272,43 @@ export async function POST(request) {
         );
     }
 
-    // Free-tier automation cap. Pro/Trial bypass.
-    const capResp = await checkAutomationLimit(supabase, user.id, plan);
+    // Free-tier automation cap. Pro/Trial bypass. Counted per workspace.
+    const capResp = await checkAutomationLimit(supabase, workspaceId, plan);
     if (capResp) return capResp;
 
-    // If postId is set, double-check the user owns the post (RLS will
-    // also enforce, but we want a clean 403 instead of a silent insert
-    // failure on a foreign key violation).
+    // Soft-lock check: a locked workspace can't have NEW active automations.
+    // Saving a draft (isActive=false) is fine; activating a locked
+    // workspace's automation is blocked here AND in /api/automations/status.
+    if (body.isActive) {
+        const { data: ws } = await supabase
+            .from('workspaces')
+            .select('is_locked, name')
+            .eq('id', workspaceId)
+            .maybeSingle();
+        if (ws?.is_locked) {
+            return NextResponse.json(
+                {
+                    error: `"${ws.name}" is locked. Upgrade your plan or delete another workspace to activate automations here.`,
+                    workspaceLocked: true,
+                },
+                { status: 423 },
+            );
+        }
+    }
+
+    // If postId is set, double-check the post belongs to this workspace.
     if (body.postTargetMode === 'specific' && body.postId) {
         const { data: post } = await supabase
             .from('instagram_posts')
-            .select('id, account_id, connected_accounts!inner(user_id)')
+            .select('id, account_id, connected_accounts!inner(workspace_id)')
             .eq('id', body.postId)
             .single();
-        if (!post || post.connected_accounts.user_id !== user.id) {
+        if (!post || post.connected_accounts.workspace_id !== workspaceId) {
             return NextResponse.json({ error: 'Post not found or not yours' }, { status: 404 });
         }
     }
 
-    const row = buildRowFromBody(body, user.id, planIsPro);
+    const row = buildRowFromBody(body, user.id, workspaceId, planIsPro);
     const { data, error } = await supabase
         .from('dm_automations')
         .insert(row)
@@ -303,6 +333,8 @@ export async function PATCH(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     let body;
     try { body = await request.json(); }
@@ -314,7 +346,7 @@ export async function PATCH(request) {
     // Free-tier automation cap also blocks duplicates — a duplicate
     // creates a new row, so it consumes a slot just like POST.
     const plan    = await getUserEffectivePlan(supabase, user.id);
-    const capResp = await checkAutomationLimit(supabase, user.id, plan);
+    const capResp = await checkAutomationLimit(supabase, workspaceId, plan);
     if (capResp) return capResp;
 
     // Fetch source row (RLS scopes by user, but we explicitly check
@@ -323,7 +355,7 @@ export async function PATCH(request) {
         .from('dm_automations')
         .select('*')
         .eq('id', id)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .single();
     if (srcErr || !src) {
         return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
@@ -338,6 +370,7 @@ export async function PATCH(request) {
         .from('dm_automations')
         .insert({
             user_id:         user.id,
+            workspace_id:    workspaceId,
             post_id:         src.post_id,
             dm_type:         src.dm_type,
             dm_config:       src.dm_config,
@@ -370,6 +403,8 @@ export async function DELETE(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -379,7 +414,7 @@ export async function DELETE(request) {
         .from('dm_automations')
         .delete({ count: 'exact' })
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('workspace_id', workspaceId);
 
     if (error) {
         console.error('[Builder] Delete failed:', error);
@@ -396,6 +431,8 @@ export async function PUT(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     let body;
     try { body = await request.json(); }
@@ -417,18 +454,19 @@ export async function PUT(request) {
         );
     }
 
-    // Verify ownership before mutating — RLS enforces this on the
-    // update too, but a clean 404 beats a silent zero-row update.
+    // Verify the automation belongs to the active workspace before
+    // mutating. RLS enforces ownership too, but a clean 404 beats a
+    // silent zero-row update.
     const { data: existing } = await supabase
         .from('dm_automations')
-        .select('id, user_id')
+        .select('id, workspace_id')
         .eq('id', id)
         .single();
-    if (!existing || existing.user_id !== user.id) {
+    if (!existing || existing.workspace_id !== workspaceId) {
         return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
     }
 
-    const row = buildRowFromBody(body, user.id, planIsPro);
+    const row = buildRowFromBody(body, user.id, workspaceId, planIsPro);
     // Don't overwrite created_at; keep the original lifecycle.
     const { data, error } = await supabase
         .from('dm_automations')

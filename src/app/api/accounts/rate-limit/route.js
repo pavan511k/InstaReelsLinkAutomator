@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/accounts/rate-limit
@@ -12,15 +13,17 @@ export async function GET() {
     if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ rateLimitPerHour: 200 });
 
     try {
         const { data: account } = await supabase
             .from('connected_accounts')
             .select('rate_limit_per_hour')
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .eq('is_active', true)
             .limit(1)
-            .single();
+            .maybeSingle();
 
         return NextResponse.json({
             rateLimitPerHour: account?.rate_limit_per_hour || 200,
@@ -41,6 +44,8 @@ export async function POST(request) {
     if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const body = await request.json();
     const { accountId, rateLimitPerHour } = body;
@@ -61,7 +66,7 @@ export async function POST(request) {
                 updated_at: new Date().toISOString(),
             })
             .eq('id', accountId)
-            .eq('user_id', user.id);
+            .eq('workspace_id', workspaceId);
 
         if (error) {
             console.error('Failed to update rate limit:', error);

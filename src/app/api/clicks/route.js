@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/clicks?automationId=xxx
@@ -28,12 +29,16 @@ export async function GET(request) {
     if (gate) return gate;
 
     try {
-        // Verify automation belongs to user, fetch dm_config for A/B info
+        const workspaceId = await getActiveWorkspaceId(supabase);
+        if (!workspaceId) {
+            return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
+        }
+        // Verify automation belongs to active workspace, fetch dm_config for A/B info
         const { data: automation } = await supabase
             .from('dm_automations')
             .select('id, dm_type, dm_config')
             .eq('id', automationId)
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .maybeSingle();
 
         if (!automation) {

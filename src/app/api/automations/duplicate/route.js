@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * POST /api/automations/duplicate
@@ -17,6 +18,8 @@ export async function POST(request) {
     if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const body = await request.json();
     const { sourcePostId, targetPostId } = body;
@@ -30,22 +33,22 @@ export async function POST(request) {
     }
 
     try {
-        // 1. Fetch the source automation — must belong to this user
+        // 1. Fetch the source automation — must belong to this workspace
         const { data: source, error: sourceErr } = await supabase
             .from('dm_automations')
             .select('dm_type, dm_config, trigger_config, settings_config')
             .eq('post_id', sourcePostId)
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .single();
 
         if (sourceErr || !source) {
             return NextResponse.json({ error: 'Source automation not found' }, { status: 404 });
         }
 
-        // 2. Verify the target post belongs to this user
+        // 2. Verify the target post belongs to this workspace
         const { data: targetPost, error: targetErr } = await supabase
             .from('instagram_posts')
-            .select('id, connected_accounts!inner(user_id)')
+            .select('id, connected_accounts!inner(workspace_id)')
             .eq('id', targetPostId)
             .single();
 
@@ -53,7 +56,7 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Target post not found' }, { status: 404 });
         }
 
-        if (targetPost.connected_accounts.user_id !== user.id) {
+        if (targetPost.connected_accounts.workspace_id !== workspaceId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
@@ -76,6 +79,7 @@ export async function POST(request) {
             .from('dm_automations')
             .insert({
                 user_id:        user.id,
+                workspace_id:   workspaceId,
                 post_id:        targetPostId,
                 dm_type:        source.dm_type,
                 dm_config:      source.dm_config,

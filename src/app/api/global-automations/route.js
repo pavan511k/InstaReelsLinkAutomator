@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/global-automations
@@ -10,12 +11,14 @@ export async function GET() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ automations: [] });
 
     try {
         const { data, error } = await supabase
             .from('global_automations')
             .select('*')
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .order('created_at', { ascending: true });
 
         if (error) throw error;
@@ -37,6 +40,8 @@ export async function POST(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const plan = await getUserEffectivePlan(supabase, user.id);
     const gate = requirePro(plan, 'Global Triggers require a Pro plan.');
@@ -56,12 +61,12 @@ export async function POST(request) {
     }
 
     try {
-        // Verify account belongs to this user
+        // Verify account belongs to this workspace
         const { data: account } = await supabase
             .from('connected_accounts')
             .select('id')
             .eq('id', accountId)
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .maybeSingle();
 
         if (!account) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
@@ -69,8 +74,9 @@ export async function POST(request) {
         const { data, error } = await supabase
             .from('global_automations')
             .insert({
-                user_id:    user.id,
-                account_id: accountId,
+                user_id:      user.id,
+                workspace_id: workspaceId,
+                account_id:   accountId,
                 name:       name.trim(),
                 dm_type:    dmType,
                 dm_config:  dmConfig,
@@ -98,6 +104,8 @@ export async function PATCH(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const body = await request.json();
     const { id, ...updates } = body;
@@ -120,7 +128,7 @@ export async function PATCH(request) {
             .from('global_automations')
             .update(dbUpdates)
             .eq('id', id)
-            .eq('user_id', user.id);
+            .eq('workspace_id', workspaceId);
 
         if (error) throw error;
         return NextResponse.json({ success: true });
@@ -137,6 +145,8 @@ export async function DELETE(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -147,7 +157,7 @@ export async function DELETE(request) {
             .from('global_automations')
             .delete()
             .eq('id', id)
-            .eq('user_id', user.id);
+            .eq('workspace_id', workspaceId);
 
         if (error) throw error;
         return NextResponse.json({ success: true });

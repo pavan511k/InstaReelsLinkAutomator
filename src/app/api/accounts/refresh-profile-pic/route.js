@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { getInstagramUserProfile } from '@/lib/meta-oauth';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * POST /api/accounts/refresh-profile-pic
@@ -30,6 +31,8 @@ export async function POST(request) {
     if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     let body;
     try {
@@ -48,7 +51,7 @@ export async function POST(request) {
         .from('connected_accounts')
         .select('id, platform, access_token, ig_profile_picture_url')
         .eq('id', accountId)
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .maybeSingle();
 
     if (lookupErr || !account) {
@@ -83,7 +86,7 @@ export async function POST(request) {
                 .from('connected_accounts')
                 .update({ ig_profile_picture_url: fresh })
                 .eq('id', account.id)
-                .eq('user_id', user.id);
+                .eq('workspace_id', workspaceId);
         }
 
         return NextResponse.json({ profilePictureUrl: fresh, refreshed: true });

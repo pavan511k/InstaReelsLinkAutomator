@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
 import { GRAPH_FB_BASE as GRAPH, GRAPH_IG_BASE } from '@/lib/meta-graph';
+import { getActiveWorkspaceId } from '@/lib/workspace-context';
 
 /**
  * GET /api/ice-breakers
@@ -12,12 +13,14 @@ export async function GET() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     try {
         const { data: account } = await supabase
             .from('connected_accounts')
             .select('default_config')
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .eq('is_active', true)
             .maybeSingle();
 
@@ -48,6 +51,8 @@ export async function POST(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     // Pro gate. GET / DELETE are intentionally ungated so a downgraded user
     // can still view + remove their existing welcome openers; only saving new
@@ -69,7 +74,7 @@ export async function POST(request) {
             .from('connected_accounts')
             .select('id, access_token, ig_user_id, fb_page_id, fb_page_access_token, default_config')
             .eq('id', accountId)
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .maybeSingle();
 
         if (!account) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
@@ -223,7 +228,7 @@ export async function POST(request) {
             .from('connected_accounts')
             .update({ default_config: updatedConfig, updated_at: new Date().toISOString() })
             .eq('id', accountId)
-            .eq('user_id', user.id);
+            .eq('workspace_id', workspaceId);
 
         return NextResponse.json({
             success: true,
@@ -245,6 +250,8 @@ export async function DELETE(request) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
 
     const { searchParams } = new URL(request.url);
     const accountId = searchParams.get('accountId');
@@ -255,7 +262,7 @@ export async function DELETE(request) {
             .from('connected_accounts')
             .select('id, access_token, ig_user_id, fb_page_id, fb_page_access_token, default_config')
             .eq('id', accountId)
-            .eq('user_id', user.id)
+            .eq('workspace_id', workspaceId)
             .maybeSingle();
 
         if (!account) return NextResponse.json({ error: 'Account not found' }, { status: 404 });
@@ -335,7 +342,7 @@ export async function DELETE(request) {
             .from('connected_accounts')
             .update({ default_config: updatedConfig, updated_at: new Date().toISOString() })
             .eq('id', accountId)
-            .eq('user_id', user.id);
+            .eq('workspace_id', workspaceId);
 
         return NextResponse.json({ success: true });
     } catch (err) {
