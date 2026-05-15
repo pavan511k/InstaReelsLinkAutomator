@@ -365,15 +365,34 @@ async function subscribeToWebhookEvents(accountData) {
  * Uses Instagram's own token endpoints
  */
 async function handleInstagramCallback(code, userId) {
-    // 1. Exchange code for short-lived Instagram token
-    const shortToken = await exchangeCodeForInstagramToken(code);
+    // Each Meta call is labeled so the OAuth catch block can tell us
+    // exactly which step Meta rejected. The minified production stack
+    // trace hides this otherwise — debugging "Unsupported request"
+    // becomes a guessing game.
+    let shortToken;
+    try {
+        shortToken = await exchangeCodeForInstagramToken(code);
+    } catch (err) {
+        console.error('[OAuth/IG] Step 1 (exchangeCodeForInstagramToken) failed:', err.message);
+        throw err;
+    }
 
-    // 2. Exchange for long-lived token (60 days)
-    const longToken = await getInstagramLongLivedToken(shortToken.access_token);
+    let longToken;
+    try {
+        longToken = await getInstagramLongLivedToken(shortToken.access_token);
+    } catch (err) {
+        console.error('[OAuth/IG] Step 2 (getInstagramLongLivedToken) failed:', err.message);
+        throw err;
+    }
     const expiresIn = longToken.expires_in || 5184000;
 
-    // 3. Get Instagram user profile
-    const profile = await getInstagramUserProfile(longToken.access_token);
+    let profile;
+    try {
+        profile = await getInstagramUserProfile(longToken.access_token);
+    } catch (err) {
+        console.error('[OAuth/IG] Step 3 (getInstagramUserProfile) failed:', err.message);
+        throw err;
+    }
 
     return {
         user_id: userId,
