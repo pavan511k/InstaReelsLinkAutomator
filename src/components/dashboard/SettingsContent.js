@@ -893,7 +893,7 @@ export default function SettingsContent({
           <div className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50/40 p-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-semibold text-neutral-700">Type your email to confirm</span>
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2 py-1 font-mono text-[11px] text-neutral-700">
+              <span className="inline-flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-2.5 py-1 font-mono text-[11px] text-neutral-700">
                 <strong className="truncate max-w-[160px]">{user?.email}</strong>
                 <button
                   type="button"
