@@ -183,7 +183,7 @@ function ContactsTable({ contacts, onOpen }) {
                     <p className="truncate text-[11px] text-neutral-500">
                       {c.email
                         ? <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" /> {c.email}</span>
-                        : `IG ID ${c.recipientIgId.slice(0, 8)}…`}
+                        : `User ID ${c.recipientIgId.slice(0, 8)}…`}
                     </p>
                   </div>
                 </div>
@@ -252,7 +252,7 @@ function ContactDetailModal({ contact, onClose }) {
                 {contact.username ? `@${contact.username}` : contact.firstName || 'Unknown user'}
               </h2>
               <p className="truncate text-[11px] text-neutral-500">
-                IG ID {contact.recipientIgId}
+                User ID {contact.recipientIgId}
               </p>
             </div>
           </div>
