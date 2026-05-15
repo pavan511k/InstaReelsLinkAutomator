@@ -394,12 +394,28 @@ async function handleInstagramCallback(code, userId) {
         throw err;
     }
 
+    // Step 2: try to exchange the short-lived token for a 60-day long-lived
+    // one. Meta's "Instagram API with Instagram Login" (the product that
+    // replaced Basic Display in late 2024) has shifted behavior — for many
+    // newer accounts, Step 1 already returns a long-lived token and Step 2
+    // rejects with "Unsupported request - method type: post/get". When that
+    // happens we fall back to using Step 1's access_token directly, which
+    // Meta documents as already valid for 60 days on the new flow.
     let longToken;
     try {
         longToken = await getInstagramLongLivedToken(shortToken.access_token);
     } catch (err) {
-        console.error('[OAuth/IG] Step 2 (getInstagramLongLivedToken) failed:', err.message);
-        throw err;
+        const isUnsupportedRequest = /unsupported.*request/i.test(err?.message || '')
+                                  || /method type/i.test(err?.message || '');
+        if (isUnsupportedRequest) {
+            console.error('[OAuth/IG] Step 2 returned "Unsupported request" on both POST and GET — ' +
+                'assuming Step 1 token is already long-lived (new IG API with IG Login behavior). ' +
+                'Falling back to Step 1 token.');
+            longToken = { access_token: shortToken.access_token, expires_in: 5184000 };
+        } else {
+            console.error('[OAuth/IG] Step 2 (getInstagramLongLivedToken) failed:', err.message);
+            throw err;
+        }
     }
     const expiresIn = longToken.expires_in || 5184000;
 
