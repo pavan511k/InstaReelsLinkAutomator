@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Loader2, AlertTriangle, X } from 'lucide-react';
+import { Loader2, AlertTriangle, X, Copy as CopyIcon } from 'lucide-react';
 
 /**
  * Delete-workspace confirmation modal.
@@ -21,13 +21,14 @@ export default function DeleteWorkspaceModal({ open, workspace, onClose }) {
     const router = useRouter();
     const [confirm, setConfirm] = useState('');
     const [busy, setBusy] = useState(false);
+    const [copied, setCopied] = useState(false);
     // SSR-safe portal mount — only render to document.body after client mount.
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => { setMounted(true); }, []);
 
     useEffect(() => {
-        if (open) { setConfirm(''); setBusy(false); }
+        if (open) { setConfirm(''); setBusy(false); setCopied(false); }
     }, [open]);
 
     useEffect(() => {
@@ -41,6 +42,14 @@ export default function DeleteWorkspaceModal({ open, workspace, onClose }) {
 
     const matches = confirm.trim() === workspace.name;
     const disabled = busy || !matches;
+
+    const copyName = async () => {
+        try {
+            await navigator.clipboard.writeText(workspace.name);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch { /* Clipboard API not available */ }
+    };
 
     const handleDelete = async () => {
         if (disabled) return;
@@ -94,9 +103,24 @@ export default function DeleteWorkspaceModal({ open, workspace, onClose }) {
                         <li>All synced posts, stories, and recipient history</li>
                         <li>DM logs, leads, contacts, and broadcasts</li>
                     </ul>
-                    <p className="text-xs text-neutral-500">
-                        Type <code className="rounded bg-neutral-100 px-1 py-0.5 font-mono text-neutral-800">{workspace.name}</code> to confirm.
-                    </p>
+                    <div className="flex items-center justify-between gap-3 text-xs text-neutral-500">
+                        <span>Type the workspace name to confirm:</span>
+                        <span className="inline-flex items-center gap-3 rounded-md border border-neutral-200 bg-white px-2.5 py-1 font-mono text-[11px] text-neutral-700">
+                            <strong className="truncate max-w-[160px]">{workspace.name}</strong>
+                            <button
+                                type="button"
+                                onClick={copyName}
+                                title={copied ? 'Copied!' : 'Copy to clipboard'}
+                                className={[
+                                    'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors',
+                                    copied ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200',
+                                ].join(' ')}
+                            >
+                                <CopyIcon className="h-2.5 w-2.5" strokeWidth={2.5} />
+                                {copied ? 'Copied' : 'Copy'}
+                            </button>
+                        </span>
+                    </div>
                     <input
                         type="text"
                         value={confirm}
@@ -121,7 +145,7 @@ export default function DeleteWorkspaceModal({ open, workspace, onClose }) {
                         type="button"
                         onClick={handleDelete}
                         disabled={disabled}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                         Delete workspace
