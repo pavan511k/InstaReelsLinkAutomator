@@ -120,18 +120,15 @@ CREATE INDEX IF NOT EXISTS idx_dm_sent_log_listing
 CREATE INDEX IF NOT EXISTS idx_dm_sent_log_user_listing
     ON dm_sent_log (user_id, sent_at DESC);
 
--- Auto-populate user_id when callers don't provide it. Lets us migrate
--- the ~12 insert sites gradually instead of needing a flag day. Looks
--- through automation first, falls back to post → connected_account
--- (covers story-mention rows that have automation_id NULL by design).
+-- Auto-populate derived columns the application code doesn't always
+-- pass: user_id, workspace_id, and recipient_username/first_name
+-- (the last two for synthetic button-tap rows that Meta delivers as
+-- postbacks without a from.username field).
 CREATE OR REPLACE FUNCTION trigger_dm_sent_log_set_user_id()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.user_id IS NOT NULL THEN
-        RETURN NEW;
-    END IF;
-
-    IF NEW.automation_id IS NOT NULL THEN
+    -- user_id resolution
+    IF NEW.user_id IS NULL AND NEW.automation_id IS NOT NULL THEN
         SELECT user_id INTO NEW.user_id
         FROM dm_automations
         WHERE id = NEW.automation_id;
@@ -142,6 +139,39 @@ BEGIN
         FROM instagram_posts p
         JOIN connected_accounts ca ON ca.id = p.account_id
         WHERE p.id = NEW.post_id;
+    END IF;
+
+    -- workspace_id resolution (independent of user_id — caller may
+    -- pre-set one but not the other).
+    IF NEW.workspace_id IS NULL AND NEW.automation_id IS NOT NULL THEN
+        SELECT workspace_id INTO NEW.workspace_id
+        FROM dm_automations
+        WHERE id = NEW.automation_id;
+    END IF;
+
+    IF NEW.workspace_id IS NULL AND NEW.post_id IS NOT NULL THEN
+        SELECT ca.workspace_id INTO NEW.workspace_id
+        FROM instagram_posts p
+        JOIN connected_accounts ca ON ca.id = p.account_id
+        WHERE p.id = NEW.post_id;
+    END IF;
+
+    -- Carry-forward recipient handle for synthetic rows
+    -- ([opening tap: …], [follow gate confirmed: …], etc.). Postback
+    -- webhooks don't carry the username, but a prior comment row
+    -- under the same automation + recipient does.
+    IF NEW.recipient_username IS NULL
+       AND NEW.recipient_first_name IS NULL
+       AND NEW.automation_id IS NOT NULL
+       AND NEW.recipient_ig_id IS NOT NULL THEN
+        SELECT recipient_username, recipient_first_name
+        INTO NEW.recipient_username, NEW.recipient_first_name
+        FROM dm_sent_log
+        WHERE automation_id = NEW.automation_id
+          AND recipient_ig_id = NEW.recipient_ig_id
+          AND (recipient_username IS NOT NULL OR recipient_first_name IS NOT NULL)
+        ORDER BY sent_at DESC
+        LIMIT 1;
     END IF;
 
     RETURN NEW;
