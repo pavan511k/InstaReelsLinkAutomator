@@ -92,3 +92,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_email_leads_unique
 
 CREATE INDEX IF NOT EXISTS idx_email_leads_account
     ON email_leads (account_id, created_at DESC);
+
+-- ── Auto-populate workspace_id on insert ───────────────────────
+-- The webhook upsert in handleEmailCollectorReply doesn't pass
+-- workspace_id. Derive it from automation_id → dm_automations
+-- (primary), falling back to account_id → connected_accounts
+-- (covers the case where automation_id is NULL on a SET NULL
+-- cascade — email_leads outlives its automation by design).
+-- Without this, rows land workspace_id = NULL and /api/leads
+-- (which filters by workspace_id) never surfaces them.
+CREATE OR REPLACE FUNCTION trigger_email_leads_set_workspace_id()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.workspace_id IS NULL AND NEW.automation_id IS NOT NULL THEN
+        SELECT workspace_id INTO NEW.workspace_id
+        FROM dm_automations
+        WHERE id = NEW.automation_id;
+    END IF;
+
+    IF NEW.workspace_id IS NULL AND NEW.account_id IS NOT NULL THEN
+        SELECT workspace_id INTO NEW.workspace_id
+        FROM connected_accounts
+        WHERE id = NEW.account_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_email_leads_set_workspace_id ON email_leads;
+CREATE TRIGGER tr_email_leads_set_workspace_id
+    BEFORE INSERT ON email_leads
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_email_leads_set_workspace_id();
