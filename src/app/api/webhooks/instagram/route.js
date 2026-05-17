@@ -2133,6 +2133,21 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
             .update({ status: 'email_captured', updated_at: new Date().toISOString() })
             .eq('id', queueEntry.id);
 
+        // Mobile push notification — fire-and-forget so a slow Expo Push
+        // API call never blocks the webhook. The helper handles its own
+        // errors; a user with no registered devices gets a no-op.
+        try {
+            const { sendPushToUser } = await import('@/lib/push-sender');
+            const displayName = leadFirstName || (leadUsername ? `@${leadUsername}` : 'A new fan');
+            sendPushToUser(ownerUserId, {
+                title: '🎉 New lead captured',
+                body:  `${displayName} shared their email: ${email}`,
+                data:  { kind: 'lead_captured', recipient_ig_id: senderId, email },
+            });
+        } catch (pushErr) {
+            console.warn('[Webhook] Push enqueue failed (non-fatal):', pushErr.message);
+        }
+
         // Look up the captured username + Pro plan + dm_config for the confirm DM
         // so it gets the same {first_name}/{username}/{email} substitution and
         // branding behaviour as the rest of the DM types.
