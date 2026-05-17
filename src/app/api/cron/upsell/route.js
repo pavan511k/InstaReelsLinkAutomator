@@ -4,12 +4,17 @@ import { getEffectivePlan } from '@/lib/plans';
 
 /**
  * GET /api/cron/upsell
- * Runs every 6 hours (cron-job.org schedule).
+ * Runs every 5 minutes (cron-job.org schedule).
  *
  * For each sent DM where:
  *   - The automation has upsell enabled (settings_config.upsell.enabled = true)
  *   - upsell_status IS NULL (never processed)
  *   - sent_at is older than upsell.delayHours ago
+ *
+ * Cadence note: the builder UI now lets users pick delayHours 1–168.
+ * With a 5-min cron, actual send lands within ±5 min of the target.
+ * Don't extend the cron interval back to hours without first capping
+ * the UI minimum to match — otherwise short-delay follow-ups drift.
  *
  * → Skips recipients who already clicked (per-recipient attribution via
  *    `?r=<igsid>` appended at send time; see lib/click-tracking.js)
