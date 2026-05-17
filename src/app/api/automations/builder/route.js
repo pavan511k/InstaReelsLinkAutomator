@@ -51,6 +51,7 @@ function buildRowFromBody(body, userId, workspaceId, planIsPro) {
         askToFollowButtonText,
         sendFollowUp,
         followUpMessage,
+        followUpDelayHours,
         emailAskMessage,
         emailThanksMessage,
         isActive,
@@ -98,12 +99,18 @@ function buildRowFromBody(body, userId, workspaceId, planIsPro) {
     const dmConfig = innerBuilderDmConfig;
 
     // Send-follow-up rides on the existing upsell cron, which already
-    // does click-gating (skip recipients who tapped the link) and
-    // 24h scheduling. We just shape its config block.
+    // does click-gating (skip recipients who tapped the link). The
+    // cron runs every 5 min, so actual send is within ±5 min of
+    // (sent_at + delayHours). Clamp body value to 1–168h matching the
+    // builder UI; default 24h if missing / non-finite.
+    const rawDelay  = Number(followUpDelayHours);
+    const safeDelay = Number.isFinite(rawDelay)
+        ? Math.max(1, Math.min(168, Math.round(rawDelay)))
+        : 24;
     const upsellBlock = sendFollowUpEffective
         ? {
             enabled:    true,
-            delayHours: 24,
+            delayHours: safeDelay,
             message:    followUpMessage || 'Hey {first_name}, just checking in — did you get a chance to look? 👀',
             dmType:     'message_template',
         }
