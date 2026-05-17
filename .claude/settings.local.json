@@ -64,7 +64,17 @@
       "Bash(awk NR>=1244 && NR<=1455 {printf \"%4d: %s\\\\n\", NR, $0} *)",
       "Bash(awk NR>=1244 && NR<=1450 {printf \"%4d: %s\\\\n\", NR, $0} *)",
       "Bash(awk NR>=183 && NR<=235 {printf \"%4d: %s\\\\n\", NR, $0} *)",
-      "Bash(npx --no-install eslint src/lib/post-upsert.js src/lib/next-post-binding.js src/app/api/posts/sync/route.js src/app/api/webhooks/instagram/route.js)"
+      "Bash(npx --no-install eslint src/lib/post-upsert.js src/lib/next-post-binding.js src/app/api/posts/sync/route.js src/app/api/webhooks/instagram/route.js)",
+      "PowerShell(npx --yes create-expo-app@latest \"C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\" --template default --no-install 2>&1 | Out-String)",
+      "PowerShell(\\(Get-Content 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\package.json' | Select-String -Pattern 'nativewind|@tanstack|zustand|@supabase|@gorhom|@legendapp|moti|burnt|mmkv|keyboard-controller|lucide|svg|pager-view|hook-form|zod|tailwindcss'\\).Count)",
+      "PowerShell(Get-ChildItem 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\app' -Recurse | Where-Object { -not $_.PSIsContainer } | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\('C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\', ''\\) })",
+      "PowerShell(Get-ChildItem 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\components','C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\hooks','C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\constants' -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName.Replace\\('C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\', ''\\) })",
+      "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit; \"ExitCode=$LASTEXITCODE\")",
+      "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit 2>&1 | Select-Object -Last 25 | Out-String; \"ExitCode=$LASTEXITCODE\")",
+      "Bash(grep -nA 3 'connected_accounts' \"/c/Code/SelfProjLearning/InstaReelsLinkAutomator/supabase/schema/01_connected_accounts.sql\")",
+      "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit 2>&1 | Select-Object -Last 20 | Out-String; \"ExitCode=$LASTEXITCODE\")",
+      "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit 2>&1 | Select-Object -Last 15 | Out-String; \"ExitCode=$LASTEXITCODE\")",
+      "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit 2>&1 | Select-Object -Last 10 | Out-String; \"ExitCode=$LASTEXITCODE\")"
     ]
   }
 }
