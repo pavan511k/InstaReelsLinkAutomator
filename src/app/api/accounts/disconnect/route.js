@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { getActiveWorkspaceId } from '@/lib/workspace-context';
+import { graphBase } from '@/lib/meta-graph';
 
 /**
  * POST /api/accounts/disconnect
@@ -88,9 +89,9 @@ export async function POST(request) {
             if (!hasIceBreakers) continue;
             const token    = acc.fb_page_access_token || acc.access_token;
             const pageOrIg = acc.fb_page_id || acc.ig_user_id;
-            const base     = acc.fb_page_access_token
-                ? 'https://graph.facebook.com/v21.0'
-                : 'https://graph.instagram.com/v21.0';
+            // useIgApi=false → graph.facebook.com (FB Page Access Token path)
+            // useIgApi=true  → graph.instagram.com (IG Business Login token path)
+            const base     = graphBase(!acc.fb_page_access_token);
             if (!token || !pageOrIg) continue;
             try {
                 const url =
