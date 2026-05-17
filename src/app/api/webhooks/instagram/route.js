@@ -332,16 +332,21 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
         .maybeSingle();
 
     if (!queueEntry) {
-        // No pending follow-gate — see if this DM matches a builder_v2
-        // dm-auto-responder automation (keyword-triggered DM reply).
-        // Returns true if a match handled the message; otherwise we
-        // fall through to legacy email-collector capture.
-        const dmAutoHandled = await handleDmAutoResponder(
+        // No pending follow-gate. Routing precedence:
+        //   1. State-continuation: if the fan is mid-flow in an Email
+        //      Collector (we asked for their email and they're replying),
+        //      that takes priority over fresh trigger matching — otherwise
+        //      a catch-all "any keyword" DM Auto-Responder would hijack
+        //      the email reply.
+        //   2. Trigger matching: only runs when no flow is in progress.
+        // Mirrors how follow-gate / opening-tap states are checked above.
+        const emailHandled = await handleEmailCollectorReply(supabase, senderId, msgText);
+        if (emailHandled) return;
+
+        await handleDmAutoResponder(
             supabase, igAccountId, senderId, msgText,
             messagingEvent.message?.mid || null,
         );
-        if (dmAutoHandled) return;
-        await handleEmailCollectorReply(supabase, senderId, msgText);
         return;
     }
 
@@ -1968,17 +1973,32 @@ async function handleEmailCollectorAutomation(supabase, automation, post, commen
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/;
 
+// How long an `awaiting_email` queue row is treated as in-flight. After
+// this, the fan is considered to have abandoned the flow and the
+// catch-all DM Auto-Responder is allowed to handle their next DM.
+const EMAIL_COLLECTOR_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Handles a DM reply when the fan is mid-flow in an Email Collector
+ * (we previously asked them for their email).
+ *
+ * Returns `true` if a pending `awaiting_email` queue row was found
+ * within the TTL window — meaning we handled (or attempted to handle)
+ * the reply and the caller should NOT run further routing.
+ * Returns `false` otherwise so the caller falls through to the
+ * standard DM Auto-Responder trigger matcher.
+ */
 async function handleEmailCollectorReply(supabase, senderId, msgText) {
+    const ttlCutoff = new Date(Date.now() - EMAIL_COLLECTOR_TTL_MS).toISOString();
+
     const { data: queueEntry } = await supabase
         .from('email_collect_queue')
         .select('*, connected_accounts(access_token, fb_page_access_token, ig_user_id, fb_page_id)')
         .eq('recipient_ig_id', senderId).eq('status', 'awaiting_email')
+        .gte('created_at', ttlCutoff)
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
-    if (!queueEntry) {
-        console.log('[Webhook] No pending email collection — ignoring DM reply');
-        return;
-    }
+    if (!queueEntry) return false;
 
     const emailMatch = msgText.match(EMAIL_REGEX);
     if (!emailMatch) {
@@ -1991,7 +2011,7 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
             await sendTextDM(replyFromId, senderId,
                 'Please reply with a valid email address (e.g. you@example.com) \ud83d\udce7', replyToken, replyUseIgApi);
         } catch { /* non-critical */ }
-        return;
+        return true; // We owned this reply (mid-flow) even though no valid email yet.
     }
 
     const email       = emailMatch[0].toLowerCase();
@@ -2021,7 +2041,7 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
         }
         if (!ownerUserId) {
             console.error(`[Webhook] Cannot resolve user_id for email lead from ${senderId} — skipping insert`);
-            return;
+            return true; // Fan was mid-flow; don't fall through to other handlers.
         }
 
         // Pull display name + username from the dm_sent_log row that
@@ -2096,6 +2116,7 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
     } catch (err) {
         console.error('[Webhook] Failed to save email lead:', err.message);
     }
+    return true; // Owned the reply (captured or attempted-capture). Don't fall through.
 }
 
 // ─── Story Reply Handler ──────────────────────────────────────────────────────
