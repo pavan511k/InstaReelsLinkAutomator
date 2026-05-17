@@ -923,24 +923,34 @@ async function processAutomationForComment(supabase, post, commentText, commente
             }
         } else if (platform === 'facebook' && account.fb_page_access_token) {
             // FB Page User Profile lookup. Endpoint:
-            //   GET /{psid}?fields=first_name,last_name
+            //   GET /{psid}?fields=first_name,name
             // Requires the pages_messaging scope (already approved). Uses the
             // PSID (commenterId) — Meta requires the Page Access Token here.
+            //
+            // FB has no IG-style @-handle, so we use the display `name` field
+            // as the recipient_username on dm_sent_log / email_leads. This
+            // mirrors the FB comment path, which stores `from.name` in the
+            // same column. Without this, FB DM-triggered automations leave
+            // recipient_username NULL (no `from.name` on messaging webhook).
             try {
                 const res = await fetch(
                     `${GRAPH_FB_BASE}/${commenterId}` +
-                    `?fields=first_name` +
+                    `?fields=first_name,name` +
                     `&access_token=${encodeURIComponent(account.fb_page_access_token)}`,
                 );
                 if (res.ok) {
                     const data = await res.json();
                     out.firstName = (data?.first_name || '').trim() || null;
+                    if (!commenterUsername) {
+                        const fbName = (data?.name || '').trim();
+                        if (fbName) commenterUsername = fbName;
+                    }
                 } else {
                     const err = await res.json().catch(() => ({}));
-                    console.warn('[Webhook] FB first_name lookup failed:', err.error?.message || res.status);
+                    console.warn('[Webhook] FB profile lookup failed:', err.error?.message || res.status);
                 }
             } catch (err) {
-                console.warn('[Webhook] FB first_name lookup threw:', err.message);
+                console.warn('[Webhook] FB profile lookup threw:', err.message);
             }
         }
     }
