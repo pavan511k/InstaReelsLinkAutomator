@@ -805,7 +805,7 @@ async function handleFacebookCommentEvent(supabase, pageId, commentData) {
         return;
     }
 
-    console.log(`[Webhook] FB Comment on post ${post_id}: "${message}" from user ${from.id}`);
+    console.log(`[Webhook] FB Comment on post ${post_id}: "${message}" from user ${from.id} (this is a Facebook user ID, NOT a PSID — DM replies from this user will arrive with a different PSID)`);
 
     let { data: post } = await supabase
         .from('instagram_posts')
@@ -1277,6 +1277,11 @@ async function processAutomationForComment(supabase, post, commentText, commente
             && planAllowsPro
         ) {
             try {
+                console.log(
+                    `[Webhook/Email] Queueing email collector — platform=${platform} ` +
+                    `automation=${activeAutomation.id} recipient_ig_id=${commenterId} ` +
+                    `comment_id=${commentId} (commentId is synthetic if it contains ':')`
+                );
                 await supabase.from('email_collect_queue').insert({
                     automation_id:        activeAutomation.id,
                     account_id:           post.account_id,
@@ -2008,7 +2013,16 @@ async function handleEmailCollectorReply(supabase, senderId, msgText) {
         .gte('created_at', ttlCutoff)
         .order('created_at', { ascending: false }).limit(1).maybeSingle();
 
-    if (!queueEntry) return false;
+    if (!queueEntry) {
+        // Diagnostic: on FB this is the smoking-gun for the FUID/PSID
+        // mismatch on comment-triggered email collectors. The queue row
+        // was inserted with the commenter's Facebook user ID, but the
+        // reply comes from the page-scoped PSID — different identifiers,
+        // so the lookup misses.
+        console.log(`[Webhook/Email] No awaiting_email queue row for sender ${senderId} (TTL cutoff ${ttlCutoff})`);
+        return false;
+    }
+    console.log(`[Webhook/Email] Found awaiting_email queue row for sender ${senderId} — automation=${queueEntry.automation_id} created=${queueEntry.created_at}`);
 
     const emailMatch = msgText.match(EMAIL_REGEX);
     if (!emailMatch) {
