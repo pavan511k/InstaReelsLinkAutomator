@@ -71,15 +71,19 @@ export async function GET(request) {
         const minAgeIso = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
 
         // ── Fetch sent DMs that haven't been through upsell processing ────
-        // Join to dm_automations to get the upsell config and account info.
+        // Embed dm_automations for the upsell config + workspace_id + owner.
+        // We deliberately do NOT embed connected_accounts here — there is no
+        // FK from dm_automations to connected_accounts (post-less automations
+        // like DM Auto-Responder / Email Collector have post_id=NULL, so we
+        // can't go via posts either). The connected_account is looked up per
+        // automation by workspace_id inside the loop.
         const { data: sentRows, error: fetchErr } = await supabase
             .from('dm_sent_log')
             .select(`
                 id, automation_id, recipient_ig_id, recipient_username, recipient_first_name,
                 post_id, sent_at,
                 dm_automations!inner(
-                    id, user_id, settings_config, dm_type, dm_config,
-                    connected_accounts!inner(id, access_token, ig_user_id)
+                    id, user_id, workspace_id, settings_config, dm_type, dm_config
                 )
             `)
             .eq('status', 'sent')
@@ -208,8 +212,30 @@ export async function GET(request) {
                 continue;
             }
 
+            // ── Resolve the active connected account for this automation ──
+            // dm_automations has no account_id FK (post-less automations
+            // have post_id=NULL, so we can't traverse via posts either).
+            // Look up the active account by workspace_id — every workspace
+            // has at least one active account when its automations are
+            // firing. If somehow none exists (account disconnected after
+            // the original send), skip the upsell.
+            const { data: account } = await supabase
+                .from('connected_accounts')
+                .select('id, access_token, fb_page_access_token, ig_user_id, fb_page_id')
+                .eq('workspace_id', automation.workspace_id)
+                .eq('is_active', true)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+
+            if (!account) {
+                await markUpsellStatus(supabase, row.id, 'skipped');
+                results.skipped++;
+                console.log(`[Upsell] Skipping ${row.recipient_ig_id} — no active account in workspace ${automation.workspace_id}`);
+                continue;
+            }
+
             // ── Resolve plan for this user ─────────────────────────────────
-            const account = automation.connected_accounts;
             const { data: userPlanRow } = await supabase
                 .from('user_plans').select('plan, plan_expires_at, trial_ends_at')
                 .eq('user_id', automation.user_id).maybeSingle();
