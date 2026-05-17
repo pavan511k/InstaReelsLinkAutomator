@@ -1215,6 +1215,7 @@ function AdvancedCard({
   askToFollowButtonText, onAskToFollowButtonText,
   sendFollowUp, onSendFollowUp,
   followUpMessage, onFollowUpMessage,
+  followUpDelayHours, onFollowUpDelayHours,
   openingEnabled = false,
   isPro = false,
   activePlatform = 'instagram',
@@ -1361,27 +1362,52 @@ function AdvancedCard({
           </div>
         )}
 
-        {/* Send follow-up message — Pro feature. 24h after the main
-            DM, we nudge anyone who hasn't clicked the link. Uses the
+        {/* Send follow-up message — Pro feature. After `delayHours`,
+            we nudge anyone who hasn't clicked the link. Uses the
             existing upsell cron (which already does click-gating via
-            click_events ?r=<igsid> attribution). */}
+            click_events ?r=<igsid> attribution). Cron runs every 5
+            minutes, so actual send lands within ±5 min of the target. */}
         <div>
           <Toggle
             checked={Boolean(sendFollowUp)}
             onChange={onSendFollowUp}
             label="Send follow-up message"
-            sublabel="Nudge non-clickers 24 hours after the original DM."
+            sublabel="Nudge non-clickers after a delay you choose."
             proGated
             disabled={!isPro}
           />
           {sendFollowUp && (
-            <textarea
-              value={followUpMessage || ''}
-              onChange={(e) => onFollowUpMessage(e.target.value.slice(0, 640))}
-              placeholder="Hey {first_name}, just checking in — did you get a chance to look at the link? 👀"
-              rows={3}
-              className="mt-3 block w-full resize-none rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-[#E63946] focus:outline-none focus:ring-2 focus:ring-[#E63946]/20 transition-colors"
-            />
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-neutral-700 mb-1">
+                  Send after
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    step={1}
+                    value={Number.isFinite(followUpDelayHours) ? followUpDelayHours : 24}
+                    onChange={(e) => {
+                      const raw  = parseInt(e.target.value, 10);
+                      const safe = Number.isFinite(raw) ? Math.max(1, Math.min(168, raw)) : 24;
+                      onFollowUpDelayHours(safe);
+                    }}
+                    className="w-20 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-[#E63946] focus:outline-none focus:ring-2 focus:ring-[#E63946]/20 transition-colors"
+                  />
+                  <span className="text-sm text-neutral-600">hours</span>
+                  <span className="text-xs text-neutral-400">(1–168, accurate within ±5 min)</span>
+                </div>
+              </div>
+              <textarea
+                value={followUpMessage || ''}
+                onChange={(e) => onFollowUpMessage(e.target.value.slice(0, 640))}
+                placeholder="Hey {first_name}, just checking in — did you get a chance to look at the link? 👀"
+                rows={3}
+                className="block w-full resize-none rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-[#E63946] focus:outline-none focus:ring-2 focus:ring-[#E63946]/20 transition-colors"
+              />
+            </div>
           )}
         </div>
       </div>
@@ -2391,6 +2417,15 @@ export default function BuilderView({
   const [followUpMessage, setFollowUpMessage] = useState(
     settingsCfg.followUpMessage || DEFAULT_FOLLOW_UP,
   );
+  // Delay in hours before the follow-up DM fires. Cron runs every 5 min,
+  // so actual send is within ±5 min of (sent_at + delayHours). Clamp on
+  // load so legacy rows with bad values get a sensible default. Allowed
+  // range 1–168 (1h to 1 week) — matches the builder UI.
+  const [followUpDelayHours, setFollowUpDelayHours] = useState(() => {
+    const raw = settingsCfg.upsell?.delayHours;
+    if (!Number.isFinite(raw)) return 24;
+    return Math.max(1, Math.min(168, Math.round(raw)));
+  });
 
   // Pro check — used to gate the two toggles above. Free users see
   // the Pro badge and can't toggle them on.
@@ -2445,6 +2480,7 @@ export default function BuilderView({
       askToFollowButtonText,
       sendFollowUp,
       followUpMessage,
+      followUpDelayHours,
       emailAskMessage,
       emailThanksMessage,
       // Go Live forces is_active=true; Save respects current state
@@ -2608,6 +2644,8 @@ export default function BuilderView({
             onSendFollowUp={setSendFollowUp}
             followUpMessage={followUpMessage}
             onFollowUpMessage={setFollowUpMessage}
+            followUpDelayHours={followUpDelayHours}
+            onFollowUpDelayHours={setFollowUpDelayHours}
             openingEnabled={openingEnabled}
             isPro={isPro}
             activePlatform={activePlatform}
