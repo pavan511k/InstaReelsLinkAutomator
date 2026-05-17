@@ -2,10 +2,10 @@
  * Single source of truth for the Meta Graph API version.
  *
  * When Meta deprecates the version, change `GRAPH_API_VERSION` here and the
- * change propagates everywhere. Importing files should never hardcode `v21.0`
- * (or whatever the current version is) themselves.
+ * change propagates everywhere. Importing files should never hardcode the
+ * version themselves.
  */
-export const GRAPH_API_VERSION = 'v21.0';
+export const GRAPH_API_VERSION = 'v25.0';
 
 export const GRAPH_FB_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 export const GRAPH_IG_BASE = `https://graph.instagram.com/${GRAPH_API_VERSION}`;
