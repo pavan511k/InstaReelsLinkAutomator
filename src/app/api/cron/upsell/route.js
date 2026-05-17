@@ -16,6 +16,16 @@ import { getEffectivePlan } from '@/lib/plans';
  * Don't extend the cron interval back to hours without first capping
  * the UI minimum to match — otherwise short-delay follow-ups drift.
  *
+ * Gate-aware timing:
+ *   - When an automation has Ask-to-Follow or Opening-Tap enabled, the
+ *     GATE DM lands in dm_sent_log first and the main DM lands later
+ *     (or never, if the fan abandons the gate). We:
+ *       1. Skip when dm_followup_queue.status is awaiting_* or
+ *          max_retries_reached — the main DM never reached the fan.
+ *       2. Compute the eligibility timer from the LATEST sent_at for
+ *          (automation, recipient), so the follow-up fires `delayHours`
+ *          after the MAIN DM, not the gate DM.
+ *
  * → Skips recipients who already clicked (per-recipient attribution via
  *    `?r=<igsid>` appended at send time; see lib/click-tracking.js)
  * → Enqueues a follow-up DM in dm_queue with is_upsell=true
@@ -103,9 +113,56 @@ export async function GET(request) {
                 continue;
             }
 
-            // Use ?? not || so a legit 0-hour delay isn't replaced by the default.
+            // ── Gate-completion check ─────────────────────────────────────
+            // When the automation has ask-to-follow or opening-tap enabled,
+            // the GATE DM is logged as sent_log status='sent' even though
+            // the main DM hasn't fired yet. Without this check, the upsell
+            // would nudge a fan about a link they never received.
+            // dm_followup_queue.status transitions:
+            //   awaiting_confirmation / awaiting_opening_tap → gate still pending
+            //   link_sent                                    → gate passed, main DM out (normal upsell flow continues)
+            //   max_retries_reached                          → gate permanently failed (fan already got nudged)
+            // For pending and permanently-failed gates, the main DM never
+            // landed — skip the upsell. If the fan later passes the gate,
+            // sendRewardDM logs a fresh dm_sent_log row that goes through
+            // this cron normally on its own merits.
+            const { data: pendingGate } = await supabase
+                .from('dm_followup_queue')
+                .select('id, status')
+                .eq('automation_id', row.automation_id)
+                .eq('recipient_ig_id', row.recipient_ig_id)
+                .in('status', ['awaiting_confirmation', 'awaiting_opening_tap', 'max_retries_reached'])
+                .limit(1)
+                .maybeSingle();
+
+            if (pendingGate) {
+                await markUpsellStatus(supabase, row.id, 'skipped');
+                results.skipped++;
+                console.log(`[Upsell] ✋ Skipping ${row.recipient_ig_id} — gate status='${pendingGate.status}' (main DM never reached)`);
+                continue;
+            }
+
+            // ── Pick LATEST sent_at for this (automation, recipient) ──────
+            // When a gate fires, the gate DM is logged first and the main
+            // DM comes later as its own row. We want the upsell timer to
+            // start from the LAST DM the fan received, not the first.
+            // Also covers re-engagement: fan commenting again on the same
+            // automation after a long gap gets the new sent_at, not the
+            // stale one. Use ?? not || so a legit 0-hour delay isn't
+            // replaced by the default.
+            const { data: latestRow } = await supabase
+                .from('dm_sent_log')
+                .select('sent_at')
+                .eq('automation_id', row.automation_id)
+                .eq('recipient_ig_id', row.recipient_ig_id)
+                .eq('status', 'sent')
+                .order('sent_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            const effectiveSentAt = latestRow?.sent_at || row.sent_at;
             const delayHours = upsellCfg.delayHours ?? DEFAULT_DELAY_HOURS;
-            const eligibleAt = new Date(new Date(row.sent_at).getTime() + delayHours * 3_600_000);
+            const eligibleAt = new Date(new Date(effectiveSentAt).getTime() + delayHours * 3_600_000);
 
             // Not yet old enough
             if (now < eligibleAt) {
