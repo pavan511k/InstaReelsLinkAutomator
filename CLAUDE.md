@@ -283,7 +283,6 @@ RESEND_API_KEY, ALERT_FROM_EMAIL
     | `POST /api/automations/expire`   | every 1h | Flips `is_active` to false once `expires_at` is reached |
     | `GET  /api/broadcast/process`    | every 1m | Drains `broadcast_recipients` per running broadcast job, respecting per-account rate limit |
     | `GET  /api/cron/process-queue`   | every 1m | Drains `dm_queue`. Rate-limit math depends on this 1-min cadence — `budgetThisWindow = max(1, floor(rate_limit_per_hour / 60))` |
-    | `GET  /api/cron/flow-steps`      | every 1h | Enqueues next-step DMs from multi-step flow automations once their `delayHours` has elapsed |
     | `GET  /api/cron/sendback`        | every 1h | Retries failed DMs with per-row backoff `[1, 4, 12]` hours |
     | `GET  /api/cron/upsell`          | every 5 min | Enqueues upsell follow-up DMs after the configured `delay_hours` (1–168) since the original send. Cadence is tuned to the UI minimum — don't raise it without also raising the minimum delay. |
 
