@@ -79,3 +79,27 @@ CREATE POLICY "Users view own click events"
             SELECT id FROM dm_automations WHERE user_id = auth.uid()
         )
     );
+
+-- ── Auto-populate workspace_id on insert ───────────────────────
+-- The /r/[code] redirect handler doesn't pass workspace_id when
+-- logging clicks. Derive it from automation_id → dm_automations.
+-- Without this, rows land workspace_id = NULL and any future
+-- workspace-scoped query misses them.
+CREATE OR REPLACE FUNCTION trigger_click_events_set_workspace_id()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.workspace_id IS NULL AND NEW.automation_id IS NOT NULL THEN
+        SELECT workspace_id INTO NEW.workspace_id
+        FROM dm_automations
+        WHERE id = NEW.automation_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_click_events_set_workspace_id ON click_events;
+CREATE TRIGGER tr_click_events_set_workspace_id
+    BEFORE INSERT ON click_events
+    FOR EACH ROW
+    EXECUTE FUNCTION trigger_click_events_set_workspace_id();
