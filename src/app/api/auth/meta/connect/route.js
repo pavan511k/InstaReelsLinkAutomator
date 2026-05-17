@@ -41,9 +41,38 @@ export async function GET(request) {
         );
     }
 
-    // Get the logged-in user
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    // Get the logged-in user. Two paths:
+    //   1. Web flow → session cookie (existing behavior).
+    //   2. Mobile flow → ?token= query param carrying the Supabase JWT.
+    //      We can't share cookies with WebBrowser.openAuthSessionAsync, so
+    //      the mobile app passes the JWT in the URL. Validated via the
+    //      admin client.
+    const isMobile = searchParams.get('source') === 'mobile';
+    const mobileToken = searchParams.get('token');
+
+    let user = null;
+    let supabase = null; // user-context client; only created on web flow
+
+    if (isMobile && mobileToken) {
+        try {
+            const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
+            const adminClient = createSupabaseClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL,
+                process.env.SUPABASE_SERVICE_ROLE_KEY,
+            );
+            const { data, error: tokenError } = await adminClient.auth.getUser(mobileToken);
+            if (tokenError) {
+                console.warn('[OAuth/Connect] Mobile token rejected:', tokenError.message);
+            } else {
+                user = data.user;
+            }
+        } catch (err) {
+            console.warn('[OAuth/Connect] Mobile token validation threw:', err.message);
+        }
+    } else {
+        supabase = await createClient();
+        ({ data: { user } } = await supabase.auth.getUser());
+    }
 
     if (!user) {
         return NextResponse.redirect(new URL('/login', request.url));
@@ -57,31 +86,39 @@ export async function GET(request) {
         return NextResponse.redirect(url);
     }
 
-    // Cross-platform conflict check — only one active platform per
-    // workspace. Reconnecting the SAME platform is fine (token refresh);
-    // switching to a DIFFERENT platform in the same workspace requires
-    // explicit disconnect first. Other workspaces are unaffected.
-    const { getActiveWorkspaceId } = await import('@/lib/workspace-context');
-    const workspaceId = await getActiveWorkspaceId(supabase);
-    if (workspaceId) {
-        const { data: activeAccounts } = await supabase
-            .from('connected_accounts')
-            .select('platform')
-            .eq('workspace_id', workspaceId)
-            .eq('is_active', true);
+    // Cross-platform conflict check (web flow only). We skip this for mobile
+    // because the cookie-bound getActiveWorkspaceId isn't available there,
+    // and the same protection still fires at the callback step via the
+    // unique-index conflict path. Mobile users get the
+    // `account_in_other_workspace` / `account_in_use_elsewhere` deep-link
+    // response instead of the `disconnect_first` preflight.
+    if (!isMobile && supabase) {
+        const { getActiveWorkspaceId } = await import('@/lib/workspace-context');
+        const workspaceId = await getActiveWorkspaceId(supabase);
+        if (workspaceId) {
+            const { data: activeAccounts } = await supabase
+                .from('connected_accounts')
+                .select('platform')
+                .eq('workspace_id', workspaceId)
+                .eq('is_active', true);
 
-        if (activeAccounts && activeAccounts.length > 0) {
-            const conflictRow = activeAccounts.find((a) => a.platform !== connectionType);
-            if (conflictRow) {
-                const url = new URL('/settings', request.url);
-                url.searchParams.set('error', 'disconnect_first');
-                return NextResponse.redirect(url);
+            if (activeAccounts && activeAccounts.length > 0) {
+                const conflictRow = activeAccounts.find((a) => a.platform !== connectionType);
+                if (conflictRow) {
+                    const url = new URL('/settings', request.url);
+                    url.searchParams.set('error', 'disconnect_first');
+                    return NextResponse.redirect(url);
+                }
             }
         }
     }
 
-    // Build the OAuth URL with user ID as state (for CSRF protection + user mapping)
-    const authUrl = buildAuthUrl(connectionType, user.id);
+    // Build the OAuth URL with user ID as state. When initiated by the
+    // mobile app, append `:mobile` so the callback knows to redirect
+    // back to the autodm:// deep link instead of the web `/settings`
+    // route. Web flows are unchanged.
+    const stateArg = isMobile ? `${user.id}:mobile` : user.id;
+    const authUrl  = buildAuthUrl(connectionType, stateArg);
 
     return NextResponse.redirect(authUrl);
 }
