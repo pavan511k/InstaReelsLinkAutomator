@@ -103,70 +103,53 @@ export default function AutomationRulesModal({ open, onClose }) {
                             The tie-breaker rules
                         </h3>
 
-                        {/* Rule 1: specific shadows any (active specific only) */}
                         <RuleCard
                             number="1"
-                            title="An active specific-post automation always wins over Any Post"
+                            title="An active specific-post automation wins over Any Post"
                         >
-                            <p className="text-sm text-neutral-600 leading-relaxed">
-                                If a specific-post automation is active, your &quot;Any Post&quot; catch-all
-                                stays out of the way on that post — even if the specific one&apos;s keyword
-                                doesn&apos;t match. <strong className="text-neutral-900">Pause the specific
-                                automation</strong> and Any Post takes over.
-                            </p>
                             <Versus
                                 left={{ label: 'Specific post (active)', detail: 'Bound to Post #X', winner: true }}
                                 right={{ label: 'Any post', detail: 'Catch-all across posts', winner: false }}
                             />
                         </RuleCard>
 
-                        {/* Rule 2: same-post — specificity decides */}
                         <RuleCard
                             number="2"
-                            title="Two automations on the same post? More specific wins"
+                            title="More specific trigger wins on the same post"
                         >
-                            <p className="text-sm text-neutral-600 leading-relaxed">
-                                We first check which automations actually match the comment. Among the
-                                matchers, the more specific trigger fires.
-                                <strong className="text-neutral-900"> Keywords beat &quot;Emojis/Mentions only&quot; beats &quot;All comments&quot;.</strong>
-                                {' '}If only one matches, that one wins regardless of trigger type.
-                            </p>
                             <Versus
                                 left={{ label: 'Keywords: "buy"', detail: 'Matches "I want to buy"', winner: true }}
                                 right={{ label: 'All comments', detail: 'Would also match', winner: false }}
                             />
                         </RuleCard>
 
-                        {/* Rule 3: same specificity, both match — newest wins */}
                         <RuleCard
                             number="3"
-                            title="Same specificity and both match? Newest wins"
+                            title="Tied on specificity? Newest edit wins"
                         >
-                            <p className="text-sm text-neutral-600 leading-relaxed">
-                                When two automations are tied on specificity (e.g. both have keyword lists
-                                that contain &quot;link&quot;), the one you most recently edited fires.
-                                Saving an automation refreshes its &quot;updated&quot; timestamp — so you
-                                can shift priority just by opening &amp; saving.
-                            </p>
                             <Versus
                                 left={{ label: 'Automation A', detail: 'Updated 2 hours ago', winner: true }}
                                 right={{ label: 'Automation B', detail: 'Updated 5 days ago', winner: false }}
                             />
                         </RuleCard>
 
-                        {/* Rule 4: DM trigger precedence */}
                         <RuleCard
                             number="4"
-                            title="DM trigger: Auto-Responder beats Email Collector"
+                            title="A fan mid-flow stays in that flow"
                         >
-                            <p className="text-sm text-neutral-600 leading-relaxed">
-                                If a fan DMs a keyword that matches both a DM Auto-Responder AND an Email
-                                Collector, the Auto-Responder fires. Email Collector only catches keywords
-                                that no Auto-Responder claims.
-                            </p>
                             <Versus
-                                left={{ label: 'DM Auto-Responder', detail: 'Keyword: "link"', winner: true }}
-                                right={{ label: 'Email Collector', detail: 'Keyword: "link"', winner: false }}
+                                left={{ label: 'Email Collector (asked for email)', detail: 'Fan replies with their email', winner: true }}
+                                right={{ label: 'DM Auto-Responder', detail: 'Any-keyword catch-all', winner: false }}
+                            />
+                        </RuleCard>
+
+                        <RuleCard
+                            number="5"
+                            title="No flow in progress? Specific keyword beats any-keyword"
+                        >
+                            <Versus
+                                left={{ label: 'Email Collector', detail: 'Keyword: "link"', winner: true }}
+                                right={{ label: 'DM Auto-Responder', detail: 'Any keyword', winner: false }}
                             />
                         </RuleCard>
                     </section>

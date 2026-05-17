@@ -160,6 +160,30 @@ export default async function FlowBuilderPage({ searchParams }) {
   // feature access (full Pro experience during the 30-day trial).
   const effectivePlan = await getUserEffectivePlan(supabase, user.id);
 
+  // Existing DM-triggered automations in this workspace, used by the
+  // builder to surface overlap warnings (e.g. "your catch-all auto-
+  // responder will still let your Email Collector handle 'link'").
+  // Only the fields needed for the overlap math — minimal projection.
+  let relatedDmAutomations = [];
+  if (workspaceId) {
+    const { data } = await supabase
+      .from('dm_automations')
+      .select('id, is_active, trigger_config, settings_config')
+      .eq('workspace_id', workspaceId)
+      .eq('dm_type', 'builder_v2')
+      .eq('is_active', true)
+      .in('settings_config->>templateType', ['dm-auto-responder', 'email-collector']);
+    relatedDmAutomations = (data || [])
+      .filter((a) => a.id !== editId)
+      .map((a) => ({
+        id:           a.id,
+        templateType: a.settings_config?.templateType,
+        anyKeyword:   Boolean(a.trigger_config?.anyKeyword),
+        keywords:     Array.isArray(a.trigger_config?.keywords) ? a.trigger_config.keywords : [],
+        name:         a.settings_config?.automationName || 'Untitled automation',
+      }));
+  }
+
   // Pro-only template types — block direct URL access in edit mode is
   // fine (the row already exists), but block CREATE for free users so
   // they don't waste time building a flow that won't save.
@@ -178,6 +202,7 @@ export default async function FlowBuilderPage({ searchParams }) {
       effectivePlan={effectivePlan}
       accountDefaults={accountDefaults}
       activePlatform={activePlatform}
+      relatedDmAutomations={relatedDmAutomations}
     />
   );
 }

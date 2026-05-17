@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 // Use useLayoutEffect on the client (runs synchronously before paint,
 // no FOUC) and useEffect on the server (avoids the React warning that
@@ -821,6 +821,94 @@ function LockedTextField({ value, onChange, label, placeholder, maxLength = 20 }
         >
           {editing ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : <SquarePen className="h-3.5 w-3.5" strokeWidth={2} />}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── DM-trigger overlap notice ─────────────────────────────────────────────
+// Surfaces a small callout below the keyword card when this automation's
+// shape would overlap with another active DM-triggered automation in the
+// same workspace. Helps creators understand precedence without reading
+// the "How it works" modal:
+//   • Editing an Email Collector while an any-keyword Auto-Responder
+//     exists: Auto-Responder won't intercept this collector's keywords
+//     or the fan's email reply.
+//   • Editing a DM Auto-Responder with "Any keyword" on while specific-
+//     keyword Email Collectors exist: those keywords stay claimed by the
+//     collectors; this catch-all handles everything else.
+// Renders nothing for templates that don't share the DM-trigger surface
+// (comment-to-dm, story-reply) or when no overlap exists.
+function DmOverlapNotice({ type, anyKeyword, relatedDmAutomations }) {
+  if (type !== 'email-collector' && type !== 'dm-auto-responder') return null;
+  if (!relatedDmAutomations || relatedDmAutomations.length === 0) return null;
+
+  // Editing an Email Collector → look for catch-all Auto-Responders.
+  if (type === 'email-collector') {
+    const catchAlls = relatedDmAutomations.filter(
+      (a) => a.templateType === 'dm-auto-responder' && a.anyKeyword,
+    );
+    if (catchAlls.length === 0) return null;
+    return (
+      <NoticeCard
+        tone="info"
+        title="Your catch-all auto-responder won't interfere"
+      >
+        You have an &quot;any-keyword&quot; DM Auto-Responder
+        {catchAlls.length === 1 ? (
+          <> (<strong className="font-semibold">{catchAlls[0].name}</strong>)</>
+        ) : (
+          <> ({catchAlls.length} active)</>
+        )}
+        . Don&apos;t worry — this Email Collector will still fire on its
+        keywords, and the fan&apos;s email reply will route back here for
+        up to 24 hours.
+      </NoticeCard>
+    );
+  }
+
+  // Editing a DM Auto-Responder with anyKeyword on → list overlapping
+  // Email Collectors so the creator can see what's claimed.
+  if (!anyKeyword) return null;
+  const collectors = relatedDmAutomations.filter(
+    (a) => a.templateType === 'email-collector',
+  );
+  if (collectors.length === 0) return null;
+
+  return (
+    <NoticeCard
+      tone="info"
+      title="Existing Email Collectors keep their keywords"
+    >
+      This catch-all will handle every DM <em>except</em> those claimed by
+      your Email Collectors:
+      <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-[12px] text-neutral-700">
+        {collectors.map((c) => (
+          <li key={c.id}>
+            <strong className="font-semibold">{c.name}</strong>
+            {c.anyKeyword
+              ? <> &mdash; <span className="text-neutral-500">any keyword</span></>
+              : c.keywords.length > 0
+                ? <> &mdash; <span className="font-mono text-neutral-700">{c.keywords.slice(0, 5).join(', ')}{c.keywords.length > 5 ? '…' : ''}</span></>
+                : null}
+          </li>
+        ))}
+      </ul>
+    </NoticeCard>
+  );
+}
+
+function NoticeCard({ tone = 'info', title, children }) {
+  // Tone is reserved for future variants (warn/error). Today only `info`.
+  void tone;
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+      <div className="flex items-start gap-2.5">
+        <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-white text-[10px] font-bold">i</div>
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-blue-900">{title}</p>
+          <div className="mt-1 text-[12px] leading-relaxed text-blue-900/85">{children}</div>
+        </div>
       </div>
     </div>
   );
@@ -2162,6 +2250,8 @@ export default function BuilderView({
                             // automations only (edit mode ignores these).
   activePlatform = 'instagram', // 'instagram' | 'facebook' | 'both' — hides
                                 // IG-only toggles when only FB is connected.
+  relatedDmAutomations = [],    // Other active DM-triggered automations in this
+                                // workspace, used to surface overlap warnings.
 }) {
   useBuilderFullBleed();
   const router = useRouter();
@@ -2435,17 +2525,23 @@ export default function BuilderView({
         );
       case 'keywords':
         return (
-          <KeywordsCard
-            key={cardKey}
-            num={num}
-            anyKeyword={anyKeyword}
-            onAnyKeyword={setAnyKeyword}
-            keywords={keywords}
-            onAddKeyword={(kw) => setKeywords([...keywords, kw])}
-            onRemoveKeyword={(kw) => setKeywords(keywords.filter((k) => k !== kw))}
-            isFocused={isFocused}
-            onFocus={onFocus}
-          />
+          <Fragment key={cardKey}>
+            <KeywordsCard
+              num={num}
+              anyKeyword={anyKeyword}
+              onAnyKeyword={setAnyKeyword}
+              keywords={keywords}
+              onAddKeyword={(kw) => setKeywords([...keywords, kw])}
+              onRemoveKeyword={(kw) => setKeywords(keywords.filter((k) => k !== kw))}
+              isFocused={isFocused}
+              onFocus={onFocus}
+            />
+            <DmOverlapNotice
+              type={type}
+              anyKeyword={anyKeyword}
+              relatedDmAutomations={relatedDmAutomations}
+            />
+          </Fragment>
         );
       case 'email-capture':
         return (
