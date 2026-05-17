@@ -692,9 +692,29 @@ async function sendRewardDM(igSenderId, recipientId, dmType, dmConfig, accessTok
             }
 
             if (imageUrl) {
+                // Headline shown above the image-card buttons. Meta requires
+                // a non-empty title (max 80 chars). Mirrors the fallback
+                // order in sendAutomatedDM (send-dm.js):
+                //   1. Explicit imageHeadline set on the automation
+                //   2. First line of the message — natural-looking default
+                //   3. "Take a look 👇" so we never push the literal app name
+                const explicitHeadline = (dmConfig.imageHeadline || '').trim();
+                const firstLine        = (mainMessage.split('\n').find((l) => l.trim()) || '').trim();
+                const slideHeadline    =
+                    (explicitHeadline && explicitHeadline.slice(0, 80))
+                    || (firstLine && firstLine.slice(0, 80))
+                    || 'Take a look 👇';
+
+                // If the headline is just the first line of the message, drop
+                // that line from the description to avoid the same text
+                // appearing twice (title + subtitle would be redundant).
+                const description = !explicitHeadline && firstLine && mainMessage.startsWith(firstLine)
+                    ? mainMessage.slice(firstLine.length).trimStart()
+                    : mainMessage;
+
                 const slide = {
-                    headline:    'AutoDM',
-                    description: mainMessage,
+                    headline:    slideHeadline,
+                    description,
                     imageUrl,
                     ...(validButtons.length > 0 && {
                         buttons: validButtons.map((b) => ({ type: 'url', label: b.label, value: b.url })),
