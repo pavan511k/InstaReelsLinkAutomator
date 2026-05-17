@@ -121,23 +121,48 @@ export async function GET(request) {
     const error = searchParams.get('error');
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+    // Mobile source detection: when state ends with ":mobile", the OAuth
+    // flow was initiated from the mobile app. We need this BEFORE the
+    // error/missing-params guards so even pre-flight failures route back
+    // to the mobile deep link (otherwise the mobile app sees Safari hang
+    // on /dashboard?error=...).
+    const isMobileSource = typeof state === 'string' && state.endsWith(':mobile');
+
+    function finishRedirect({ webPath, mobileStatus, mobileMessage, mobileType }) {
+        if (isMobileSource) {
+            const p = new URLSearchParams();
+            if (mobileStatus)  p.set('status',  mobileStatus);
+            if (mobileMessage) p.set('message', mobileMessage);
+            if (mobileType)    p.set('type',    mobileType);
+            return new NextResponse(null, {
+                status: 303,
+                headers: { Location: `autodm://oauth-complete?${p.toString()}` },
+            });
+        }
+        return NextResponse.redirect(`${appUrl}${webPath}`);
+    }
+
     // User denied permissions
     if (error) {
         console.error('[OAuth] Provider returned error:', error, searchParams.get('error_description'));
-        return NextResponse.redirect(`${appUrl}/dashboard?error=oauth_denied`);
+        return finishRedirect({ webPath: '/dashboard?error=oauth_denied', mobileStatus: 'err', mobileMessage: 'oauth_denied' });
     }
 
     if (!code || !state) {
-        return NextResponse.redirect(`${appUrl}/dashboard?error=missing_params`);
+        return finishRedirect({ webPath: '/dashboard?error=missing_params', mobileStatus: 'err', mobileMessage: 'missing_params' });
     }
 
-    // Parse state: "connectionType:userId"
+    // Parse state: "connectionType:userId" — plus optional ":mobile" suffix
+    // when the OAuth flow was initiated from the mobile app. We strip the
+    // suffix off the userId before passing it downstream so all existing
+    // logic (token exchange, account upsert) stays identical.
     const colonIndex = state.indexOf(':');
     const connectionType = state.substring(0, colonIndex);
-    const userId = state.substring(colonIndex + 1);
+    const stateTail      = state.substring(colonIndex + 1);
+    const userId         = isMobileSource ? stateTail.slice(0, -':mobile'.length) : stateTail;
 
     if (!connectionType || !userId) {
-        return NextResponse.redirect(`${appUrl}/dashboard?error=invalid_state`);
+        return finishRedirect({ webPath: '/dashboard?error=invalid_state', mobileStatus: 'err', mobileMessage: 'invalid_state' });
     }
 
     try {
@@ -146,12 +171,43 @@ export async function GET(request) {
             : await handleFacebookCallback(code, userId, connectionType);
 
         // Save to Supabase — connected to the user's active workspace.
-        const supabase = await createClient();
+        // Web flow has a session cookie; getActiveWorkspaceId reads it
+        // and RLS-scoped client writes are fine.
+        // Mobile flow has no cookie (request originated from WebBrowser
+        // outside the app's cookie jar), so we use the service-role
+        // client for both the workspace lookup and the upsert. The
+        // workspace fallback ("user's oldest") matches the mobile app's
+        // own bootstrap, so the row lands where the user expects.
+        const userSupabase = await createClient();
         const platform = accountData.platform;
-        const workspaceId = await getActiveWorkspaceId(supabase);
+        let workspaceId = null;
+
+        // For mobile we use the service-role client for all DB writes
+        // since there's no auth.uid() to satisfy RLS. The user_id we
+        // insert is already validated (came from the bearer-token check
+        // in /api/auth/meta/connect).
+        const supabase = isMobileSource
+            ? createServiceClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL,
+                process.env.SUPABASE_SERVICE_ROLE_KEY,
+            )
+            : userSupabase;
+
+        if (isMobileSource) {
+            const { data: ws } = await supabase
+                .from('workspaces')
+                .select('id')
+                .eq('owner_id', userId)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+            workspaceId = ws?.id ?? null;
+        } else {
+            workspaceId = await getActiveWorkspaceId(userSupabase);
+        }
 
         if (!workspaceId) {
-            return NextResponse.redirect(`${appUrl}/dashboard?error=no_workspace`);
+            return finishRedirect({ webPath: '/dashboard?error=no_workspace', mobileStatus: 'err', mobileMessage: 'no_workspace' });
         }
 
         // Block if the same IG/FB account is already connected anywhere.
@@ -187,17 +243,22 @@ export async function GET(request) {
 
             if (existingAnywhere && existingAnywhere.user_id !== userId) {
                 // Owned by a different user account entirely.
-                const redirectUrl = new URL('/settings', appUrl);
-                redirectUrl.searchParams.set('error', 'account_in_use_elsewhere');
-                return NextResponse.redirect(redirectUrl.toString());
+                return finishRedirect({
+                    webPath: '/settings?error=account_in_use_elsewhere',
+                    mobileStatus: 'err',
+                    mobileMessage: 'account_in_use_elsewhere',
+                });
             }
 
             if (existingAnywhere && existingAnywhere.workspace_id !== workspaceId) {
                 // Same user, just in another workspace.
-                const redirectUrl = new URL('/settings', appUrl);
-                redirectUrl.searchParams.set('error', 'account_in_other_workspace');
-                redirectUrl.searchParams.set('target_ws', existingAnywhere.workspace_id);
-                return NextResponse.redirect(redirectUrl.toString());
+                const webPath =
+                    `/settings?error=account_in_other_workspace&target_ws=${encodeURIComponent(existingAnywhere.workspace_id)}`;
+                return finishRedirect({
+                    webPath,
+                    mobileStatus: 'err',
+                    mobileMessage: 'account_in_other_workspace',
+                });
             }
         }
 
@@ -223,7 +284,7 @@ export async function GET(request) {
 
             if (updateError) {
                 console.error('Failed to update account:', updateError);
-                return NextResponse.redirect(`${appUrl}/dashboard?error=save_failed`);
+                return finishRedirect({ webPath: '/dashboard?error=save_failed', mobileStatus: 'err', mobileMessage: 'save_failed' });
             }
         } else {
             // ── Brand-new connection ──────────────────────────────────────────
@@ -257,7 +318,7 @@ export async function GET(request) {
 
             if (insertError) {
                 console.error('Failed to save account:', insertError);
-                return NextResponse.redirect(`${appUrl}/dashboard?error=save_failed`);
+                return finishRedirect({ webPath: '/dashboard?error=save_failed', mobileStatus: 'err', mobileMessage: 'save_failed' });
             }
 
             // Trial provisioning + trial-started email moved to the
@@ -285,9 +346,14 @@ export async function GET(request) {
         }
 
         // Send new users straight to /automations so they can configure their
-        // first automation immediately. (Legacy /posts page was removed in the
-        // builder refactor — the same use case is now covered there.)
-        return NextResponse.redirect(`${appUrl}/automations?connected=${connectionType}`);
+        // first automation immediately. Mobile flows route back to the deep
+        // link (autodm://oauth-complete) — the mobile app's oauth-complete
+        // screen then takes the user to (tabs).
+        return finishRedirect({
+            webPath: `/automations?connected=${connectionType}`,
+            mobileStatus: 'ok',
+            mobileType:   connectionType,
+        });
     } catch (err) {
         console.error('[OAuth] Callback failed:', err.message);
         // Pass the thrown error message as the 'error' query param so ConnectAccount.js
@@ -295,7 +361,7 @@ export async function GET(request) {
         // Fall back to 'oauth_failed' for generic/unexpected errors.
         const knownErrors = ['no_facebook_page', 'no_instagram_account', 'save_failed'];
         const errorKey = knownErrors.includes(err.message) ? err.message : 'oauth_failed';
-        return NextResponse.redirect(`${appUrl}/dashboard?error=${errorKey}`);
+        return finishRedirect({ webPath: `/dashboard?error=${errorKey}`, mobileStatus: 'err', mobileMessage: errorKey });
     }
 }
 
