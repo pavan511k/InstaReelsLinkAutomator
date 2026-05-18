@@ -74,7 +74,10 @@
       "Bash(grep -nA 3 'connected_accounts' \"/c/Code/SelfProjLearning/InstaReelsLinkAutomator/supabase/schema/01_connected_accounts.sql\")",
       "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit 2>&1 | Select-Object -Last 20 | Out-String; \"ExitCode=$LASTEXITCODE\")",
       "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit 2>&1 | Select-Object -Last 15 | Out-String; \"ExitCode=$LASTEXITCODE\")",
-      "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit 2>&1 | Select-Object -Last 10 | Out-String; \"ExitCode=$LASTEXITCODE\")"
+      "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit 2>&1 | Select-Object -Last 10 | Out-String; \"ExitCode=$LASTEXITCODE\")",
+      "WebFetch(domain:supabase.com)",
+      "PowerShell(Get-ChildItem -Path 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\.claude' -Recurse -File | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\('C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\.claude\\\\', ''\\) } | Select-Object -First 40)",
+      "PowerShell(python --version 2>&1 | Out-String)"
     ]
   }
 }
