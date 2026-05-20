@@ -32,7 +32,7 @@ const IG_SCOPES = [
 // Facebook Login scopes.
 const FB_SCOPES = [
     'pages_show_list',
-    // 'pages_read_engagement',   // REJECTED in App Review.
+    'pages_read_engagement',   // REJECTED in App Review.
     // ⚠ Required to receive `feed` webhook events for FB Page comments
     //   AND for linked IG comments arriving via the Page subscription.
     //   Without it, only DMs (`messages`) are delivered.
