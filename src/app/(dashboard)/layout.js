@@ -47,7 +47,7 @@ export default async function DashboardLayout({ children }) {
     try {
         const { data: accounts } = activeWorkspaceId ? await supabase
             .from('connected_accounts')
-            .select('id, ig_profile_picture_url, platform')
+            .select('id, ig_profile_picture_url, fb_page_picture_url, platform')
             .eq('workspace_id', activeWorkspaceId)
             .eq('is_active', true) : { data: [] };
 
@@ -56,8 +56,11 @@ export default async function DashboardLayout({ children }) {
             // Pick the same account we'll display the avatar for — pass
             // both URL and id so the Sidebar's onError handler can call
             // /api/accounts/refresh-profile-pic against the right row.
-            const picAccount = accounts.find((a) => a.ig_profile_picture_url);
-            profilePicUrl = picAccount?.ig_profile_picture_url || null;
+            // Prefer IG picture if present; otherwise fall back to the
+            // connected FB Page's picture so FB-only accounts also show
+            // a real avatar instead of falling through to initials.
+            const picAccount = accounts.find((a) => a.ig_profile_picture_url || a.fb_page_picture_url);
+            profilePicUrl = picAccount?.ig_profile_picture_url || picAccount?.fb_page_picture_url || null;
             profilePicAccountId = picAccount?.id || null;
             // Active platform — used to hide IG-only nav items for FB-only
             // accounts. If the user has both 'instagram' and 'facebook' rows
