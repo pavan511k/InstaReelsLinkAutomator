@@ -194,11 +194,16 @@ export async function getFacebookLongLivedToken(shortLivedToken) {
 // ─── Shared Graph API Calls ─────────────────────────────────────
 
 /**
- * Get user's Facebook Pages
+ * Get user's Facebook Pages.
+ *
+ * Requests `picture.type(large){url}` so the OAuth callback can store the
+ * Page's profile picture URL alongside id/name — mirrors the IG flow
+ * where `getInstagramUserProfile` returns `profile_picture_url`.
  */
 export async function getUserPages(accessToken) {
+    const fields = 'id,name,access_token,picture.type(large){url}';
     const response = await fetch(
-        `${GRAPH_FB_BASE}/me/accounts?access_token=${accessToken}`
+        `${GRAPH_FB_BASE}/me/accounts?fields=${fields}&access_token=${accessToken}`
     );
 
     if (!response.ok) {
@@ -208,6 +213,27 @@ export async function getUserPages(accessToken) {
 
     const data = await response.json();
     return data.data || [];
+}
+
+/**
+ * Fetch the current profile-picture URL for a Facebook Page.
+ *
+ * Used by /api/accounts/refresh-profile-pic when the stored CDN URL has
+ * expired. Returns the URL string or null. Mirrors the IG flow's
+ * getInstagramUserProfile-based refresh.
+ */
+export async function getFacebookPagePicture(pageId, pageAccessToken) {
+    const response = await fetch(
+        `${GRAPH_FB_BASE}/${pageId}?fields=picture.type(large){url}&access_token=${encodeURIComponent(pageAccessToken)}`
+    );
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error?.message || 'Failed to fetch Page picture');
+    }
+
+    const data = await response.json();
+    return data?.picture?.data?.url || null;
 }
 
 /**
