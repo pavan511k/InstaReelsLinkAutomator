@@ -97,8 +97,12 @@ export default function Features() {
 
         {/* Wallpaper — 9:16 portrait, photo only, with 3 glass notifications
             sequencing in at top + 100% headline overlaid on the bottom of
-            the image (over a darkening gradient for legibility). */}
-        <div className="relative aspect-[9/16] overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-900 shadow-xl">
+            the image (over a darkening gradient for legibility).
+            On mobile / tablet the column spans full width, so the 9:16
+            aspect would render as a ~600px+ tall card. Constrain max-width
+            with mx-auto to render it as a centered phone-mockup style card
+            instead. lg+ removes the cap so it fills the grid column. */}
+        <div className="relative mx-auto aspect-[9/16] w-full max-w-[260px] overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-900 shadow-xl sm:max-w-[300px] lg:max-w-none">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={ENGAGEMENT_PHOTO}

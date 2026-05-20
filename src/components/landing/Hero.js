@@ -57,9 +57,14 @@ export default function Hero() {
       </div>
 
       {/* MOBILE photo — in flow, capped, aspect-ratio container so it stacks
-          naturally below the text. Bottom mask fades into the band. */}
+          naturally below the text. Bottom mask fades into the band.
+          Width steps up gradually so the portrait never dominates the
+          viewport. At its previous max-w-[560px] the image stretched to
+          ~620px tall on tablet-width viewports (incl. Chrome's
+          "Request desktop site" mode on a phone), which made the hero
+          feel image-heavy rather than text-led. */}
       <div className="relative z-[2] block px-6 pb-12 lg:hidden">
-        <div className="relative mx-auto aspect-[1973/2189] w-full max-w-[560px] overflow-hidden">
+        <div className="relative mx-auto aspect-[1973/2189] w-full max-w-[340px] sm:max-w-[400px] md:max-w-[460px] overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={HERO_PHOTO}
