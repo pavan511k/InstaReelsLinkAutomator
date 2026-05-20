@@ -201,6 +201,32 @@ export async function GET(request) {
                 .limit(1)
                 .maybeSingle();
             workspaceId = ws?.id ?? null;
+
+            // First-time mobile users may not have a workspace yet — the
+            // schema's bootstrap INSERT only ran for users who existed at
+            // migration time. Auto-create a Default workspace so the
+            // connect flow doesn't dead-end with `no_workspace`. Uses the
+            // service-role client (already in `supabase` here for mobile
+            // source), so RLS is bypassed.
+            if (!workspaceId) {
+                const { data: created, error: createErr } = await supabase
+                    .from('workspaces')
+                    .insert({ owner_id: userId, name: 'Default', slug: 'default' })
+                    .select('id')
+                    .single();
+                if (createErr) {
+                    console.warn('[OAuth/Callback] Default workspace create failed:', createErr.message);
+                } else if (created?.id) {
+                    workspaceId = created.id;
+                    // Mirror the schema bootstrap: every owner is also a
+                    // workspace_member with role=owner. Some downstream
+                    // policies key off membership rather than ownership.
+                    await supabase
+                        .from('workspace_members')
+                        .insert({ workspace_id: workspaceId, user_id: userId, role: 'owner' })
+                        .then(() => null, () => null);
+                }
+            }
         } else {
             workspaceId = await getActiveWorkspaceId(userSupabase);
         }
@@ -475,6 +501,7 @@ async function handleFacebookCallback(code, userId, connectionType) {
     accountData.fb_page_id           = page.id;
     accountData.fb_page_name         = page.name;
     accountData.fb_page_access_token = page.access_token;
+    accountData.fb_page_picture_url  = page.picture?.data?.url || null;
 
     return accountData;
 }
