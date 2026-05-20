@@ -20,7 +20,7 @@ const REDIRECT_URI         = `${APP_URL}/api/auth/meta/callback`;
 const IG_SCOPES = [
     'instagram_business_basic',
     'instagram_business_manage_messages',
-    // 'instagram_business_manage_comments', // REJECTED in App Review.
+    'instagram_business_manage_comments', // REJECTED in App Review.
     // ⚠ This scope gates TWO things, not just one:
     //   1. RECEIVING `comments` webhook events. Without it Meta delivers
     //      DM events but NEVER delivers a comment event, so every
@@ -36,7 +36,7 @@ const FB_SCOPES = [
     // ⚠ Required to receive `feed` webhook events for FB Page comments
     //   AND for linked IG comments arriving via the Page subscription.
     //   Without it, only DMs (`messages`) are delivered.
-    // 'pages_manage_engagement', // TO REQUEST in next App Review — needed for the Public Comment Reply feature (`replyToComment` posts via POST /{comment-id}/comments).
+    'pages_manage_engagement', // TO REQUEST in next App Review — needed for the Public Comment Reply feature (`replyToComment` posts via POST /{comment-id}/comments).
     'pages_manage_metadata',
     'pages_messaging',
 ];
