@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS connected_accounts (
     ig_profile_picture_url  text,
     fb_page_id              text,
     fb_page_name            text,
+    fb_page_picture_url     text,
 
     -- OAuth tokens (encrypted at rest by Supabase vault in production)
     access_token            text NOT NULL DEFAULT '',
