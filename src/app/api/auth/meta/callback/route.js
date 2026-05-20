@@ -8,7 +8,6 @@ import {
     exchangeCodeForFacebookToken,
     getFacebookLongLivedToken,
     getUserPages,
-    getInstagramAccount,
     getMetaUser,
 } from '@/lib/meta-oauth';
 import { GRAPH_API_VERSION, GRAPH_FB_BASE, GRAPH_IG_BASE } from '@/lib/meta-graph';
@@ -445,66 +444,37 @@ async function handleInstagramCallback(code, userId) {
 }
 
 /**
- * Handle Facebook Login callback (for Facebook and Both connection types)
- * Uses Facebook's token endpoints + Graph API to find IG Business Account
+ * Handle Facebook Login callback. Only fires for connectionType='facebook';
+ * the 'both' (FB + linked IG) type was removed from /api/auth/meta/connect,
+ * so new connections always land here as pure-FB. Existing 'both' rows in
+ * the DB are read elsewhere but never re-enter this function.
  */
 async function handleFacebookCallback(code, userId, connectionType) {
-    // 1. Exchange code for short-lived Facebook token
-    const shortToken = await exchangeCodeForFacebookToken(code);
-
-    // 2. Exchange for long-lived token
-    const longToken = await getFacebookLongLivedToken(shortToken.access_token);
+    const shortToken  = await exchangeCodeForFacebookToken(code);
+    const longToken   = await getFacebookLongLivedToken(shortToken.access_token);
     const accessToken = longToken.access_token;
-    const expiresIn = longToken.expires_in || 5184000;
+    const expiresIn   = longToken.expires_in || 5184000;
 
-    // 3. Get Meta user info
     const metaUser = await getMetaUser(accessToken);
-
-    // 4. Get user's Facebook Pages
-    const pages = await getUserPages(accessToken);
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const pages    = await getUserPages(accessToken);
 
     const accountData = {
-        user_id: userId,
-        platform: connectionType,
-        meta_user_id: metaUser.id,
-        access_token: accessToken,
+        user_id:          userId,
+        platform:         connectionType,
+        meta_user_id:     metaUser.id,
+        access_token:     accessToken,
         token_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
-        scopes: shortToken.scope ? shortToken.scope.split(',') : [],
+        scopes:           shortToken.scope ? shortToken.scope.split(',') : [],
     };
 
-    // Find Instagram Business Account if needed
-    if (connectionType === 'both') {
-        for (const page of pages) {
-            const igAccount = await getInstagramAccount(page.id, page.access_token);
-            if (igAccount) {
-                accountData.ig_user_id = igAccount.id;
-                accountData.ig_username = igAccount.username;
-                accountData.ig_profile_picture_url = igAccount.profile_picture_url;
-                accountData.fb_page_id = page.id;
-                accountData.fb_page_name = page.name;
-                accountData.fb_page_access_token = page.access_token;
-                break;
-            }
-        }
-        if (!accountData.ig_user_id) {
-            throw new Error('no_instagram_account');
-        }
+    if (pages.length === 0) {
+        throw new Error('no_facebook_page');
     }
 
-    // Store Facebook Page info
-    if (connectionType === 'facebook' || connectionType === 'both') {
-        if (pages.length > 0 && !accountData.fb_page_id) {
-            const page = pages[0];
-            accountData.fb_page_id = page.id;
-            accountData.fb_page_name = page.name;
-            accountData.fb_page_access_token = page.access_token;
-        }
-        if (!accountData.fb_page_id) {
-            throw new Error('no_facebook_page');
-        }
-    }
+    const page = pages[0];
+    accountData.fb_page_id           = page.id;
+    accountData.fb_page_name         = page.name;
+    accountData.fb_page_access_token = page.access_token;
 
     return accountData;
 }
