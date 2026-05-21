@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { GRAPH_API_VERSION, GRAPH_FB_BASE } from '@/lib/meta-graph';
 import { bindPendingNextPostAutomations } from '@/lib/next-post-binding';
 import { getActiveWorkspaceId } from '@/lib/workspace-context';
@@ -7,6 +8,13 @@ import { getActiveWorkspaceId } from '@/lib/workspace-context';
 /**
  * POST /api/posts/sync
  * Fetches posts from all connected Instagram/Facebook accounts and upserts to DB.
+ *
+ * Two auth paths:
+ *   - Web: session cookie via supabase-server createClient().
+ *   - Mobile: Authorization: Bearer <JWT> header + ?workspace_id=<uuid>
+ *     query param (mobile doesn't have the active_workspace_id cookie).
+ *     Validated against the admin client and scoped to a workspace the
+ *     user owns or is a member of.
  *
  * IMPORTANT: allPosts is deduplicated by ig_post_id before the upsert.
  * A user can have both a 'both' account and a 'facebook' account active at the
@@ -16,14 +24,68 @@ import { getActiveWorkspaceId } from '@/lib/workspace-context';
  *   "ON CONFLICT DO UPDATE command cannot affect row a second time"
  * Deduplication prevents this.
  */
-export async function POST() {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+export async function POST(request) {
+    let user = null;
+    let workspaceId = null;
+    let supabase = null;
+
+    // Mobile path: Bearer token. The cookie client wouldn't see it, so
+    // we resolve the user via the service-role admin client.
+    const authHeader = request?.headers?.get?.('authorization') || '';
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (bearer) {
+        const admin = createServiceClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY,
+        );
+        const { data, error } = await admin.auth.getUser(bearer);
+        if (error || !data?.user) {
+            return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+        }
+        user = data.user;
+        supabase = admin;
+        const { searchParams } = new URL(request.url);
+        const requestedWs = searchParams.get('workspace_id');
+        if (requestedWs) {
+            const { data: owned } = await admin
+                .from('workspaces')
+                .select('id')
+                .eq('owner_id', user.id)
+                .eq('id', requestedWs)
+                .maybeSingle();
+            if (owned?.id) workspaceId = owned.id;
+            if (!workspaceId) {
+                const { data: member } = await admin
+                    .from('workspace_members')
+                    .select('workspace_id')
+                    .eq('user_id', user.id)
+                    .eq('workspace_id', requestedWs)
+                    .in('role', ['owner', 'admin'])
+                    .maybeSingle();
+                if (member?.workspace_id) workspaceId = member.workspace_id;
+            }
+        }
+        if (!workspaceId) {
+            const { data: oldest } = await admin
+                .from('workspaces')
+                .select('id')
+                .eq('owner_id', user.id)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+            workspaceId = oldest?.id ?? null;
+        }
+    } else {
+        // Web path: cookie session.
+        supabase = await createClient();
+        ({ data: { user } } = await supabase.auth.getUser());
+        if (user) workspaceId = await getActiveWorkspaceId(supabase);
+    }
 
     if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
-    const workspaceId = await getActiveWorkspaceId(supabase);
     if (!workspaceId) {
         return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
     }
