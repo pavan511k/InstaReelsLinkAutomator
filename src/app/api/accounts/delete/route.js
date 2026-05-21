@@ -40,12 +40,36 @@ async function tryDelete(label, fn) {
     }
 }
 
-export async function DELETE() {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+export async function DELETE(request) {
+    // Two auth paths:
+    //   - Web: cookie session via supabase-server createClient()
+    //   - Mobile: Authorization: Bearer <JWT> header. Cookie client
+    //     wouldn't see the JWT, so resolve via admin client.
+    let user = null;
+    let supabase = null;
 
-    if (!user) {
-        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    const authHeader = request?.headers?.get?.('authorization') || '';
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (bearer) {
+        const admin = createServiceClient();
+        const { data, error } = await admin.auth.getUser(bearer);
+        if (error || !data?.user) {
+            return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+        }
+        user = data.user;
+        // No cookie-bound supabase client available on mobile, but
+        // the auth.signOut() below isn't strictly needed since the
+        // admin.auth.admin.deleteUser() invalidates all sessions for
+        // this user across devices. Mobile clears its own session on
+        // the client side after the request returns.
+        supabase = null;
+    } else {
+        supabase = await createClient();
+        ({ data: { user } } = await supabase.auth.getUser());
+        if (!user) {
+            return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+        }
     }
 
     const db = createServiceClient();
@@ -223,7 +247,14 @@ export async function DELETE() {
         // That's the "I deleted my account but everything is still there" bug.
         // Surface the failure so the user knows their account wasn't fully wiped.
 
-        await supabase.auth.signOut();
+        // Web flow signs out the cookie-bound session; mobile has no
+        // cookie session here, so the deleteUser call below is what
+        // invalidates the bearer token (it kills every session for this
+        // user across devices). Mobile clears local Supabase state
+        // client-side after this request returns.
+        if (supabase) {
+            await supabase.auth.signOut();
+        }
 
         const { error: deleteAuthError } = await db.auth.admin.deleteUser(user.id);
         if (deleteAuthError) {
