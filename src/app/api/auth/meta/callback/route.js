@@ -127,12 +127,13 @@ export async function GET(request) {
     // on /dashboard?error=...).
     const isMobileSource = typeof state === 'string' && state.endsWith(':mobile');
 
-    function finishRedirect({ webPath, mobileStatus, mobileMessage, mobileType }) {
+    function finishRedirect({ webPath, mobileStatus, mobileMessage, mobileType, mobileWorkspaceId }) {
         if (isMobileSource) {
             const p = new URLSearchParams();
-            if (mobileStatus)  p.set('status',  mobileStatus);
-            if (mobileMessage) p.set('message', mobileMessage);
-            if (mobileType)    p.set('type',    mobileType);
+            if (mobileStatus)       p.set('status',       mobileStatus);
+            if (mobileMessage)      p.set('message',      mobileMessage);
+            if (mobileType)         p.set('type',         mobileType);
+            if (mobileWorkspaceId)  p.set('workspace_id', mobileWorkspaceId);
             return new NextResponse(null, {
                 status: 303,
                 headers: { Location: `autodm://oauth-complete?${p.toString()}` },
@@ -151,14 +152,30 @@ export async function GET(request) {
         return finishRedirect({ webPath: '/dashboard?error=missing_params', mobileStatus: 'err', mobileMessage: 'missing_params' });
     }
 
-    // Parse state: "connectionType:userId" — plus optional ":mobile" suffix
-    // when the OAuth flow was initiated from the mobile app. We strip the
-    // suffix off the userId before passing it downstream so all existing
-    // logic (token exchange, account upsert) stays identical.
+    // Parse state. Formats:
+    //   web flow:                   "<connectionType>:<userId>"
+    //   mobile (legacy):            "<connectionType>:<userId>:mobile"
+    //   mobile (with workspace):    "<connectionType>:<userId>:<workspaceId>:mobile"
+    //
+    // The optional middle segment encodes the user's active workspace
+    // (passed by the mobile client on the /connect URL). When present
+    // we use it for the upsert below instead of the user's oldest
+    // workspace — fixes the bug where connecting from workspace B
+    // landed the row in workspace A.
     const colonIndex = state.indexOf(':');
     const connectionType = state.substring(0, colonIndex);
     const stateTail      = state.substring(colonIndex + 1);
-    const userId         = isMobileSource ? stateTail.slice(0, -':mobile'.length) : stateTail;
+
+    let userId = stateTail;
+    let mobileRequestedWorkspaceId = null;
+    if (isMobileSource) {
+        const withoutMobile = stateTail.slice(0, -':mobile'.length);
+        const parts = withoutMobile.split(':');
+        userId = parts[0];
+        if (parts.length > 1 && parts[1]) {
+            mobileRequestedWorkspaceId = parts[1];
+        }
+    }
 
     if (!connectionType || !userId) {
         return finishRedirect({ webPath: '/dashboard?error=invalid_state', mobileStatus: 'err', mobileMessage: 'invalid_state' });
@@ -193,14 +210,55 @@ export async function GET(request) {
             : userSupabase;
 
         if (isMobileSource) {
-            const { data: ws } = await supabase
-                .from('workspaces')
-                .select('id')
-                .eq('owner_id', userId)
-                .order('created_at', { ascending: true })
-                .limit(1)
-                .maybeSingle();
-            workspaceId = ws?.id ?? null;
+            console.log('[OAuth/Callback] Mobile state parsed:', { userId, mobileRequestedWorkspaceId });
+
+            // Prefer the workspace_id the mobile client encoded in state
+            // (the user's active workspace). Validate via owner OR
+            // workspace_members.role IN ('owner','admin'). Silent
+            // "oldest workspace" fallback was the source of the
+            // workspace-1 bug, so it's gone — if the mobile sent a
+            // workspace_id we can't validate, error out cleanly so
+            // the user sees the cause.
+            if (mobileRequestedWorkspaceId) {
+                const { data: owned } = await supabase
+                    .from('workspaces')
+                    .select('id')
+                    .eq('owner_id', userId)
+                    .eq('id',       mobileRequestedWorkspaceId)
+                    .maybeSingle();
+                if (owned?.id) {
+                    workspaceId = owned.id;
+                } else {
+                    const { data: member } = await supabase
+                        .from('workspace_members')
+                        .select('workspace_id, role')
+                        .eq('user_id',      userId)
+                        .eq('workspace_id', mobileRequestedWorkspaceId)
+                        .in('role', ['owner', 'admin'])
+                        .maybeSingle();
+                    workspaceId = member?.workspace_id ?? null;
+                }
+                if (!workspaceId) {
+                    console.warn('[OAuth/Callback] Mobile-requested workspace_id', mobileRequestedWorkspaceId, 'not accessible to user', userId);
+                    return finishRedirect({
+                        webPath: '/dashboard?error=workspace_not_accessible',
+                        mobileStatus: 'err',
+                        mobileMessage: 'workspace_not_accessible',
+                    });
+                }
+            } else {
+                // Legacy: state didn't carry a workspace_id (old mobile
+                // build). Fall back to oldest owned.
+                console.warn('[OAuth/Callback] Mobile state missing workspace_id — legacy fallback to oldest workspace');
+                const { data: ws } = await supabase
+                    .from('workspaces')
+                    .select('id')
+                    .eq('owner_id', userId)
+                    .order('created_at', { ascending: true })
+                    .limit(1)
+                    .maybeSingle();
+                workspaceId = ws?.id ?? null;
+            }
 
             // First-time mobile users may not have a workspace yet — the
             // schema's bootstrap INSERT only ran for users who existed at
@@ -374,10 +432,17 @@ export async function GET(request) {
         // first automation immediately. Mobile flows route back to the deep
         // link (autodm://oauth-complete) — the mobile app's oauth-complete
         // screen then takes the user to (tabs).
+        console.log('[OAuth/Callback] ✅ Account saved to workspace:', workspaceId);
         return finishRedirect({
             webPath: `/automations?connected=${connectionType}`,
             mobileStatus: 'ok',
             mobileType:   connectionType,
+            // Pass the workspace the connection landed in so the
+            // mobile app can sync its active workspace pointer. Without
+            // this, mobile may be querying a different workspace than
+            // the one the callback inserted into and the new
+            // connected_account row is invisible.
+            mobileWorkspaceId: workspaceId,
         });
     } catch (err) {
         console.error('[OAuth] Callback failed:', err.message);
