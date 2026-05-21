@@ -86,13 +86,99 @@ export async function GET(request) {
         return NextResponse.redirect(url);
     }
 
-    // Cross-platform conflict check (web flow only). We skip this for mobile
-    // because the cookie-bound getActiveWorkspaceId isn't available there,
-    // and the same protection still fires at the callback step via the
-    // unique-index conflict path. Mobile users get the
-    // `account_in_other_workspace` / `account_in_use_elsewhere` deep-link
-    // response instead of the `disconnect_first` preflight.
-    if (!isMobile && supabase) {
+    // Single-account-per-workspace rule. Applies to BOTH web and mobile
+    // flows. Web uses the cookie-bound getActiveWorkspaceId; mobile uses
+    // the same "oldest owned workspace" fallback that the callback route
+    // uses for upsert. Without this guard, a creator could end up with
+    // multiple active connected_accounts rows per workspace and the
+    // automations engine wouldn't know which one to fire on.
+    let preflightWorkspaceId = null;
+    if (isMobile) {
+        try {
+            const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
+            const adminClient = createSupabaseClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL,
+                process.env.SUPABASE_SERVICE_ROLE_KEY,
+            );
+
+            // The mobile client MUST send workspace_id (lib/oauth.ts
+            // now hard-fails when its store has none). When present,
+            // we validate the user owns it OR is a member of it via
+            // workspace_members.role IN ('owner','admin') — supports
+            // both solo workspaces and future team workspaces. Silent
+            // fallback to "oldest owned" was the source of the
+            // workspace-1 bug, so it's removed: if the mobile-sent
+            // workspace_id doesn't validate, we error back instead.
+            const requestedWorkspaceId = searchParams.get('workspace_id');
+            console.log('[OAuth/Connect] Mobile inbound:', { user_id: user.id, workspace_id: requestedWorkspaceId, type: connectionType });
+
+            if (requestedWorkspaceId) {
+                const { data: owned } = await adminClient
+                    .from('workspaces')
+                    .select('id')
+                    .eq('owner_id', user.id)
+                    .eq('id',       requestedWorkspaceId)
+                    .maybeSingle();
+                if (owned?.id) {
+                    preflightWorkspaceId = owned.id;
+                } else {
+                    // Not owner — check membership for the team case.
+                    const { data: member } = await adminClient
+                        .from('workspace_members')
+                        .select('workspace_id, role')
+                        .eq('user_id',      user.id)
+                        .eq('workspace_id', requestedWorkspaceId)
+                        .in('role', ['owner', 'admin'])
+                        .maybeSingle();
+                    preflightWorkspaceId = member?.workspace_id ?? null;
+                }
+                if (!preflightWorkspaceId) {
+                    console.warn('[OAuth/Connect] Mobile requested workspace_id', requestedWorkspaceId, 'not accessible to user', user.id);
+                    return new NextResponse(null, {
+                        status: 303,
+                        headers: { Location: 'autodm://oauth-complete?status=err&message=workspace_not_accessible' },
+                    });
+                }
+            } else {
+                // Legacy mobile build: no workspace_id sent. Fall back
+                // to oldest owned (preserve old behavior so old TestFlight
+                // builds don't break overnight).
+                console.warn('[OAuth/Connect] Mobile request missing workspace_id — legacy fallback to oldest workspace');
+                const { data: ws } = await adminClient
+                    .from('workspaces')
+                    .select('id')
+                    .eq('owner_id', user.id)
+                    .order('created_at', { ascending: true })
+                    .limit(1)
+                    .maybeSingle();
+                preflightWorkspaceId = ws?.id ?? null;
+            }
+            console.log('[OAuth/Connect] Preflight workspace resolved:', preflightWorkspaceId);
+
+            if (preflightWorkspaceId) {
+                const { data: activeAccounts } = await adminClient
+                    .from('connected_accounts')
+                    .select('platform')
+                    .eq('workspace_id', preflightWorkspaceId)
+                    .eq('is_active', true);
+                if (activeAccounts && activeAccounts.length > 0) {
+                    // Any active account blocks adding another — same
+                    // platform or different — to keep the model simple.
+                    // Skip the callback round-trip; respond with a 303
+                    // straight to autodm:// so the mobile app can show
+                    // the error without opening Meta's OAuth dialog.
+                    return new NextResponse(null, {
+                        status: 303,
+                        headers: { Location: 'autodm://oauth-complete?status=err&message=disconnect_first' },
+                    });
+                }
+            }
+        } catch (err) {
+            console.warn('[OAuth/Connect] Mobile preflight check failed:', err.message);
+            // Fall through — let the callback handle conflicts via the
+            // unique-index path. Better to attempt than to block.
+        }
+    } else if (supabase) {
         const { getActiveWorkspaceId } = await import('@/lib/workspace-context');
         const workspaceId = await getActiveWorkspaceId(supabase);
         if (workspaceId) {
@@ -103,12 +189,11 @@ export async function GET(request) {
                 .eq('is_active', true);
 
             if (activeAccounts && activeAccounts.length > 0) {
-                const conflictRow = activeAccounts.find((a) => a.platform !== connectionType);
-                if (conflictRow) {
-                    const url = new URL('/settings', request.url);
-                    url.searchParams.set('error', 'disconnect_first');
-                    return NextResponse.redirect(url);
-                }
+                // Any active account blocks adding another — single-
+                // account-per-workspace rule.
+                const url = new URL('/settings', request.url);
+                url.searchParams.set('error', 'disconnect_first');
+                return NextResponse.redirect(url);
             }
         }
     }
@@ -116,9 +201,18 @@ export async function GET(request) {
     // Build the OAuth URL with user ID as state. When initiated by the
     // mobile app, append `:mobile` so the callback knows to redirect
     // back to the autodm:// deep link instead of the web `/settings`
-    // route. Web flows are unchanged.
-    const stateArg = isMobile ? `${user.id}:mobile` : user.id;
-    const authUrl  = buildAuthUrl(connectionType, stateArg);
+    // route. Also encode the workspace_id when we have one so the
+    // callback inserts into the right workspace — not the user's
+    // oldest. State format for mobile:
+    //   `<userId>:[<workspaceId>:]mobile`
+    // Web flows are unchanged.
+    let stateArg = user.id;
+    if (isMobile) {
+        stateArg = preflightWorkspaceId
+            ? `${user.id}:${preflightWorkspaceId}:mobile`
+            : `${user.id}:mobile`;
+    }
+    const authUrl = buildAuthUrl(connectionType, stateArg);
 
     return NextResponse.redirect(authUrl);
 }
