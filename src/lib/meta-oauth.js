@@ -36,7 +36,7 @@ const FB_SCOPES = [
     // ⚠ Required to receive `feed` webhook events for FB Page comments
     //   AND for linked IG comments arriving via the Page subscription.
     //   Without it, only DMs (`messages`) are delivered.
-    'pages_manage_engagement', // TO REQUEST in next App Review — needed for the Public Comment Reply feature (`replyToComment` posts via POST /{comment-id}/comments).
+    // 'pages_manage_engagement', // TO REQUEST in next App Review — needed for the Public Comment Reply feature (`replyToComment` posts via POST /{comment-id}/comments).
     'pages_manage_metadata',
     'pages_messaging',
 ];
