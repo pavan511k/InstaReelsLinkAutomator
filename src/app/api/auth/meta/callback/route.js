@@ -293,24 +293,20 @@ export async function GET(request) {
             return finishRedirect({ webPath: '/dashboard?error=no_workspace', mobileStatus: 'err', mobileMessage: 'no_workspace' });
         }
 
-        // Block if the same IG/FB account is already connected anywhere.
-        // The unique partial index on connected_accounts(ig_user_id) /
-        // (fb_page_id) enforces this at the DB level — we just need to
-        // surface a friendly error before the insert fails.
+        // Block if the same IG/FB account is ACTIVELY connected elsewhere.
+        // Critical: only ACTIVE rows count as conflicts. Soft-disconnected
+        // rows (is_active=false, written by mobile's disconnect flow until
+        // /api/accounts/disconnect becomes bearer-aware) still hold the
+        // ig_user_id / fb_page_id and would otherwise look like conflicts —
+        // they're not. They're reusable, and the insert/update branch below
+        // moves them to the current workspace and reactivates them.
         //
         // The lookup uses the SERVICE-ROLE client so it sees rows owned
         // by other users too. RLS would otherwise hide them, and a
         // cross-user collision would slip through to a generic
         // "save_failed" redirect when the unique index ultimately rejects
         // the insert.
-        //
-        // Two cases:
-        //   1. Same user, different workspace → redirect with
-        //      `account_in_other_workspace` + `target_ws` so /settings
-        //      offers a "Switch to {workspace}" action.
-        //   2. Different user owns it → redirect with
-        //      `account_in_use_elsewhere`. We don't expose which user
-        //      owns it; that's a privacy / security boundary.
+        let reactivatableExistingId = null;
         if (accountData.ig_user_id || accountData.fb_page_id) {
             const idColumn = accountData.ig_user_id ? 'ig_user_id' : 'fb_page_id';
             const idValue  = accountData.ig_user_id || accountData.fb_page_id;
@@ -320,48 +316,69 @@ export async function GET(request) {
             );
             const { data: existingAnywhere } = await serviceDb
                 .from('connected_accounts')
-                .select('id, user_id, workspace_id')
+                .select('id, user_id, workspace_id, is_active')
                 .eq(idColumn, idValue)
                 .maybeSingle();
 
-            if (existingAnywhere && existingAnywhere.user_id !== userId) {
-                // Owned by a different user account entirely.
-                return finishRedirect({
-                    webPath: '/settings?error=account_in_use_elsewhere',
-                    mobileStatus: 'err',
-                    mobileMessage: 'account_in_use_elsewhere',
-                });
-            }
+            if (existingAnywhere) {
+                if (existingAnywhere.user_id !== userId) {
+                    // Owned by a different user account entirely. Always blocks.
+                    return finishRedirect({
+                        webPath: '/settings?error=account_in_use_elsewhere',
+                        mobileStatus: 'err',
+                        mobileMessage: 'account_in_use_elsewhere',
+                    });
+                }
 
-            if (existingAnywhere && existingAnywhere.workspace_id !== workspaceId) {
-                // Same user, just in another workspace.
-                const webPath =
-                    `/settings?error=account_in_other_workspace&target_ws=${encodeURIComponent(existingAnywhere.workspace_id)}`;
-                return finishRedirect({
-                    webPath,
-                    mobileStatus: 'err',
-                    mobileMessage: 'account_in_other_workspace',
-                });
+                if (existingAnywhere.is_active && existingAnywhere.workspace_id !== workspaceId) {
+                    // Same user, ACTIVE in another workspace. Real conflict —
+                    // they need to disconnect from the other workspace first.
+                    const webPath =
+                        `/settings?error=account_in_other_workspace&target_ws=${encodeURIComponent(existingAnywhere.workspace_id)}`;
+                    return finishRedirect({
+                        webPath,
+                        mobileStatus: 'err',
+                        mobileMessage: 'account_in_other_workspace',
+                    });
+                }
+
+                // Same user, and either: same workspace, OR a different
+                // workspace but currently soft-disconnected. Either way,
+                // the existing row is the one we want to update — the
+                // unique index on (ig_user_id) / (fb_page_id) wouldn't
+                // let us insert a second one anyway.
+                reactivatableExistingId = existingAnywhere.id;
             }
         }
 
-        // Check for existing account (active or inactive) for this workspace + platform
-        const { data: existingAccount } = await supabase
-            .from('connected_accounts')
-            .select('id, is_active')
-            .eq('workspace_id', workspaceId)
-            .eq('platform', platform)
-            .maybeSingle();
+        // Resolve which row, if any, we'll UPDATE in place. Falls back to
+        // a workspace+platform match for accounts without a unique key
+        // (shouldn't happen for real Meta accounts, but defensive).
+        let existingAccount = null;
+        if (reactivatableExistingId) {
+            existingAccount = { id: reactivatableExistingId };
+        } else {
+            const { data: byWsPlatform } = await supabase
+                .from('connected_accounts')
+                .select('id, is_active')
+                .eq('workspace_id', workspaceId)
+                .eq('platform', platform)
+                .maybeSingle();
+            existingAccount = byWsPlatform ?? null;
+        }
 
         if (existingAccount) {
             // Reactivate / refresh credentials on existing account.
+            // Always set workspace_id explicitly — covers the reactivate-
+            // and-move case from a soft-disconnected row in another workspace.
             // No plan columns — plan lives in user_plans.
             const { error: updateError } = await supabase
                 .from('connected_accounts')
                 .update({
                     ...accountData,
-                    is_active:  true,
-                    updated_at: new Date().toISOString(),
+                    workspace_id: workspaceId,
+                    is_active:    true,
+                    updated_at:   new Date().toISOString(),
                 })
                 .eq('id', existingAccount.id);
 
