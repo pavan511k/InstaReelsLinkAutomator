@@ -33,6 +33,8 @@ export async function POST(request) {
     // we resolve the user via the service-role admin client.
     const authHeader = request?.headers?.get?.('authorization') || '';
     const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const authPath = bearer ? 'mobile-bearer' : 'web-cookie';
+    console.log('[PostsSync] Inbound:', { authPath });
 
     if (bearer) {
         const admin = createServiceClient(
@@ -47,6 +49,7 @@ export async function POST(request) {
         supabase = admin;
         const { searchParams } = new URL(request.url);
         const requestedWs = searchParams.get('workspace_id');
+        console.log('[PostsSync] Bearer auth resolved user', user.id, 'requestedWs=', requestedWs);
         if (requestedWs) {
             const { data: owned } = await admin
                 .from('workspaces')
@@ -65,6 +68,9 @@ export async function POST(request) {
                     .maybeSingle();
                 if (member?.workspace_id) workspaceId = member.workspace_id;
             }
+            if (!workspaceId) {
+                console.warn('[PostsSync] requestedWs', requestedWs, 'not accessible — falling back to oldest workspace');
+            }
         }
         if (!workspaceId) {
             const { data: oldest } = await admin
@@ -75,6 +81,7 @@ export async function POST(request) {
                 .limit(1)
                 .maybeSingle();
             workspaceId = oldest?.id ?? null;
+            console.log('[PostsSync] Fallback workspace =', workspaceId);
         }
     } else {
         // Web path: cookie session.
@@ -84,11 +91,14 @@ export async function POST(request) {
     }
 
     if (!user) {
+        console.warn('[PostsSync] No user resolved');
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
     if (!workspaceId) {
+        console.warn('[PostsSync] No workspace resolved for user', user.id);
         return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
     }
+    console.log('[PostsSync] Resolved:', { user_id: user.id, workspace_id: workspaceId });
 
     // Get all active connected accounts in this workspace
     const { data: accounts, error: accountError } = await supabase
@@ -97,12 +107,19 @@ export async function POST(request) {
         .eq('workspace_id', workspaceId)
         .eq('is_active', true);
 
-    if (accountError || !accounts || accounts.length === 0) {
+    if (accountError) {
+        console.error('[PostsSync] Account lookup error:', accountError);
         return NextResponse.json({ error: 'No connected account found' }, { status: 400 });
     }
+    if (!accounts || accounts.length === 0) {
+        console.warn('[PostsSync] No active accounts in workspace', workspaceId);
+        return NextResponse.json({ error: 'No connected account found' }, { status: 400 });
+    }
+    console.log('[PostsSync] Accounts to sync:', accounts.length, accounts.map((a) => ({ id: a.id, platform: a.platform, ig_user_id: a.ig_user_id, fb_page_id: a.fb_page_id })));
 
     const allPosts = [];
     const syncedPlatforms = [];
+    const accountReports = []; // per-account post/story counts + errors for diagnostic response
     // Per-account list of currently-live story IDs from Graph. Anything in
     // our DB tagged is_story=true for the account but missing from this set
     // was either deleted by the user or naturally expired — we mark those
@@ -112,6 +129,8 @@ export async function POST(request) {
     try {
         for (const account of accounts) {
             liveStoryIdsByAccount[account.id] = [];
+            const report = { account_id: account.id, platform: account.platform, ig_posts: 0, ig_stories: 0, fb_posts: 0, errors: [] };
+
             // Fetch Instagram posts if Instagram is connected
             if (account.ig_user_id && (account.platform === 'instagram' || account.platform === 'both')) {
                 // Instagram Business Login tokens (platform=instagram, no fb_page_access_token)
@@ -121,8 +140,16 @@ export async function POST(request) {
                 const igToken = account.fb_page_access_token || account.access_token;
                 const useIgApi = !account.fb_page_access_token && account.platform === 'instagram';
 
-                // Fetch Posts
-                const igPosts = await fetchInstagramPosts(account.ig_user_id, igToken, useIgApi);
+                // Fetch Posts — wrapped so one failing account doesn't abort the whole sync.
+                let igPosts = [];
+                try {
+                    igPosts = await fetchInstagramPosts(account.ig_user_id, igToken, useIgApi);
+                    report.ig_posts = igPosts.length;
+                    console.log(`[PostsSync] IG posts for ${account.ig_user_id}:`, igPosts.length, useIgApi ? '(IG API)' : '(FB API)');
+                } catch (igErr) {
+                    report.errors.push({ kind: 'ig_posts', message: igErr.message });
+                    console.error(`[PostsSync] IG posts fetch failed for ${account.ig_user_id}:`, igErr.message);
+                }
                 allPosts.push(...igPosts.map((p) => ({
                     account_id: account.id,
                     ig_post_id: p.id,
@@ -143,7 +170,15 @@ export async function POST(request) {
 
                 // Fetch Stories (Active items within 24h limit).
                 // null = fetch failed → skip the expired-sweep for this account.
-                const igStories = await fetchInstagramStories(account.ig_user_id, igToken, useIgApi);
+                let igStories = null;
+                try {
+                    igStories = await fetchInstagramStories(account.ig_user_id, igToken, useIgApi);
+                    report.ig_stories = igStories?.length ?? 0;
+                    console.log(`[PostsSync] IG stories for ${account.ig_user_id}:`, igStories?.length ?? 'null (fetch error)');
+                } catch (storyErr) {
+                    report.errors.push({ kind: 'ig_stories', message: storyErr.message });
+                    console.error(`[PostsSync] IG stories fetch failed for ${account.ig_user_id}:`, storyErr.message);
+                }
                 if (igStories === null) {
                     liveStoryIdsByAccount[account.id] = null;
                 } else {
@@ -173,7 +208,15 @@ export async function POST(request) {
 
             // Fetch Facebook Page posts if Facebook is connected
             if (account.fb_page_id && (account.platform === 'facebook' || account.platform === 'both')) {
-                const fbPosts = await fetchFacebookPosts(account.fb_page_id, account.fb_page_access_token || account.access_token);
+                let fbPosts = [];
+                try {
+                    fbPosts = await fetchFacebookPosts(account.fb_page_id, account.fb_page_access_token || account.access_token);
+                    report.fb_posts = fbPosts.length;
+                    console.log(`[PostsSync] FB posts for page ${account.fb_page_id}:`, fbPosts.length);
+                } catch (fbErr) {
+                    report.errors.push({ kind: 'fb_posts', message: fbErr.message });
+                    console.error(`[PostsSync] FB posts fetch failed for page ${account.fb_page_id}:`, fbErr.message);
+                }
                 allPosts.push(...fbPosts.map((p) => {
                     const attachment = p.attachments?.data?.[0];
                     // media{image{src}} is explicitly requested in fetchFacebookPosts so this path works.
@@ -203,7 +246,11 @@ export async function POST(request) {
                 }));
                 syncedPlatforms.push('facebook');
             }
+
+            accountReports.push(report);
         }
+
+        console.log('[PostsSync] Fetch complete:', { totalRawItems: allPosts.length, accountReports });
 
         // ── Deduplicate by ig_post_id ───────────────────────────────────────
         // Multiple active accounts can share the same Facebook Page, producing two
@@ -283,15 +330,24 @@ export async function POST(request) {
             else console.log(`[Sync] Account ${account.id}: live=${liveIds.length}, marked expired=${count ?? '?'}`);
         }
 
-        return NextResponse.json({
+        const responsePayload = {
             success: true,
+            authPath,
+            workspaceId,
             synced: deduped.length,
             platforms: syncedPlatforms,
-        });
+            accountCount: accounts.length,
+            accountReports,
+        };
+        console.log('[PostsSync] ✅ Done:', responsePayload);
+        return NextResponse.json(responsePayload);
     } catch (err) {
-        console.error('Post sync error:', err);
+        console.error('[PostsSync] Sync error:', err);
         return NextResponse.json({
             error: `Sync failed: ${err.message}`,
+            authPath,
+            workspaceId,
+            accountReports,
         }, { status: 500 });
     }
 }
