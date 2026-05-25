@@ -1,20 +1,91 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { getUserEffectivePlan, requirePro } from '@/lib/plan-server';
 import { GRAPH_FB_BASE as GRAPH, GRAPH_IG_BASE } from '@/lib/meta-graph';
 import { getActiveWorkspaceId } from '@/lib/workspace-context';
+
+/**
+ * Resolves the user + active workspace + a Supabase client to use for
+ * RLS-scoped reads/writes. Supports two auth paths:
+ *   - Web: cookie session via supabase-server createClient
+ *   - Mobile: Authorization: Bearer <JWT> + optional ?workspace_id=
+ *     query string. Returns the admin client so subsequent queries
+ *     don't depend on the auth.uid() RLS context.
+ *
+ * Returns { error: NextResponse } on auth failure so callers can `return`
+ * directly. On success returns { user, workspaceId, supabase, isMobile }.
+ */
+async function resolveAuth(request) {
+    const authHeader = request?.headers?.get?.('authorization') || '';
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    if (bearer) {
+        const admin = createSupabaseClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY,
+        );
+        const { data, error } = await admin.auth.getUser(bearer);
+        if (error || !data?.user) {
+            return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) };
+        }
+        const user = data.user;
+
+        const { searchParams } = new URL(request.url);
+        const requestedWs = searchParams.get('workspace_id');
+        let workspaceId = null;
+        if (requestedWs) {
+            const { data: owned } = await admin
+                .from('workspaces')
+                .select('id')
+                .eq('owner_id', user.id)
+                .eq('id', requestedWs)
+                .maybeSingle();
+            if (owned?.id) workspaceId = owned.id;
+            if (!workspaceId) {
+                const { data: member } = await admin
+                    .from('workspace_members')
+                    .select('workspace_id')
+                    .eq('user_id', user.id)
+                    .eq('workspace_id', requestedWs)
+                    .in('role', ['owner', 'admin'])
+                    .maybeSingle();
+                if (member?.workspace_id) workspaceId = member.workspace_id;
+            }
+        }
+        if (!workspaceId) {
+            const { data: oldest } = await admin
+                .from('workspaces')
+                .select('id')
+                .eq('owner_id', user.id)
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+            workspaceId = oldest?.id ?? null;
+        }
+        if (!workspaceId) {
+            return { error: NextResponse.json({ error: 'No active workspace' }, { status: 400 }) };
+        }
+        return { user, workspaceId, supabase: admin, isMobile: true };
+    }
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) };
+    const workspaceId = await getActiveWorkspaceId(supabase);
+    if (!workspaceId) return { error: NextResponse.json({ error: 'No active workspace' }, { status: 400 }) };
+    return { user, workspaceId, supabase, isMobile: false };
+}
 
 /**
  * GET /api/ice-breakers
  * Returns the ice breakers stored in default_config (our saved config).
  * We store locally rather than always fetching from Meta to avoid API overhead.
  */
-export async function GET() {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    const workspaceId = await getActiveWorkspaceId(supabase);
-    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
+export async function GET(request) {
+    const auth = await resolveAuth(request);
+    if (auth.error) return auth.error;
+    const { workspaceId, supabase } = auth;
 
     try {
         const { data: account } = await supabase
@@ -48,11 +119,9 @@ export async function GET() {
  * The `payload` is a sanitized identifier we store locally to map back to responseMessage.
  */
 export async function POST(request) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    const workspaceId = await getActiveWorkspaceId(supabase);
-    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
+    const auth = await resolveAuth(request);
+    if (auth.error) return auth.error;
+    const { user, workspaceId, supabase } = auth;
 
     // Pro gate. GET / DELETE are intentionally ungated so a downgraded user
     // can still view + remove their existing welcome openers; only saving new
@@ -247,11 +316,9 @@ export async function POST(request) {
  * Clears all ice breakers from Meta and locally.
  */
 export async function DELETE(request) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    const workspaceId = await getActiveWorkspaceId(supabase);
-    if (!workspaceId) return NextResponse.json({ error: 'No active workspace' }, { status: 400 });
+    const auth = await resolveAuth(request);
+    if (auth.error) return auth.error;
+    const { workspaceId, supabase } = auth;
 
     const { searchParams } = new URL(request.url);
     const accountId = searchParams.get('accountId');
