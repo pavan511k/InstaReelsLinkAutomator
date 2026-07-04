@@ -1,14 +1,62 @@
 'use client';
 
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { MailCheck, ArrowRight, ArrowLeft } from 'lucide-react';
+import { MailCheck, ArrowRight, ArrowLeft, RotateCw, Check } from 'lucide-react';
+import { createClient } from '@/lib/supabase-client';
 import { useStyles } from '@/lib/useStyles';
 import darkStyles from './verify.module.css';
 import lightStyles from './verify.light.module.css';
 
+const RESEND_COOLDOWN_SECONDS = 60;
+
 export default function VerifyPage() {
     const styles = useStyles(darkStyles, lightStyles);
+    const supabase = useMemo(() => createClient(), []);
+
+    const [email, setEmail]             = useState('');
+    const [resending, setResending]     = useState(false);
+    const [resent, setResent]           = useState(false);
+    const [resendError, setResendError] = useState('');
+    const [cooldown, setCooldown]       = useState(0);
+
+    // The signup page forwards the address as ?email= so we can offer a resend.
+    // Read it from window.location (not useSearchParams — avoids the App Router
+    // Suspense requirement / client-render bailout).
+    useEffect(() => {
+        setEmail(new URLSearchParams(window.location.search).get('email') || '');
+    }, []);
+
+    // Cooldown ticker between resends (also respects Supabase's send rate limit).
+    useEffect(() => {
+        if (cooldown <= 0) return undefined;
+        const timer = setInterval(() => setCooldown((s) => (s <= 1 ? 0 : s - 1)), 1000);
+        return () => clearInterval(timer);
+    }, [cooldown]);
+
+    const handleResend = async () => {
+        if (!email || resending || cooldown > 0) return;
+        setResending(true);
+        setResent(false);
+        setResendError('');
+        try {
+            const { error } = await supabase.auth.resend({
+                type: 'signup',
+                email,
+                options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+            });
+            if (error) setResendError(error.message);
+            else       setResent(true);
+            // Back off either way so we never hammer Supabase's send endpoint.
+            setCooldown(RESEND_COOLDOWN_SECONDS);
+        } catch {
+            setResendError('Could not resend right now. Please try again shortly.');
+        } finally {
+            setResending(false);
+        }
+    };
+
     return (
         <div className={styles.page}>
 
@@ -74,6 +122,41 @@ export default function VerifyPage() {
                         <p className={styles.tipText}>
                             Check your <strong>spam or junk folder</strong>. The email comes from <strong>support@autodm.pro</strong>.
                         </p>
+                        {email && (
+                            <button
+                                type="button"
+                                onClick={handleResend}
+                                disabled={resending || cooldown > 0}
+                                className={styles.ghostBtn}
+                                style={{
+                                    marginTop: 12,
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    fontFamily: 'inherit',
+                                    color: '#92400E',
+                                    cursor: resending || cooldown > 0 ? 'not-allowed' : 'pointer',
+                                    opacity: resending || cooldown > 0 ? 0.6 : 1,
+                                }}
+                            >
+                                <RotateCw size={14} strokeWidth={2.5} />
+                                {resending
+                                    ? 'Resending…'
+                                    : cooldown > 0
+                                        ? `Resend in ${cooldown}s`
+                                        : 'Resend verification email'}
+                            </button>
+                        )}
+                        {resent && !resendError && (
+                            <p className={styles.tipText} style={{ marginTop: 10, color: '#15803D', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Check size={14} strokeWidth={2.5} /> Sent! Check your inbox again.
+                            </p>
+                        )}
+                        {resendError && (
+                            <p className={styles.tipText} style={{ marginTop: 10, color: '#B91C1C', fontWeight: 600 }}>
+                                {resendError}
+                            </p>
+                        )}
                     </div>
 
                     <div className={styles.actions}>

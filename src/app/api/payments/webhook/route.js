@@ -119,6 +119,19 @@ export async function POST(request) {
             BILLING_PLANS[order.plan_id] ? order.plan_id : 'pro',
         );
 
+        // Defense-in-depth: never grant Pro for an underpayment / wrong
+        // currency. The order amount is server-set so this normally matches
+        // exactly — it only trips on partial payments, a dashboard order
+        // amendment, or misconfig. On a mismatch we log and ack (so Cashfree
+        // doesn't retry a non-transient issue) but do NOT activate.
+        const expectedInr  = billingPlan.priceInr;
+        const paidAmount   = Number(event.data?.payment?.payment_amount ?? event.data?.order?.order_amount);
+        const paidCurrency = String(event.data?.payment?.payment_currency ?? event.data?.order?.order_currency ?? 'INR').toUpperCase();
+        if (!Number.isFinite(paidAmount) || paidAmount + 0.01 < expectedInr || paidCurrency !== 'INR') {
+            console.error(`[Webhook/Payments] Amount mismatch for order ${orderId}: paid ${paidAmount} ${paidCurrency}, expected ${expectedInr} INR — NOT activating.`);
+            return NextResponse.json({ received: true });
+        }
+
         try {
             await activatePlan(supabase, order.user_id, billingPlan.entitlement, planExpiresAt);
         } catch (err) {

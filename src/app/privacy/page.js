@@ -238,7 +238,7 @@ export default function PrivacyPolicy() {
                     <ul>
                         <li><strong>While your account is active:</strong> We retain all account data, automation settings, DM logs, and analytics for as long as you maintain an active AutoDM account</li>
                         <li><strong>When you disconnect a social account:</strong> Your OAuth access token is revoked and scrubbed. Your automation settings are preserved so you can reconnect later without losing your configuration. Your synced posts are deleted from our database per Meta Platform Terms</li>
-                        <li><strong>Access tokens:</strong> Instagram and Facebook access tokens are valid for 60 days. We automatically refresh long-lived tokens before they expire. Tokens are scrubbed immediately upon account disconnection or deletion</li>
+                        <li><strong>Access tokens:</strong> Instagram access tokens are valid for 60 days; we automatically refresh them before they expire, and if a token cannot be refreshed we email you to reconnect. Facebook Page tokens are long-lived. Access tokens are scrubbed immediately upon account disconnection or deletion</li>
                         <li><strong>When you request full account deletion:</strong> We delete all your personal information, connected accounts, synced posts, automations, DM logs, analytics data, and access tokens within 30 days of your request</li>
                         <li><strong>Payment records:</strong> Transaction records (order IDs, amounts, dates) may be retained for up to 7 years to comply with financial recordkeeping requirements. No payment card details are stored</li>
                     </ul>

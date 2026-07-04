@@ -177,3 +177,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_connected_accounts_ig_user
 CREATE UNIQUE INDEX IF NOT EXISTS uq_connected_accounts_fb_page
     ON connected_accounts (fb_page_id)
     WHERE fb_page_id IS NOT NULL;
+
+-- One ACTIVE account per (workspace, platform) — the DB backstop for the
+-- "one platform per workspace (IG XOR FB)" rule the OAuth callback enforces at
+-- the app layer. Historically this lived only in
+-- migrations/drop-unique-active-user-platform.sql, so a fresh DB provisioned
+-- from the numbered schema was missing it (schema drift). Colocated here now.
+CREATE UNIQUE INDEX IF NOT EXISTS unique_active_workspace_platform
+    ON connected_accounts (workspace_id, platform)
+    WHERE is_active = true;

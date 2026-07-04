@@ -300,10 +300,10 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
     //      configured question text. Exact match only so this doesn't
     //      intercept follow-up-gate YES/NO replies or keyword DMs.
     if (msgPayload?.startsWith('ICE_BREAKER_')) {
-        const handled = await handleIceBreakerResponse(supabase, igAccountId, senderId, msgPayload);
+        const handled = await handleIceBreakerResponse(supabase, igAccountId, senderId, msgPayload, inboundMid);
         if (handled) return;
     }
-    if (msgText && await handleIceBreakerByText(supabase, igAccountId, senderId, msgText)) {
+    if (msgText && await handleIceBreakerByText(supabase, igAccountId, senderId, msgText, inboundMid)) {
         return;
     }
 
@@ -312,7 +312,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
     // Match the payload back to the original automation's config and send
     // the configured response. Returns true if handled (so we don't fall
     // through into follow-up / email-collector branches).
-    if (msgPayload && await handleQuickReplyTap(supabase, senderId, msgPayload)) {
+    if (msgPayload && await handleQuickReplyTap(supabase, senderId, msgPayload, inboundMid)) {
         return;
     }
 
@@ -403,16 +403,29 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
         // bubble (the user already saw it before tapping the button).
         const rewardConfig = { ...(queueEntry.link_dm_config || {}), openingEnabled: false };
 
+        // Atomically claim the opening-tap → link_sent transition BEFORE
+        // sending. Meta redelivers postbacks (at-least-once) and users double-
+        // tap; without this the main DM goes out once per delivery. The status
+        // guard means only the delivery that actually flips the row proceeds —
+        // the rest get a null result and bail.
+        const { data: openingClaim } = await supabase.from('dm_followup_queue')
+            .update({ status: 'link_sent', updated_at: new Date().toISOString() })
+            .eq('id', queueEntry.id)
+            .eq('status', 'awaiting_opening_tap')
+            .select('id')
+            .maybeSingle();
+
+        if (!openingClaim) {
+            console.log('[Webhook] Opening tap already handled by a concurrent delivery — skipping');
+            return;
+        }
+
         try {
             await sendRewardDM(
                 openingIgSender, senderId, queueEntry.link_dm_type,
                 rewardConfig, openingToken, openingTracking,
                 openingRewardPlan, openingUseIgApi,
             );
-
-            await supabase.from('dm_followup_queue')
-                .update({ status: 'link_sent', updated_at: new Date().toISOString() })
-                .eq('id', queueEntry.id);
 
             await supabase.from('dm_sent_log').insert({
                 automation_id:   queueEntry.automation_id,
@@ -427,6 +440,10 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 
             console.log('[Webhook] Opening tap: main DM sent, queue marked link_sent');
         } catch (err) {
+            // Roll the claim back so a retry / redelivery can re-attempt the send.
+            await supabase.from('dm_followup_queue')
+                .update({ status: 'awaiting_opening_tap', updated_at: new Date().toISOString() })
+                .eq('id', queueEntry.id);
             console.error('[Webhook] Opening tap: failed to send main DM:', err.message);
         }
         return;
@@ -487,13 +504,25 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
             }
         } catch { /* non-fatal — reward will still send, just unmapped */ }
 
+        // Atomically claim the confirmation → link_sent transition BEFORE
+        // sending the reward. Meta redelivers the "YES" postback (at-least-
+        // once) and users double-tap; without this the reward DM goes out once
+        // per delivery. Only the delivery that actually flips the row proceeds.
+        const { data: rewardClaim } = await supabase.from('dm_followup_queue')
+            .update({ status: 'link_sent', updated_at: new Date().toISOString() })
+            .eq('id', queueEntry.id)
+            .eq('status', 'awaiting_confirmation')
+            .select('id')
+            .maybeSingle();
+
+        if (!rewardClaim) {
+            console.log('[Webhook] Reward already sent by a concurrent delivery — skipping');
+            return;
+        }
+
         try {
             await sendRewardDM(igSenderId, senderId, queueEntry.link_dm_type,
                 queueEntry.link_dm_config, accessToken, rewardTracking, rewardPlan, useIgApi);
-
-            await supabase.from('dm_followup_queue')
-                .update({ status: 'link_sent', updated_at: new Date().toISOString() })
-                .eq('id', queueEntry.id);
 
             await supabase.from('dm_sent_log').insert({
                 automation_id:   queueEntry.automation_id,
@@ -508,6 +537,10 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 
             console.log('[Webhook] Reward DM sent and queue entry marked link_sent');
         } catch (err) {
+            // Roll the claim back so a retry / redelivery can re-attempt the send.
+            await supabase.from('dm_followup_queue')
+                .update({ status: 'awaiting_confirmation', updated_at: new Date().toISOString() })
+                .eq('id', queueEntry.id);
             console.error('[Webhook] Failed to send reward DM:', err.message);
         }
     } else {
@@ -516,10 +549,28 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 
         console.log(`[Webhook] ${senderId} is NOT following (retry ${newRetryCount}/${maxRetries})`);
 
+        // Atomically claim this retry increment so a redelivered "YES" can't
+        // double-count retries or send the nudge / max-retry DM twice. Guarded
+        // on the retry_count we read — only the first delivery for this attempt
+        // flips the row; concurrent redeliveries match 0 rows and bail.
+        const { data: retryClaim } = await supabase.from('dm_followup_queue')
+            .update({
+                status:      newRetryCount >= maxRetries ? 'max_retries_reached' : 'awaiting_confirmation',
+                retry_count: newRetryCount,
+                updated_at:  new Date().toISOString(),
+            })
+            .eq('id', queueEntry.id)
+            .eq('status', 'awaiting_confirmation')
+            .eq('retry_count', queueEntry.retry_count || 0)
+            .select('id')
+            .maybeSingle();
+
+        if (!retryClaim) {
+            console.log('[Webhook] Follow-gate retry already handled by a concurrent delivery — skipping');
+            return;
+        }
+
         if (newRetryCount >= maxRetries) {
-            await supabase.from('dm_followup_queue')
-                .update({ status: 'max_retries_reached', retry_count: newRetryCount, updated_at: new Date().toISOString() })
-                .eq('id', queueEntry.id);
             try {
                 await sendTextDM(igSenderId, senderId,
                     "Sorry, we couldn't verify your follow after multiple attempts. Feel free to try again by commenting! \ud83d\ude0a",
@@ -528,9 +579,6 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
                 console.warn('[Webhook] Failed to send max-retry message:', err.message);
             }
         } else {
-            await supabase.from('dm_followup_queue')
-                .update({ retry_count: newRetryCount, updated_at: new Date().toISOString() })
-                .eq('id', queueEntry.id);
             try {
                 // Use 'there' as a friendly placeholder fallback \u2014 the IGSID
                 // is meaningless to a recipient and dm_followup_queue doesn't
@@ -548,6 +596,25 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
     }
 }
 
+// ─── Inbound-event idempotency ───────────────────────────────────────────────
+//
+// Meta delivers messaging/postback webhooks at-least-once and redelivers the
+// same event (same `mid`) on any non-2xx or transient failure. Send paths with
+// no stateful row to claim (ice-breakers, quick-reply chips) call this right
+// BEFORE sending: it records the mid and returns true only the first time, so a
+// redelivery is skipped and the fan is messaged once. Fails OPEN — if the
+// ledger table is missing or errors, we proceed (never block a real DM on the
+// guard). Must be called immediately before the send, so a non-sending handler
+// earlier in the dispatch chain doesn't claim a mid it isn't going to use.
+async function claimInboundEvent(supabase, mid) {
+    if (!mid) return true; // nothing to dedup on — best-effort, allow the send
+    const { error } = await supabase.from('processed_dm_events').insert({ mid });
+    if (!error)                 return true;  // first delivery — claimed
+    if (error.code === '23505') return false; // duplicate delivery — skip the send
+    console.warn('[Webhook] processed_dm_events claim error (proceeding):', error.message);
+    return true; // fail open — never block a real send on the dedup ledger
+}
+
 // ─── Quick-reply chip-tap handler ────────────────────────────────────────────
 //
 // When a recipient taps one of the chips on a Quick Reply DM, Meta delivers a
@@ -560,7 +627,7 @@ async function handleIncomingDMReply(supabase, igAccountId, messagingEvent) {
 //
 // Returns true if the tap was matched and handled (so the caller can return
 // without falling through to follow-gate / email-collector branches).
-async function handleQuickReplyTap(supabase, senderId, msgPayload) {
+async function handleQuickReplyTap(supabase, senderId, msgPayload, inboundMid) {
     // Find the most recent quick_reply DM sent to this user. We bound the
     // window to 7 days to avoid matching a chip the user is "tapping" weeks
     // after the conversation went stale (very rare in practice).
@@ -618,6 +685,12 @@ async function handleQuickReplyTap(supabase, senderId, msgPayload) {
     // Centralized branding via applyBranding (was duplicated inline here
     // when applyBranding wasn't exported -- it is now, so we just call it).
     body = applyBranding(body, automation.dm_config || {}, plan);
+
+    // Dedup at-least-once redeliveries — send this chip reply only once.
+    if (!(await claimInboundEvent(supabase, inboundMid))) {
+        console.log(`[Webhook/QR] Duplicate delivery for chip "${matched.title}" — already sent, skipping`);
+        return true;
+    }
 
     try {
         await sendTextDM(account.ig_user_id || account.fb_page_id, senderId, body, token, useIg);
@@ -2717,7 +2790,7 @@ async function processGlobalTriggers(supabase, post, commentText, commenterId, c
 
 // ─── Ice Breaker Handler ──────────────────────────────────────────────────────
 
-async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload) {
+async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload, inboundMid) {
     console.log('[IceBreaker] handleIceBreakerResponse entry ' + JSON.stringify({
         igAccountId, senderId, payload,
         startsWithPrefix: !!payload && payload.startsWith('ICE_BREAKER_'),
@@ -2770,6 +2843,12 @@ async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload
         return false;
     }
 
+    // Dedup at-least-once redeliveries — send this ice-breaker reply only once.
+    if (!(await claimInboundEvent(supabase, inboundMid))) {
+        console.log('[IceBreaker] Duplicate delivery — response already sent, skipping');
+        return true;
+    }
+
     try {
         console.log('[IceBreaker] Sending response DM ' + JSON.stringify({
             from:    account.ig_user_id,
@@ -2794,7 +2873,7 @@ async function handleIceBreakerResponse(supabase, igAccountId, senderId, payload
 //
 // Normalisation: lowercase + trim + strip trailing punctuation. Covers the
 // common variations Meta delivers (with / without a question mark, etc).
-async function handleIceBreakerByText(supabase, igAccountId, senderId, msgText) {
+async function handleIceBreakerByText(supabase, igAccountId, senderId, msgText, inboundMid) {
     console.log('[IceBreaker:textMatch] entry ' + JSON.stringify({ igAccountId, senderId, msgText }));
 
     const { data: account } = await supabase
@@ -2834,6 +2913,12 @@ async function handleIceBreakerByText(supabase, igAccountId, senderId, msgText) 
     if (userPlan !== 'pro' && userPlan !== 'business' && userPlan !== 'trial') {
         console.log('[IceBreaker:textMatch] Skipping — user is on ' + userPlan + ' plan');
         return false;
+    }
+
+    // Dedup at-least-once redeliveries — send this ice-breaker reply only once.
+    if (!(await claimInboundEvent(supabase, inboundMid))) {
+        console.log('[IceBreaker:textMatch] Duplicate delivery — response already sent, skipping');
+        return true;
     }
 
     try {

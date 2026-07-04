@@ -286,6 +286,7 @@ RESEND_API_KEY, ALERT_FROM_EMAIL
     | `GET  /api/cron/sendback`        | every 1h | Retries failed DMs with per-row backoff `[1, 4, 12]` hours |
     | `GET  /api/cron/upsell`          | every 5 min | Enqueues upsell follow-up DMs after the configured `delay_hours` (1–168) since the original send. Cadence is tuned to the UI minimum — don't raise it without also raising the minimum delay. |
     | `GET  /api/cron/daily-summary`   | once daily at 08:00 UTC | Sends "yesterday in AutoDM" push to every user with a registered Expo push token AND at least one DM or lead in the past 24h. No state tracking — the once-daily schedule is the dedup mechanism. |
+    | `GET  /api/cron/refresh-tokens`  | once daily | Renews Instagram long-lived tokens nearing expiry via `ig_refresh_token`; emails the owner to reconnect (deduped via `connected_accounts.token_expiry_notified_at`) when a token can't be refreshed. Facebook skipped (Page tokens are long-lived). |
 
     **When changing cadence:** update both the cron-job.org dashboard *and* the header docstring of the route file. If you change `process-queue` away from 1 minute, update `WINDOW_MINUTES` in that file or rate limits will silently drift.
 

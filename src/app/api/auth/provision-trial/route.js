@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import { TRIAL_DAYS } from '@/lib/plans';
-import { sendTrialStartedEmail } from '@/lib/email';
+import { provisionNewUser } from '@/lib/provision-new-user';
 
 /**
  * POST /api/auth/provision-trial
@@ -44,13 +43,11 @@ export async function POST(request) {
     const user = data.user;
 
     try {
-        // Check if the user_plans row exists. If yes, this is not a
-        // first-time sign-in — short-circuit. Crucially we do NOT
-        // overwrite the row, so a paid user signing back in on mobile
-        // doesn't get reset to trial.
+        // Short-circuit if a plan row already exists — never overwrite it
+        // (esp. a paid plan), and preserve the original response shape.
         const { data: existingPlan } = await admin
             .from('user_plans')
-            .select('user_id, plan, trial_ends_at, plan_expires_at')
+            .select('plan')
             .eq('user_id', user.id)
             .maybeSingle();
 
@@ -62,48 +59,19 @@ export async function POST(request) {
             });
         }
 
-        // First time — provision the trial + send the welcome email.
-        const trialEndsAt = new Date();
-        trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS);
+        // First-time signup → shared provisioner: applies the one-free-trial-
+        // per-email block, sends the welcome email, and provisions a workspace
+        // — the same rules as the web flow. Idempotent, so a request that raced
+        // the check above is handled safely inside it.
+        const { trialGranted, trialEndsAt } = await provisionNewUser(user);
 
-        const { error: insertErr } = await admin
-            .from('user_plans')
-            .insert({
-                user_id:       user.id,
-                plan:          'free',
-                trial_ends_at: trialEndsAt.toISOString(),
-            });
-
-        if (insertErr) {
-            // Race condition: another concurrent request may have
-            // already provisioned. Re-check; if row now exists, treat
-            // as success.
-            if (insertErr.code === '23505') {
-                return NextResponse.json({ success: true, alreadyExisted: true });
-            }
-            console.error('[ProvisionTrial] Insert failed:', insertErr.message);
-            return NextResponse.json({ error: 'Failed to provision trial' }, { status: 500 });
-        }
-
-        console.log(`[ProvisionTrial] Trial row created for ${user.id} (mobile signup) — expires ${trialEndsAt.toDateString()}`);
-
-        // Fire-and-forget welcome email. Failure to send shouldn't
-        // block — the row is already in place, the user is on trial.
-        const userEmail = user.email;
-        const userName  = user.user_metadata?.full_name || '';
-        if (userEmail) {
-            sendTrialStartedEmail({
-                to:          userEmail,
-                name:        userName,
-                igUsername:  '',  // not connected yet — email copy handles this
-                trialEndsAt: trialEndsAt.toISOString(),
-            }).catch((e) => console.warn('[ProvisionTrial] Email send failed:', e.message));
-        }
+        console.log(`[ProvisionTrial] Provisioned ${user.id} (mobile signup) — trial=${trialGranted}`);
 
         return NextResponse.json({
             success:        true,
             alreadyExisted: false,
-            trialEndsAt:    trialEndsAt.toISOString(),
+            trial:          trialGranted,
+            trialEndsAt:    trialEndsAt || null,
         });
     } catch (err) {
         console.error('[ProvisionTrial] Unexpected error:', err);

@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS connected_accounts (
     access_token            text NOT NULL DEFAULT '',
     fb_page_access_token    text,
     token_expires_at        timestamptz,
+    -- When we last emailed the owner to reconnect (their token couldn't be
+    -- auto-refreshed). Dedups the warning; cleared on refresh / reconnect.
+    token_expiry_notified_at timestamptz DEFAULT NULL,
     scopes                  text[],
 
     -- Account state

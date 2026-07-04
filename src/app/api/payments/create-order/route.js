@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { BILLING_PLANS } from '@/lib/plans';
+import { normalizeIndianMobile } from '@/lib/phone';
 
 const CASHFREE_BASE = process.env.CASHFREE_ENV === 'production'
     ? 'https://api.cashfree.com/pg'
@@ -19,11 +21,21 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { planId = 'pro' } = body;
+    const { planId = 'pro', phone } = body;
 
     const plan = BILLING_PLANS[planId];
     if (!plan) {
         return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
+    }
+
+    // Cashfree requires a real customer phone on the order. Validate at the
+    // boundary — the client also validates, but never trust it.
+    const customerPhone = normalizeIndianMobile(phone);
+    if (!customerPhone) {
+        return NextResponse.json(
+            { error: 'A valid 10-digit Indian mobile number is required to process payment.' },
+            { status: 400 },
+        );
     }
 
     // Block re-purchase when the user already has an active paid Pro
@@ -68,8 +80,7 @@ export async function POST(request) {
         customer_details: {
             customer_id:    user.id.replace(/-/g, '').substring(0, 32),
             customer_email: user.email,
-            // Cashfree requires phone — collect in a future billing profile step
-            customer_phone: '9999999999',
+            customer_phone: customerPhone,
         },
         order_meta: {
             return_url: `${appUrl}/pricing/success?order_id={order_id}&plan=${planId}`,
@@ -77,6 +88,32 @@ export async function POST(request) {
         },
         order_note: `${plan.label} — ${user.email}`,
     };
+
+    // Persist the pending order BEFORE charging. Use the service client: the
+    // payment_orders RLS has no INSERT policy, so a user-scoped insert is
+    // silently denied. A Cashfree order must never exist without a local row —
+    // BOTH the webhook and /verify key off it to activate the plan, so a
+    // missing row means the user pays but never gets Pro. Fail closed so we
+    // never charge for an order we can't reconcile.
+    const serviceDb = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+    );
+    const { error: persistErr } = await serviceDb.from('payment_orders').insert({
+        user_id:  user.id,
+        order_id: orderId,
+        plan_id:  planId,
+        amount:   plan.priceInr,
+        currency: 'INR',
+        status:   'pending',
+    });
+    if (persistErr) {
+        console.error('[Cashfree] Could not persist pending order — aborting before charge:', persistErr.message);
+        return NextResponse.json(
+            { error: 'Could not start checkout. Please try again.' },
+            { status: 500 },
+        );
+    }
 
     try {
         const res = await fetch(`${CASHFREE_BASE}/orders`, {
@@ -100,20 +137,14 @@ export async function POST(request) {
             );
         }
 
-        // Persist the pending order for webhook reconciliation
-        try {
-            await supabase.from('payment_orders').insert({
-                user_id:           user.id,
-                order_id:          orderId,
-                cashfree_order_id: data.cf_order_id?.toString(),
-                plan_id:           planId,
-                amount:            plan.priceInr,
-                currency:          'INR',
-                status:            'pending',
-            });
-        } catch (dbErr) {
-            // Non-critical — order can be reconciled via webhook
-            console.warn('[Cashfree] Could not persist order (table may not exist yet):', dbErr.message);
+        // Attach Cashfree's order id for reference (best-effort — the pending
+        // row already exists, keyed on our own order_id, which is what the
+        // webhook and /verify look up).
+        if (data.cf_order_id) {
+            await serviceDb
+                .from('payment_orders')
+                .update({ cashfree_order_id: data.cf_order_id.toString() })
+                .eq('order_id', orderId);
         }
 
         return NextResponse.json({

@@ -22,15 +22,15 @@ export default function DisconnectModal({ isOpen, onClose, onConfirm, isDisconne
       ariaLabel="Disconnect account"
     >
       <div className="px-2 pt-4 pb-2">
-        <div className="flex justify-center">
-          <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
-            <AlertTriangle className="h-7 w-7" strokeWidth={2} />
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+            <AlertTriangle className="h-6 w-6" strokeWidth={2} />
           </span>
+          <h3 className="text-xl font-bold text-neutral-900">
+            Disconnect this account?
+          </h3>
         </div>
-        <h3 className="mt-5 text-left text-xl font-bold text-neutral-900">
-          Disconnect this account?
-        </h3>
-        <p className="mt-2 text-left text-sm leading-relaxed text-neutral-600">
+        <p className="mt-4 text-left text-sm leading-relaxed text-neutral-600">
           Per <strong className="text-neutral-900">Meta policy</strong>, disconnecting permanently deletes all Platform Data fetched from Instagram/Facebook:
         </p>
         <ul className="mt-4 list-disc space-y-1.5 pl-6 text-sm text-neutral-700">

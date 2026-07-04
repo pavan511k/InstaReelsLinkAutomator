@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase-server';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/dashboard/Sidebar';
 import LockedWorkspaceBanner from '@/components/dashboard/LockedWorkspaceBanner';
-import { getEffectivePlan, trialDaysRemaining, getDmLimit, TRIAL_DAYS, getWorkspaceLimit } from '@/lib/plans';
+import { getEffectivePlan, trialDaysRemaining, getDmLimit, getWorkspaceLimit } from '@/lib/plans';
 import { getActiveWorkspace } from '@/lib/workspace-context';
+import { provisionNewUser } from '@/lib/provision-new-user';
 
 export const metadata = {
     title: 'Dashboard — AutoDM',
@@ -97,30 +97,14 @@ export default async function DashboardLayout({ children }) {
             //   • Cases where the auth/callback provisioner failed
             //   • Existing users who signed up before user_plans existed
             try {
-                const serviceDb = createServiceClient(
-                    process.env.NEXT_PUBLIC_SUPABASE_URL,
-                    process.env.SUPABASE_SERVICE_ROLE_KEY,
-                );
+                // Route through the shared provisioner so the trial-abuse
+                // check, welcome email, and workspace all apply consistently
+                // with the /auth/callback and /auth/confirm paths.
+                await provisionNewUser(user);
 
-                const trialEndsAt = new Date();
-                trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS);
-
-                await serviceDb
-                    .from('user_plans')
-                    .upsert(
-                        {
-                            user_id:       user.id,
-                            plan:          'free',
-                            trial_ends_at: trialEndsAt.toISOString(),
-                        },
-                        {
-                            onConflict:       'user_id',
-                            ignoreDuplicates: true, // safe — never overwrites a paid plan
-                        }
-                    );
-
-                // Re-read so plan displays correctly on THIS render
-                const { data: freshPlan } = await serviceDb
+                // Re-read so the plan displays correctly on THIS render (RLS
+                // lets the user read their own row).
+                const { data: freshPlan } = await supabase
                     .from('user_plans')
                     .select('plan, plan_expires_at, trial_ends_at')
                     .eq('user_id', user.id)
@@ -129,10 +113,10 @@ export default async function DashboardLayout({ children }) {
                 effectivePlan = getEffectivePlan(freshPlan);
                 trialDaysLeft = trialDaysRemaining(freshPlan);
 
-                console.log(`[Layout] Trial provisioned for user ${user.id} (fallback)`);
+                console.log(`[Layout] Provisioned via shared provisioner for user ${user.id} (fallback)`);
             } catch (provErr) {
                 // Still non-fatal — user sees free plan until next render
-                console.warn('[Layout] Fallback trial provision failed:', provErr.message);
+                console.warn('[Layout] Fallback provision failed:', provErr.message);
             }
         }
     } catch { /* user_plans table may not exist in very fresh deploys */ }

@@ -77,7 +77,34 @@
       "PowerShell(Set-Location 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile'; npx tsc --noEmit 2>&1 | Select-Object -Last 10 | Out-String; \"ExitCode=$LASTEXITCODE\")",
       "WebFetch(domain:supabase.com)",
       "PowerShell(Get-ChildItem -Path 'C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\.claude' -Recurse -File | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\('C:\\\\Code\\\\SelfProjLearning\\\\autodm-mobile\\\\.claude\\\\', ''\\) } | Select-Object -First 40)",
-      "PowerShell(python --version 2>&1 | Out-String)"
+      "PowerShell(python --version 2>&1 | Out-String)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(git -C \"C:/Code/SelfProjLearning/InstaReelsLinkAutomator\" check-ignore .env.local)",
+      "Bash(git -C \"C:/Code/SelfProjLearning/InstaReelsLinkAutomator\" ls-files --error-unmatch .env.local)"
     ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "expo@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "github@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "figma@claude-plugins-official": true,
+    "ralph-loop@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "playground@claude-plugins-official": true,
+    "chrome-devtools-mcp@claude-plugins-official": true,
+    "linear@claude-plugins-official": true,
+    "firecrawl@claude-plugins-official": true,
+    "serena@claude-plugins-official": true,
+    "postiz@claude-plugins-official": true
   }
 }

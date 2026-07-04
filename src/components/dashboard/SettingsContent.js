@@ -874,15 +874,28 @@ export default function SettingsContent({
         ariaLabel="Delete account"
       >
         <div className="px-2 pt-4 pb-2">
-          <div className="flex justify-center">
-            <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600">
-              <AlertTriangle className="h-7 w-7" strokeWidth={2} />
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+              <AlertTriangle className="h-6 w-6" strokeWidth={2} />
             </span>
+            <h3 className="text-xl font-bold text-neutral-900">Delete your account?</h3>
           </div>
-          <h3 className="mt-5 text-left text-xl font-bold text-neutral-900">Delete your account?</h3>
-          <p className="mt-2 text-left text-sm leading-relaxed text-neutral-600">
+          <p className="mt-4 text-left text-sm leading-relaxed text-neutral-600">
             This action <strong className="text-neutral-900">cannot be undone</strong>. It permanently deletes your account and removes all associated data:
           </p>
+
+          {/* Paid-plan forfeiture warning — deletion doesn't auto-restore
+              remaining paid time (warn-and-support policy). */}
+          {(currentUsage?.plan === 'pro' || currentUsage?.plan === 'business') && currentUsage?.planExpiresAt && (
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" strokeWidth={2.5} />
+              <p className="text-xs leading-relaxed text-amber-900">
+                You&apos;re on <strong>Pro until {planExpiresStr}</strong>. Deleting now <strong>forfeits the remaining paid time</strong> — we don&apos;t restore it automatically. If this is a mistake, email{' '}
+                <a href="mailto:support@autodm.pro" className="font-semibold underline">support@autodm.pro</a> instead.
+              </p>
+            </div>
+          )}
+
           <ul className="mt-4 list-disc space-y-1.5 pl-6 text-sm text-neutral-700">
             <li>All connected Instagram/Facebook accounts</li>
             <li>All synced posts and stories</li>

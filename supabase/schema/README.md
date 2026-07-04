@@ -3,7 +3,7 @@
 This folder contains the complete SQL schema for AutoDM, split into
 **one file per table** so each can be read, reviewed, or re-run independently.
 
-Run these scripts **in order** (01 → 18) in the Supabase SQL Editor when
+Run these scripts **in order** (01 → 21) in the Supabase SQL Editor when
 setting up a fresh database. Every script is idempotent — it uses
 `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, and
 `ON CONFLICT DO NOTHING`, so re-running a script on an existing database
@@ -34,9 +34,23 @@ is safe and will not overwrite data.
 | 17 | `17_admin_email_log.sql` | Audit log for the admin /admin/email tool |
 | 18 | `18_contacts_rpc.sql` | `contacts_for_user(uuid)` RPC powering /contacts |
 | 19 | `19_workspaces.sql` | Workspaces + memberships, adds `workspace_id` to all scoped tables |
+| 20 | `20_processed_dm_events.sql` | Inbound webhook idempotency ledger (ice-breaker / quick-reply dedup) |
+| 21 | `21_trial_history.sql` | One-free-trial-per-email ledger (email-hash; survives account deletion) |
 
 > **Order matters.** Each table references tables created by earlier scripts
 > via foreign keys. Running out of order will produce FK constraint errors.
+
+---
+
+## One-time data migrations (optional — run manually)
+
+A few scripts in `supabase/migrations/` are **not** part of the numbered `01 → 21`
+schema run. They're one-off data operations — apply them deliberately, once, from
+the Supabase SQL Editor:
+
+| Script | When | What |
+|---|---|---|
+| `backfill-trial-history.sql` | Once, **after** `21_trial_history.sql` exists | Seeds `trial_history` with a one-way hash of every existing user's email, so the "one free trial per email" block also covers users who signed up before it shipped. Enables `pgcrypto`; idempotent (`ON CONFLICT DO NOTHING`). Skip it and the ledger just fills from new signups instead. |
 
 ---
 

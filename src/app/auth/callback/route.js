@@ -1,21 +1,19 @@
-// Removed edge runtime — we need service role access to provision trial in user_plans
+// Not edge — provisionNewUser needs service-role access to user_plans.
 import { createServerClient } from '@supabase/ssr';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { TRIAL_DAYS } from '@/lib/plans';
-import { sendTrialStartedEmail } from '@/lib/email';
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspace-context';
-import { enforceWorkspaceLocks } from '@/lib/workspace-locks';
+import { provisionNewUser } from '@/lib/provision-new-user';
 
 /**
  * GET /auth/callback
  *
- * Called by Supabase after the user clicks the email verification link.
- * 1. Exchanges the one-time code for a session.
- * 2. Provisions a user_plans row with a 30-day trial if one doesn't exist yet.
- *    (ignoreDuplicates: true — safe to call multiple times, never overwrites a paid plan.)
- * 3. Redirects to /dashboard where the inline trial banner + sidebar plan
- *    badge will immediately reflect the trial status.
+ * OAuth (Google) callback — exchanges the PKCE `?code=` for a session, then
+ * provisions the user's trial + workspace via the shared provisioner.
+ *
+ * Email links (signup confirmation, password reset) now use the token_hash
+ * flow via `/auth/confirm` instead — that path doesn't depend on a client-side
+ * PKCE code verifier, so it survives being opened on a different device or in
+ * an email app's in-app browser (the failure this route hit for email links).
  */
 export async function GET(request) {
     const { searchParams, origin } = new URL(request.url);
@@ -23,10 +21,21 @@ export async function GET(request) {
     const next = searchParams.get('next') ?? '/dashboard';
 
     if (!code) {
+        // No code → the provider step failed before reaching us (e.g. the user
+        // cancelled Google consent). Forward Supabase's real error so /login can
+        // message it correctly; fall back to auth_failed.
+        const providerError = searchParams.get('error');
+        if (providerError) {
+            const params = new URLSearchParams({ error: providerError });
+            const providerErrorCode = searchParams.get('error_code');
+            const providerErrorDesc = searchParams.get('error_description');
+            if (providerErrorCode) params.set('error_code', providerErrorCode);
+            if (providerErrorDesc) params.set('error_description', providerErrorDesc);
+            return NextResponse.redirect(`${origin}/login?${params.toString()}`);
+        }
         return NextResponse.redirect(`${origin}/login?error=auth_failed`);
     }
 
-    // ── Step 1: exchange code for session ────────────────────────────────
     const response = NextResponse.redirect(
         buildRedirectUrl(origin, request.headers.get('x-forwarded-host'), next)
     );
@@ -54,95 +63,13 @@ export async function GET(request) {
         return NextResponse.redirect(`${origin}/login?error=auth_failed`);
     }
 
-    // ── Step 2: provision trial + send trial-started email ───────────────
-    // This is the single source of truth for "user becomes a paying-eligible
-    // trial user." Runs once per user — the first time they click the email
-    // verification link Supabase sent. Subsequent visits to this route (e.g.
-    // password resets that route through here) skip both the insert and the
-    // email because the user_plans row already exists.
+    // Provision trial + workspace (first-time users). Shared with /auth/confirm
+    // so OAuth and email-link signups onboard identically. Non-fatal — the
+    // dashboard layout has a tertiary fallback provisioner.
     let activeWorkspaceId = null;
     try {
-        const serviceDb = createServiceClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY,
-        );
-
-        // Check if user_plans row exists. If not, insert AND send email.
-        // If yes, skip both (already onboarded — or paid plan, which we
-        // must never overwrite).
-        const userId = sessionData.user.id;
-        const { data: existingPlan } = await serviceDb
-            .from('user_plans').select('user_id')
-            .eq('user_id', userId).maybeSingle();
-
-        if (!existingPlan) {
-            const trialEndsAt = new Date();
-            trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS);
-
-            await serviceDb.from('user_plans').insert({
-                user_id:       userId,
-                plan:          'free',
-                trial_ends_at: trialEndsAt.toISOString(),
-            });
-
-            console.log(`[AuthCallback] Trial provisioned for user ${userId} — expires ${trialEndsAt.toDateString()}`);
-
-            // Fire-and-forget trial-started email. Failure to send shouldn't
-            // block the redirect — user can still use the product.
-            const userEmail = sessionData.user.email;
-            const userName  = sessionData.user.user_metadata?.full_name || '';
-            if (userEmail) {
-                sendTrialStartedEmail({
-                    to:          userEmail,
-                    name:        userName,
-                    igUsername:  '', // not connected yet — email copy handles this
-                    trialEndsAt: trialEndsAt.toISOString(),
-                }).catch((e) => console.warn('[AuthCallback] Trial email send failed:', e.message));
-            }
-        }
-
-        // Default workspace provisioning. Single source of truth: every
-        // authenticated user has at least one workspace. The schema
-        // migration backfilled existing users; this branch covers brand
-        // new signups + any edge case where a user reached this route
-        // without a workspace row.
-        const { data: existingWs } = await serviceDb
-            .from('workspaces')
-            .select('id')
-            .eq('owner_id', userId)
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-
-        if (existingWs) {
-            activeWorkspaceId = existingWs.id;
-        } else {
-            const { data: newWs } = await serviceDb
-                .from('workspaces')
-                .insert({ owner_id: userId, name: 'Default', slug: 'default' })
-                .select('id')
-                .single();
-            if (newWs) {
-                await serviceDb
-                    .from('workspace_members')
-                    .insert({ workspace_id: newWs.id, user_id: userId, role: 'owner' });
-                activeWorkspaceId = newWs.id;
-                console.log(`[AuthCallback] Default workspace ${newWs.id} created for user ${userId}`);
-            }
-        }
-
-        // Reconcile workspace locks defensively. Catches the case where a
-        // user's trial expired or paid plan lapsed since the last time
-        // they touched the app — the cron sweep handles this too, but
-        // running here means a returning user sees the right state on
-        // the very first page load after coming back.
-        try {
-            await enforceWorkspaceLocks(serviceDb, userId);
-        } catch (err) {
-            console.warn('[AuthCallback] Lock reconciliation failed:', err.message);
-        }
+        ({ activeWorkspaceId } = await provisionNewUser(sessionData.user));
     } catch (err) {
-        // Non-fatal — dashboard layout has a tertiary fallback provisioner.
         console.warn('[AuthCallback] Trial/workspace provision failed (non-fatal):', err.message);
     }
 

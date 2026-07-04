@@ -6,6 +6,8 @@ import {
   Check, ArrowRight, Loader2, Crown, ShieldCheck, Clock, Sparkles,
 } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { promptForMobile } from '@/lib/phone';
 
 /**
  * PricingModal — modal version of /pricing for upgrade flows triggered
@@ -236,6 +238,7 @@ export default function PricingModal({ open, onClose }) {
   const [error, setError]               = useState('');
   const [billingCycle, setBillingCycle] = useState('yearly');
   const [planState, setPlanState] = useState({ loaded: false, plan: 'free', planExpiresAt: null });
+  const { prompt } = useConfirm();
 
   // Fetch plan state when the modal opens — keeps the data fresh
   // without doing it on every dashboard render.
@@ -264,13 +267,19 @@ export default function PricingModal({ open, onClose }) {
 
   const handleUpgrade = async (planId) => {
     if (!planId) return;
-    setLoadingPlan(planId);
     setError('');
+
+    // Cashfree needs a real customer phone — collect it before starting the
+    // loading state so a cancel leaves the button untouched.
+    const phone = await promptForMobile(prompt);
+    if (!phone) return;
+
+    setLoadingPlan(planId);
     try {
       const res  = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId, phone }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create order');

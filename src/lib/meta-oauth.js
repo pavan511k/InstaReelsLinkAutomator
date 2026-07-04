@@ -7,6 +7,7 @@
  * the Facebook app credentials.
  */
 
+import { createHmac, timingSafeEqual } from 'crypto';
 import { GRAPH_FB_BASE, FB_OAUTH_BASE, GRAPH_IG_BASE } from '@/lib/meta-graph';
 
 const META_APP_ID          = process.env.NEXT_PUBLIC_META_APP_ID;        // Facebook App ID
@@ -20,13 +21,7 @@ const REDIRECT_URI         = `${APP_URL}/api/auth/meta/callback`;
 const IG_SCOPES = [
     'instagram_business_basic',
     'instagram_business_manage_messages',
-    'instagram_business_manage_comments', // REJECTED in App Review.
-    // ⚠ This scope gates TWO things, not just one:
-    //   1. RECEIVING `comments` webhook events. Without it Meta delivers
-    //      DM events but NEVER delivers a comment event, so every
-    //      comment-triggered automation silently does nothing.
-    //   2. POSTING public comment replies via the Comment Reply API.
-    // Resubmit for App Review to enable comment-trigger automations.
+    'instagram_business_manage_comments',
 ];
 
 // Facebook Login scopes.
@@ -41,13 +36,52 @@ const FB_SCOPES = [
     'pages_messaging',
 ];
 
+// ─── OAuth state signing ────────────────────────────────────────────
+// The callback trusts the user id embedded in `state` to decide which AutoDM
+// account a Meta token is bound to — and the mobile branch does so via the
+// service-role client (no RLS). An unsigned state is forgeable, so an attacker
+// could phish a victim into authorizing and have their token land in the
+// attacker's workspace. We HMAC the state here and verify it in the callback,
+// so only server-issued states are honored. Key: META_APP_SECRET (server-only,
+// always configured). '~' never appears in our payloads (connectionType,
+// UUIDs, 'mobile'), so it's a safe separator.
+const STATE_SIG_SEP = '~';
+
+function stateSignature(payload) {
+    return createHmac('sha256', META_APP_SECRET || '').update(payload).digest('hex');
+}
+
+/** Append an HMAC signature to an OAuth state payload. */
+export function signState(payload) {
+    return `${payload}${STATE_SIG_SEP}${stateSignature(payload)}`;
+}
+
+/**
+ * Verify a signed OAuth state. Returns the original payload when the signature
+ * is valid, or null when it's missing or tampered with. Fails closed.
+ */
+export function verifyState(signedState) {
+    if (typeof signedState !== 'string' || !META_APP_SECRET) return null;
+    const sep = signedState.lastIndexOf(STATE_SIG_SEP);
+    if (sep === -1) return null;
+    const payload  = signedState.slice(0, sep);
+    const provided = signedState.slice(sep + 1);
+    const expected = stateSignature(payload);
+    if (provided.length !== expected.length) return null;
+    try {
+        return timingSafeEqual(Buffer.from(provided), Buffer.from(expected)) ? payload : null;
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Build the OAuth authorization URL for the given connection type.
  *   instagram → Instagram Login (instagram.com)
  *   facebook  → Facebook Login (facebook.com)
  */
 export function buildAuthUrl(connectionType, state) {
-    const encodedState = `${connectionType}:${state}`;
+    const encodedState = signState(`${connectionType}:${state}`);
 
     if (connectionType === 'instagram') {
         const params = new URLSearchParams({
@@ -101,12 +135,11 @@ export async function exchangeCodeForInstagramToken(code) {
 }
 
 /**
- * Exchange short-lived Instagram token for the 60-day long-lived variant.
+ * Exchange a short-lived Instagram token for the 60-day long-lived variant.
  *
- * Throws an error that satisfies `isInstagramAlreadyLongLivedError()` when
- * Meta rejects the exchange — that happens on the new IG-API-with-Login
- * flow where Step 1 already returns a long-lived token. Callers should
- * catch and reuse the original token in that case.
+ * Throws when Meta rejects the exchange — notably on the IG-API-with-Login
+ * flow where step 1 already returns a long-lived token. The caller
+ * (handleInstagramCallback) catches this and reuses the step-1 token.
  */
 export async function getInstagramLongLivedToken(shortLivedToken) {
     const params = new URLSearchParams({
@@ -122,6 +155,30 @@ export async function getInstagramLongLivedToken(shortLivedToken) {
     if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.error?.message || 'Failed to get long-lived Instagram token');
+    }
+
+    return response.json(); // { access_token, token_type, expires_in }
+}
+
+/**
+ * Refresh a 60-day Instagram long-lived token for another 60 days via the
+ * ig_refresh_token grant. The token must be at least 24h old and NOT yet
+ * expired — an already-expired token can't be refreshed (the user must
+ * reconnect). Returns { access_token, token_type, expires_in }.
+ */
+export async function refreshInstagramToken(longLivedToken) {
+    const params = new URLSearchParams({
+        grant_type:   'ig_refresh_token',
+        access_token: longLivedToken,
+    });
+
+    const response = await fetch(
+        `https://graph.instagram.com/refresh_access_token?${params.toString()}`
+    );
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error?.message || 'Failed to refresh Instagram token');
     }
 
     return response.json(); // { access_token, token_type, expires_in }

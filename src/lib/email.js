@@ -318,3 +318,50 @@ export async function sendProExpiringEmail({ to, name, daysLeft, expiresAt }) {
         html,
     });
 }
+
+// ── 4. Reconnect required (IG token expired / couldn't be auto-refreshed) ─────
+// Sent by /api/cron/refresh-tokens when an Instagram long-lived token can't be
+// renewed automatically. Automations stop until the user reconnects, so this
+// is a direct "action needed" nudge rather than a soft reminder.
+export async function sendReconnectRequiredEmail({ to, name, platform = 'Instagram', handle = '' }) {
+    const firstName = (name || to.split('@')[0]).split(' ')[0];
+    const account   = handle ? `@${handle}` : `your ${platform} account`;
+
+    const html = layout(`
+        <div style="text-align:center;margin-bottom:30px;">
+            <div style="display:inline-block;padding:7px 18px;background:${COLORS.warnSoft};border:1px solid ${COLORS.warnBorder};border-radius:100px;font-size:12px;font-weight:700;color:${COLORS.warn};letter-spacing:0.04em;text-transform:uppercase;margin-bottom:20px;">
+                Action needed
+            </div>
+            <h1 style="margin:0 0 10px;font-size:26px;font-weight:800;color:${COLORS.text};letter-spacing:-0.03em;line-height:1.25;">
+                Reconnect ${platform} to keep your DMs running, ${firstName}.
+            </h1>
+            <p style="margin:0;font-size:15px;color:${COLORS.textSoft};line-height:1.65;">
+                ${platform}'s access for <strong style="color:${COLORS.text};">${account}</strong> has expired and we couldn't renew it automatically.
+                Until you reconnect, <strong style="color:${COLORS.textSoft};">your automations have stopped sending DMs.</strong>
+            </p>
+        </div>
+
+        <div style="background:${COLORS.cardSubtle};border:1px solid ${COLORS.border};border-radius:14px;padding:20px 22px;margin-bottom:28px;">
+            <p style="margin:0;font-size:13px;color:${COLORS.textMuted};line-height:1.6;">
+                Reconnecting takes about 20 seconds and keeps all your existing automations, posts, and settings intact — it just refreshes ${platform}'s permission.
+            </p>
+        </div>
+
+        <div style="text-align:center;margin-bottom:28px;">
+            ${button(`Reconnect ${platform}`, `${APP_URL}/settings`)}
+        </div>
+
+        ${divider}
+
+        <p style="margin:0;font-size:13px;color:${COLORS.textMuted};text-align:center;line-height:1.65;">
+            ${platform} access tokens expire every 60 days for security. We try to refresh them automatically — a reconnect is only needed when that isn't possible (for example, if the permission was revoked).
+        </p>
+    `);
+
+    return getResend().emails.send({
+        from: FROM,
+        to,
+        subject: `Action needed: reconnect ${platform} to keep AutoDM running`,
+        html,
+    });
+}

@@ -20,7 +20,7 @@ function GoogleIcon() {
   );
 }
 
-const PASSWORD_MIN_LENGTH = 6;
+const PASSWORD_MIN_LENGTH = 8;
 
 function getPasswordStrength(pw) {
   if (!pw) return { level: 0, label: '', color: 'bg-neutral-300' };
@@ -59,26 +59,35 @@ export default function SignupPage() {
     e.preventDefault();
     setError('');
     if (!fullName || !email || !password)      { setError('Please fill in all fields.');                         return; }
-    if (password.length < PASSWORD_MIN_LENGTH) { setError('Password must be at least 6 characters.');           return; }
+    if (password.length < PASSWORD_MIN_LENGTH) { setError('Password must be at least 8 characters.');           return; }
     if (!termsAccepted)                        { setError('Please accept the Terms & Privacy Policy.');          return; }
+
+    const trimmedName = fullName.trim();
 
     setIsLoading(true);
     try {
-      const { error: authError } = await supabase.auth.signUp({
+      const { data, error: authError } = await supabase.auth.signUp({
         email, password,
         options: {
-          data: { full_name: fullName },
+          data: { full_name: trimmedName },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (authError) {
         setError(authError.message);
+      } else if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        // Supabase's email-enumeration protection returns success with an
+        // empty identities array (and sends no email) when the address is
+        // already registered. Tell the user to sign in instead of parking
+        // them on /verify to wait for an email that will never arrive.
+        setError('This email is already registered. Please sign in instead.');
       } else {
         // No separate welcome email — Supabase Auth already sends the
         // verification email at signup, and we send the trial-started
         // email once the user connects their first IG/FB account. Two
-        // emails ~minutes apart felt redundant.
-        router.push('/verify');
+        // emails ~minutes apart felt redundant. Forward the address so
+        // /verify can offer a resend.
+        router.push(`/verify?email=${encodeURIComponent(email)}`);
       }
     } catch {
       setError('Something went wrong. Please try again.');
@@ -235,7 +244,7 @@ export default function SignupPage() {
                 <input
                   id="password"
                   type="password"
-                  placeholder="Min. 6 characters"
+                  placeholder="Min. 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"

@@ -23,9 +23,11 @@ const COLS = [
   {
     title: 'Legal',
     links: [
-      { label: 'Privacy policy',   href: '/privacy' },
-      { label: 'Terms of use',     href: '/terms' },
-      { label: 'Contact support',  href: 'mailto:support@autodm.pro' },
+      { label: 'Privacy policy',          href: '/privacy' },
+      { label: 'Terms of use',            href: '/terms' },
+      { label: 'Refunds & cancellations', href: '/refund-policy' },
+      { label: 'Shipping & delivery',     href: '/shipping' },
+      { label: 'Contact us',              href: '/contact' },
     ],
   },
 ];

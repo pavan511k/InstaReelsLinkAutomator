@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -23,13 +23,52 @@ export default function LoginPage() {
   const [email, setEmail]         = useState('');
   const [password, setPassword]   = useState('');
   const [error, setError]         = useState('');
+  const [showResetCta, setShowResetCta] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router   = useRouter();
   const supabase = createClient();
 
+  // Failed email links (password reset / verification) and OAuth errors bounce
+  // back to /login with details in the query string or URL hash. Supabase emits
+  // access_denied / otp_expired ("Email link is invalid or has expired"); our
+  // own /auth/callback emits error=auth_failed. Surface a friendly message
+  // instead of a blank form on a scary URL, then clean the address bar.
+  useEffect(() => {
+    const fromHash  = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const fromQuery = new URLSearchParams(window.location.search);
+    const pick = (key) => fromQuery.get(key) || fromHash.get(key) || '';
+    const errName = pick('error');
+    const errCode = pick('error_code');
+    const errDesc = pick('error_description');
+    if (!errName && !errCode && !errDesc) return;
+
+    const desc = errDesc ? decodeURIComponent(errDesc.replace(/\+/g, ' ')) : '';
+    const isLinkProblem =
+      errCode === 'otp_expired' ||
+      errName === 'auth_failed' ||
+      /expired|invalid/i.test(desc);
+    // A provider cancel (e.g. dismissing Google consent) comes back as
+    // access_denied without an expired/invalid link — not a reset situation,
+    // so don't offer the "request a new link" CTA.
+    const isOAuthCancel = !isLinkProblem && errName === 'access_denied';
+
+    if (isLinkProblem) {
+      setError('This link is invalid or has expired. Please request a new one.');
+      setShowResetCta(true);
+    } else if (isOAuthCancel) {
+      setError('Sign-in was cancelled. Please try again.');
+    } else {
+      setError(desc || 'We couldn’t sign you in. Please try again.');
+    }
+
+    // Strip the params so a refresh doesn't re-show the error and the URL is clean.
+    window.history.replaceState(null, '', window.location.pathname);
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setShowResetCta(false);
     if (!email || !password) { setError('Please fill in all fields.'); return; }
 
     setIsLoading(true);
@@ -52,6 +91,7 @@ export default function LoginPage() {
 
   const handleGoogleSignIn = async () => {
     setError('');
+    setShowResetCta(false);
     setIsLoading(true);
     try {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -112,7 +152,17 @@ export default function LoginPage() {
           {error && (
             <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
               <span className="mt-1 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-500" />
-              {error}
+              <div className="space-y-1">
+                <p>{error}</p>
+                {showResetCta && (
+                  <Link
+                    href="/forgot-password"
+                    className="inline-block font-semibold text-red-800 underline underline-offset-2 hover:text-red-900"
+                  >
+                    Request a new link
+                  </Link>
+                )}
+              </div>
             </div>
           )}
 

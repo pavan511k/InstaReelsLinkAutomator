@@ -5,6 +5,8 @@ import {
   Check, Zap, ArrowRight, Loader2, Crown, ShieldCheck, Lock, CreditCard, Clock, Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { promptForMobile } from '@/lib/phone';
 
 /**
  * /pricing — same plan card layout as the landing page Pricing section.
@@ -263,6 +265,7 @@ export default function PricingPage() {
   const [error, setError]               = useState('');
   const [billingCycle, setBillingCycle] = useState('yearly');
   const [planState, setPlanState] = useState({ loaded: false, plan: 'free', planExpiresAt: null });
+  const { prompt } = useConfirm();
 
   useEffect(() => {
     let cancelled = false;
@@ -288,13 +291,19 @@ export default function PricingPage() {
 
   const handleUpgrade = async (planId) => {
     if (!planId) return;
-    setLoadingPlan(planId);
     setError('');
+
+    // Cashfree needs a real customer phone — collect it before starting the
+    // loading state so a cancel leaves the button untouched.
+    const phone = await promptForMobile(prompt);
+    if (!phone) return;
+
+    setLoadingPlan(planId);
     try {
       const res  = await fetch('/api/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId, phone }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create order');

@@ -73,26 +73,54 @@ export async function GET(request) {
             const authSupabase = await createClient();
             const { data: { user } } = await authSupabase.auth.getUser();
 
+            // Entitlement is driven ONLY by the stored order — never by the
+            // `plan` query param (presentational only), and never re-applied
+            // once the order is already paid. Trusting the param and skipping
+            // the ownership + idempotency checks previously let a user self-
+            // upgrade (?plan=pro_yearly) or replay the URL to keep resetting
+            // their plan period for free. The webhook is the authoritative
+            // activator; this GET is best-effort so the user sees Pro on
+            // redirect. Mirrors the webhook's safe read-then-activate logic.
             if (user) {
-                // Look up the SKU and resolve entitlement + duration.
-                const billingPlan = BILLING_PLANS[planId] || BILLING_PLANS.pro;
-                const planExpiresAt = computePlanExpiresAt(
-                    BILLING_PLANS[planId] ? planId : 'pro',
-                );
-
-                await activatePlan(serviceSupabase, user.id, billingPlan.entitlement, planExpiresAt);
-
-                await serviceSupabase
+                const { data: order } = await serviceSupabase
                     .from('payment_orders')
-                    .update({ status: 'paid', paid_at: new Date().toISOString() })
+                    .select('user_id, plan_id, status')
                     .eq('order_id', orderId)
-                    .eq('user_id', user.id);
+                    .maybeSingle();
 
-                // Unlock any workspaces the new plan now covers.
-                try {
-                    await enforceWorkspaceLocks(serviceSupabase, user.id);
-                } catch (err) {
-                    console.warn('[Verify] Lock reconciliation failed:', err.message);
+                if (order && order.user_id === user.id && order.status !== 'paid') {
+                    const billingPlan  = BILLING_PLANS[order.plan_id] || BILLING_PLANS.pro;
+                    const expectedInr  = billingPlan.priceInr;
+                    const paidAmount   = Number(data.order_amount);
+                    const paidCurrency = String(data.order_currency || 'INR').toUpperCase();
+
+                    // Defense-in-depth: don't activate on an underpayment /
+                    // wrong currency (partial payment, order amendment, misconfig).
+                    if (!Number.isFinite(paidAmount) || paidAmount + 0.01 < expectedInr || paidCurrency !== 'INR') {
+                        console.error(`[Verify] Amount mismatch for order ${orderId}: paid ${paidAmount} ${paidCurrency}, expected ${expectedInr} INR — NOT activating.`);
+                    } else {
+                        const planExpiresAt = computePlanExpiresAt(
+                            BILLING_PLANS[order.plan_id] ? order.plan_id : 'pro',
+                        );
+
+                        await activatePlan(serviceSupabase, user.id, billingPlan.entitlement, planExpiresAt);
+
+                        // Conditional flip — only claims the transition if a
+                        // concurrent webhook hasn't already marked it paid.
+                        await serviceSupabase
+                            .from('payment_orders')
+                            .update({ status: 'paid', paid_at: new Date().toISOString() })
+                            .eq('order_id', orderId)
+                            .eq('user_id', user.id)
+                            .neq('status', 'paid');
+
+                        // Unlock any workspaces the new plan now covers.
+                        try {
+                            await enforceWorkspaceLocks(serviceSupabase, user.id);
+                        } catch (err) {
+                            console.warn('[Verify] Lock reconciliation failed:', err.message);
+                        }
+                    }
                 }
             }
 

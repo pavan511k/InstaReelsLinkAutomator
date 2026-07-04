@@ -9,6 +9,7 @@ import {
     getFacebookLongLivedToken,
     getUserPages,
     getMetaUser,
+    verifyState,
 } from '@/lib/meta-oauth';
 import { GRAPH_API_VERSION, GRAPH_FB_BASE, GRAPH_IG_BASE } from '@/lib/meta-graph';
 import { getActiveWorkspaceId } from '@/lib/workspace-context';
@@ -116,7 +117,13 @@ async function syncPostsForUser(userId, workspaceId) {
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
-    const state = searchParams.get('state');
+    // `state` is HMAC-signed when built (buildAuthUrl). Verify it here so a
+    // forged state can't bind this OAuth result to an attacker-chosen user —
+    // critical because the mobile branch below trusts the user id from `state`
+    // via the service-role client. verifyState returns null on a missing or
+    // tampered signature, which the `!code || !state` guard then rejects.
+    const rawState = searchParams.get('state');
+    const state = verifyState(rawState);
     const error = searchParams.get('error');
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -199,9 +206,10 @@ export async function GET(request) {
         let workspaceId = null;
 
         // For mobile we use the service-role client for all DB writes
-        // since there's no auth.uid() to satisfy RLS. The user_id we
-        // insert is already validated (came from the bearer-token check
-        // in /api/auth/meta/connect).
+        // since there's no auth.uid() to satisfy RLS. The user_id here is
+        // trustworthy because `state` was HMAC-verified at the top of this
+        // handler (signed by our server in the /connect → buildAuthUrl step),
+        // so a caller can't forge their own authorize URL to hijack it.
         const supabase = isMobileSource
             ? createServiceClient(
                 process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -533,15 +541,31 @@ async function subscribeToWebhookEvents(accountData) {
  */
 async function handleInstagramCallback(code, userId) {
     const shortToken = await exchangeCodeForInstagramToken(code);
-    const longToken  = await getInstagramLongLivedToken(shortToken.access_token);
-    const profile    = await getInstagramUserProfile(longToken.access_token);
+
+    // Exchange the step-1 token for the 60-day long-lived one. On the newer
+    // IG-API-with-Login flow Meta sometimes ALREADY returns a long-lived token
+    // in step 1, and this exchange then rejects. Rather than hard-fail the
+    // whole connection (a generic oauth_failed the user can't get past), catch
+    // it and reuse the step-1 token — which is the long-lived one in that case.
+    let accessToken  = shortToken.access_token;
+    let expiresInSec = 60 * 24 * 60 * 60; // IG long-lived default: 60 days
+    try {
+        const longToken = await getInstagramLongLivedToken(shortToken.access_token);
+        accessToken  = longToken.access_token;
+        expiresInSec = longToken.expires_in || expiresInSec;
+    } catch (err) {
+        console.warn('[InstagramCallback] Long-lived exchange failed — reusing step-1 token:', err.message);
+    }
+
+    // Fetching the profile with the resolved token also confirms it actually works.
+    const profile = await getInstagramUserProfile(accessToken);
 
     return {
         user_id:                userId,
         platform:               'instagram',
         meta_user_id:           profile.user_id || shortToken.user_id,
-        access_token:           longToken.access_token,
-        token_expires_at:       new Date(Date.now() + longToken.expires_in * 1000).toISOString(),
+        access_token:           accessToken,
+        token_expires_at:       new Date(Date.now() + expiresInSec * 1000).toISOString(),
         ig_user_id:             profile.user_id || shortToken.user_id,
         ig_username:            profile.username,
         ig_profile_picture_url: profile.profile_picture_url || null,
