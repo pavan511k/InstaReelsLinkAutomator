@@ -975,6 +975,14 @@ async function processAutomationForComment(supabase, post, commentText, commente
         // any-mode kicks in. If a post-bound is active, any-mode yields
         // entirely so two automations don't fire on the same comment.
         const hasPostBound = (postBound || []).length > 0;
+        // Scope account-wide "any" automations to the surface this event came
+        // from. A story reply (post.is_story) must only match "Any Story"
+        // automations (templateType='story-reply'); a post/reel comment must
+        // only match "Any Post" automations (templateType='comment-to-dm').
+        // Both share post_id=NULL + postTargetMode='any', so without this
+        // templateType scope an Any Story automation would fire on post
+        // comments and an Any Post automation would fire on story replies.
+        const anyModeTemplate = post.is_story ? 'story-reply' : 'comment-to-dm';
         const { data: anyMode } = hasPostBound
             ? { data: [] }
             : await supabase
@@ -983,7 +991,8 @@ async function processAutomationForComment(supabase, post, commentText, commente
                 .is('post_id', null)
                 .eq('is_active', true)
                 .eq('workspace_id', account.workspace_id)
-                .filter('trigger_config->>postTargetMode', 'eq', 'any');
+                .filter('trigger_config->>postTargetMode', 'eq', 'any')
+                .filter('settings_config->>templateType', 'eq', anyModeTemplate);
 
         candidates = [...(postBound || []), ...(anyMode || [])];
     }
@@ -2409,15 +2418,49 @@ async function handleStoryReplyEvent(supabase, igAccountId, { senderId, storyMed
         return false;
     }
 
-    const { data: automation } = await supabase
+    // Decide whether we handle this reply here. Two kinds of story automation
+    // qualify, mirroring the candidate resolution in processAutomationForComment
+    // so this gate can't disagree with what actually fires:
+    //   1. Story-bound  — an automation attached to THIS exact story.
+    //   2. "Any Story"  — an account-wide automation (post_id NULL,
+    //      postTargetMode='any', templateType='story-reply').
+    // Historically only (1) was checked, so Any Story replies bailed here and
+    // silently fell through to the email-collector / DM-auto-responder chain.
+    // .limit(1) (not .maybeSingle) so a story with multiple active automations
+    // doesn't throw.
+    const { data: storyBound } = await supabase
         .from('dm_automations')
         .select('id')
         .eq('post_id', post.id)
         .eq('is_active', true)
-        .maybeSingle();
+        .limit(1);
 
-    if (!automation) {
-        console.log(`[Webhook/StoryReply] No active automation for story-post ${post.id} — falling through`);
+    let hasAutomation = (storyBound || []).length > 0;
+
+    if (!hasAutomation && post.account_id) {
+        // Any Story automations are workspace-scoped, so resolve this account's
+        // workspace first (same lookup processAutomationForComment does).
+        const { data: acct } = await supabase
+            .from('connected_accounts')
+            .select('workspace_id')
+            .eq('id', post.account_id)
+            .maybeSingle();
+        if (acct?.workspace_id) {
+            const { data: anyStory } = await supabase
+                .from('dm_automations')
+                .select('id')
+                .is('post_id', null)
+                .eq('is_active', true)
+                .eq('workspace_id', acct.workspace_id)
+                .filter('trigger_config->>postTargetMode', 'eq', 'any')
+                .filter('settings_config->>templateType', 'eq', 'story-reply')
+                .limit(1);
+            hasAutomation = (anyStory || []).length > 0;
+        }
+    }
+
+    if (!hasAutomation) {
+        console.log(`[Webhook/StoryReply] No active story automation (story-bound or Any Story) for story-post ${post.id} — falling through`);
         return false;
     }
 
