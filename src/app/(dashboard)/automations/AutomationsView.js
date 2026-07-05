@@ -628,7 +628,9 @@ function AutomationsList({ automations, onUpgradeRequired, activePlatform = 'ins
                 : { label: 'Paused',   cls: 'bg-neutral-100 text-neutral-600 border-neutral-200' };
             const targetLabel =
               a.postTargetMode === 'next' ? 'Next post' :
-              a.postTargetMode === 'any'  ? 'Any post'  : null;
+              a.postTargetMode === 'any'
+                ? (a.templateType === 'story-reply' ? 'Any story' : 'Any post')
+                : null;
             // Tooltip for the keyword hint — kept off the visible row
             // so the table stays compact, but still reachable on hover
             // for "what does this fire on?".
