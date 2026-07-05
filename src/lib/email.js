@@ -52,10 +52,21 @@ function layout(content) {
           <!-- Logo -->
           <tr>
             <td style="padding-bottom:32px;text-align:center;">
-              <a href="${APP_URL}" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
-                <span style="font-size:22px;font-weight:800;color:${COLORS.text};letter-spacing:-0.04em;">
-                  auto<span style="color:${COLORS.accent};">dm</span>
-                </span>
+              <a href="${APP_URL}" style="text-decoration:none;">
+                <table cellpadding="0" cellspacing="0" role="presentation" style="margin:0 auto;">
+                  <tr>
+                    <td style="padding-right:10px;vertical-align:middle;">
+                      <span style="display:inline-block;background:#ffffff;border-radius:9px;padding:5px;line-height:0;">
+                        <img src="${APP_URL}/logo.png" width="28" height="28" alt="AutoDM" style="display:block;width:28px;height:28px;border:0;" />
+                      </span>
+                    </td>
+                    <td style="vertical-align:middle;">
+                      <span style="font-size:22px;font-weight:800;color:${COLORS.text};letter-spacing:-0.04em;">
+                        auto<span style="color:${COLORS.accent};">dm</span>
+                      </span>
+                    </td>
+                  </tr>
+                </table>
               </a>
             </td>
           </tr>
