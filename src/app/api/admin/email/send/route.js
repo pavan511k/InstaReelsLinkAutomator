@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createAdminClient } from '@/lib/supabase-admin';
-import { sendCustomEmail } from '@/lib/email';
+import { sendBulkIndividualEmails } from '@/lib/email';
 
 const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
     .split(',')
@@ -12,20 +12,32 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const MAX_SUBJECT = 200;
 const MAX_BODY    = 100 * 1024; // 100 KB
-const MAX_RECIPIENTS_TOTAL = 50;
+// Each recipient is sent an individual message, so there's no BCC-style
+// deliverability ceiling here. This cap is a fat-finger guard, not a target —
+// mind the Resend plan's daily quota and domain warmup before large blasts.
+const MAX_RECIPIENTS = 500;
 
+// Split on commas, semicolons, or whitespace, then dedupe case-insensitively
+// so the same address pasted twice isn't emailed twice.
 function parseRecipients(input) {
     if (!input) return [];
-    return input
-        .split(/[,;\s]+/)
-        .map((s) => s.trim())
-        .filter(Boolean);
+    const seen = new Set();
+    const out = [];
+    for (const raw of input.split(/[,;\s]+/)) {
+        const email = raw.trim();
+        if (!email) continue;
+        const key = email.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(email);
+    }
+    return out;
 }
 
-function validateEmails(list, label) {
+function validateEmails(list) {
     for (const e of list) {
         if (!EMAIL_RE.test(e)) {
-            throw new Error(`Invalid ${label} address: ${e}`);
+            throw new Error(`Invalid recipient address: ${e}`);
         }
     }
 }
@@ -60,75 +72,78 @@ export async function POST(request) {
     if (!content)                       return NextResponse.json({ error: 'Body is required' }, { status: 400 });
     if (content.length > MAX_BODY)      return NextResponse.json({ error: 'Body too large' }, { status: 400 });
 
-    const to  = parseRecipients(body.to);
-    const cc  = parseRecipients(body.cc);
-    const bcc = parseRecipients(body.bcc);
+    const recipients = parseRecipients(body.recipients);
 
-    if (to.length === 0) {
-        return NextResponse.json({ error: 'At least one To recipient is required' }, { status: 400 });
+    if (recipients.length === 0) {
+        return NextResponse.json({ error: 'At least one recipient is required' }, { status: 400 });
     }
-    if (to.length + cc.length + bcc.length > MAX_RECIPIENTS_TOTAL) {
+    if (recipients.length > MAX_RECIPIENTS) {
         return NextResponse.json(
-            { error: `Too many recipients (max ${MAX_RECIPIENTS_TOTAL} across To+CC+BCC)` },
+            { error: `Too many recipients (max ${MAX_RECIPIENTS})` },
             { status: 400 },
         );
     }
 
     try {
-        validateEmails(to,  'To');
-        validateEmails(cc,  'CC');
-        validateEmails(bcc, 'BCC');
+        validateEmails(recipients);
     } catch (e) {
         return NextResponse.json({ error: e.message }, { status: 400 });
     }
 
-    // ── Send via Resend, then audit-log the attempt either way ─────────────
-    let status        = 'sent';
-    let resendId      = null;
-    let errorMessage  = null;
-
+    // ── Send one individual message per recipient, then audit-log the outcome.
+    let summary;
     try {
-        const { data, error } = await sendCustomEmail({
-            to,
-            cc,
-            bcc,
+        summary = await sendBulkIndividualEmails({
+            recipients,
             subject,
             html:    bodyFormat === 'html' ? content : undefined,
             text:    bodyFormat === 'text' ? content : undefined,
             branded: branded && bodyFormat === 'html',
         });
-
-        if (error) {
-            status       = 'failed';
-            errorMessage = error.message || JSON.stringify(error);
-        } else {
-            resendId = data?.id || null;
-        }
     } catch (e) {
-        status       = 'failed';
-        errorMessage = e.message || 'Send failed';
+        summary = {
+            total: recipients.length,
+            sent: 0,
+            failed: recipients.length,
+            ids: [],
+            errors: [e.message || 'Send failed'],
+        };
     }
 
+    // 'failed' only when NOTHING went out; a partial send still counts as sent
+    // but records how many slipped and why.
+    const allFailed = summary.sent === 0;
+    const status    = allFailed ? 'failed' : 'sent';
+    const errorMessage = summary.failed > 0
+        ? `${summary.sent} sent, ${summary.failed} failed${summary.errors[0] ? `: ${summary.errors[0]}` : ''}`
+        : null;
+
     // Service-role insert — the table is RLS-protected for reads
-    // but writes always go through the API.
+    // but writes always go through the API. All recipients live in
+    // to_addresses; cc/bcc are unused now that every send is individual.
     const admin = createAdminClient();
     await admin.from('admin_email_log').insert({
         sent_by:        user.id,
         sender_email:   user.email,
-        to_addresses:   to,
-        cc_addresses:   cc,
-        bcc_addresses:  bcc,
+        to_addresses:   recipients,
+        cc_addresses:   [],
+        bcc_addresses:  [],
         subject,
         body_format:    bodyFormat,
         branded_layout: branded && bodyFormat === 'html',
         status,
-        resend_id:      resendId,
+        resend_id:      summary.ids[0] || null,
         error_message:  errorMessage,
     });
 
-    if (status === 'failed') {
+    if (allFailed) {
         return NextResponse.json({ error: errorMessage || 'Send failed' }, { status: 502 });
     }
 
-    return NextResponse.json({ id: resendId, status: 'sent' });
+    return NextResponse.json({
+        status: 'sent',
+        sent:   summary.sent,
+        failed: summary.failed,
+        total:  summary.total,
+    });
 }

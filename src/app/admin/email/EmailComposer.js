@@ -18,23 +18,19 @@ const HTML_PLACEHOLDER = `<p>Hi Pavan,</p>
 export default function EmailComposer() {
     const router = useRouter();
 
-    const [to, setTo]               = useState('');
-    const [cc, setCc]               = useState('');
-    const [bcc, setBcc]             = useState('');
-    const [subject, setSubject]     = useState('');
+    const [recipients, setRecipients] = useState('');
+    const [subject, setSubject]       = useState('');
     const [bodyFormat, setBodyFormat] = useState('html');
-    const [branded, setBranded]     = useState(true);
-    const [body, setBody]           = useState('');
-    const [isSending, setIsSending] = useState(false);
-    const [showCc, setShowCc]       = useState(false);
-    const [showBcc, setShowBcc]     = useState(false);
+    const [branded, setBranded]       = useState(true);
+    const [body, setBody]             = useState('');
+    const [isSending, setIsSending]   = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!to.trim())      { toast.error('At least one To recipient is required.'); return; }
-        if (!subject.trim()) { toast.error('Subject is required.');                    return; }
-        if (!body.trim())    { toast.error('Body is required.');                       return; }
+        if (!recipients.trim()) { toast.error('At least one recipient is required.'); return; }
+        if (!subject.trim())    { toast.error('Subject is required.');                 return; }
+        if (!body.trim())       { toast.error('Body is required.');                    return; }
 
         setIsSending(true);
         const tId = toast.loading('Sending…');
@@ -44,9 +40,7 @@ export default function EmailComposer() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    to,
-                    cc,
-                    bcc,
+                    recipients,
                     subject,
                     bodyFormat,
                     body,
@@ -60,10 +54,13 @@ export default function EmailComposer() {
                 return;
             }
 
-            toast.success('Email sent.', { id: tId });
-            setTo(''); setCc(''); setBcc('');
-            setSubject(''); setBody('');
-            setShowCc(false); setShowBcc(false);
+            const sent = json.sent ?? 0;
+            const failedNote = json.failed ? ` (${json.failed} failed)` : '';
+            toast.success(
+                `Email sent to ${sent} recipient${sent === 1 ? '' : 's'}${failedNote}.`,
+                { id: tId },
+            );
+            setRecipients(''); setSubject(''); setBody('');
             router.refresh(); // pull the new row into the log table
         } catch (err) {
             toast.error(err.message || 'Network error.', { id: tId });
@@ -82,69 +79,21 @@ export default function EmailComposer() {
         >
             {/* Recipients block */}
             <div className="space-y-3">
-                <FieldRow label="To" required>
-                    <input
-                        type="text"
-                        value={to}
-                        onChange={(e) => setTo(e.target.value)}
+                <FieldRow label="Recipients" required>
+                    <textarea
+                        value={recipients}
+                        onChange={(e) => setRecipients(e.target.value)}
                         placeholder="alice@example.com, bob@example.com"
                         autoComplete="off"
+                        rows={3}
                         disabled={isSending}
-                        className={inputClass}
+                        className={`${inputClass} resize-y`}
                     />
+                    <p className="mt-1 text-xs text-neutral-500">
+                        Separate with commas, spaces, or new lines. Each person gets their
+                        own private copy — no one sees the other recipients.
+                    </p>
                 </FieldRow>
-
-                {showCc ? (
-                    <FieldRow label="CC">
-                        <input
-                            type="text"
-                            value={cc}
-                            onChange={(e) => setCc(e.target.value)}
-                            placeholder="comma-separated"
-                            autoComplete="off"
-                            disabled={isSending}
-                            className={inputClass}
-                        />
-                    </FieldRow>
-                ) : null}
-
-                {showBcc ? (
-                    <FieldRow label="BCC">
-                        <input
-                            type="text"
-                            value={bcc}
-                            onChange={(e) => setBcc(e.target.value)}
-                            placeholder="comma-separated — hidden from other recipients"
-                            autoComplete="off"
-                            disabled={isSending}
-                            className={inputClass}
-                        />
-                    </FieldRow>
-                ) : null}
-
-                {(!showCc || !showBcc) && (
-                    <div className="flex items-center gap-2 pl-[88px] text-xs">
-                        {!showCc && (
-                            <button
-                                type="button"
-                                onClick={() => setShowCc(true)}
-                                className="font-medium text-neutral-500 hover:text-neutral-800"
-                            >
-                                + Add CC
-                            </button>
-                        )}
-                        {!showCc && !showBcc && <span className="text-neutral-300">·</span>}
-                        {!showBcc && (
-                            <button
-                                type="button"
-                                onClick={() => setShowBcc(true)}
-                                className="font-medium text-neutral-500 hover:text-neutral-800"
-                            >
-                                + Add BCC
-                            </button>
-                        )}
-                    </div>
-                )}
 
                 <FieldRow label="Subject" required>
                     <input

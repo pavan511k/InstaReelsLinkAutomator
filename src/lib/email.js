@@ -108,32 +108,80 @@ function button(text, href) {
 // ── Divider ───────────────────────────────────────────────────────────────────
 const divider = `<hr style="border:none;border-top:1px solid ${COLORS.border};margin:28px 0;" />`;
 
-// ── Ad-hoc admin send ─────────────────────────────────────────────────────────
-// Backs the /admin/email tool. Caller provides recipients + content;
-// optionally wraps the HTML body in the branded layout() so admin emails
-// match the rest of AutoDM's transactional style. Returns the Resend
-// response so callers can log the resend_id.
-export async function sendCustomEmail({
-    to,
-    cc = [],
-    bcc = [],
+// ── Ad-hoc admin bulk send ────────────────────────────────────────────────────
+// Backs the /admin/email tool. Sends the SAME email to many recipients as
+// SEPARATE messages — one recipient per message, their address in `To`.
+//
+// Why not one email with a big To/BCC list? A BCC fan-out (recipient hidden,
+// identical content to many addresses at once) looks like bulk mail to receiving
+// servers — they defer or spam-filter it, so the message never leaves the "sent"
+// state. An individual message with the recipient in `To` reads as normal 1:1
+// mail and delivers reliably.
+//
+// Uses Resend's batch endpoint (up to 100 messages per HTTP call) and waits
+// between chunks so we stay under Resend's default rate limit (2 req/sec).
+// Returns an aggregate summary so the caller can audit-log the outcome and
+// surface partial failures.
+const RESEND_BATCH_MAX = 100;      // Resend hard cap: messages per batch call
+const RATE_LIMIT_DELAY_MS = 600;   // >500ms between calls keeps us under 2 req/sec
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function chunkList(list, size) {
+    const chunks = [];
+    for (let i = 0; i < list.length; i += size) {
+        chunks.push(list.slice(i, i + size));
+    }
+    return chunks;
+}
+
+export async function sendBulkIndividualEmails({
+    recipients,
     subject,
     html,
     text,
     branded = false,
+    delayMs = RATE_LIMIT_DELAY_MS,
 }) {
     const wrappedHtml = branded && html ? layout(html) : html;
+    const resend = getResend();
 
-    return getResend().emails.send({
-        from: FROM,
-        to,
-        // Resend rejects empty arrays for cc/bcc — pass undefined when none.
-        cc:  cc.length  > 0 ? cc  : undefined,
-        bcc: bcc.length > 0 ? bcc : undefined,
-        subject,
-        html: wrappedHtml,
-        text,
-    });
+    const summary = { total: recipients.length, sent: 0, failed: 0, ids: [], errors: [] };
+    const batches = chunkList(recipients, RESEND_BATCH_MAX);
+
+    for (let i = 0; i < batches.length; i++) {
+        const payload = batches[i].map((email) => ({
+            from: FROM,
+            to: email,
+            subject,
+            html: wrappedHtml,
+            text,
+        }));
+
+        try {
+            const { data, error } = await resend.batch.send(payload);
+            if (error) {
+                summary.failed += payload.length;
+                summary.errors.push(error.message || JSON.stringify(error));
+            } else {
+                const ids = (data?.data || []).map((d) => d.id).filter(Boolean);
+                summary.sent += ids.length;
+                summary.ids.push(...ids);
+                // If Resend returned fewer ids than messages sent, treat the gap
+                // as failed rather than silently over-reporting success.
+                const missing = payload.length - ids.length;
+                if (missing > 0) summary.failed += missing;
+            }
+        } catch (e) {
+            summary.failed += payload.length;
+            summary.errors.push(e.message || 'Batch send failed');
+        }
+
+        // Throttle between batches only — a single batch is one HTTP request.
+        if (i < batches.length - 1) await sleep(delayMs);
+    }
+
+    return summary;
 }
 
 // ── 1. Trial started email (sent on email verification) ─────────────────────
